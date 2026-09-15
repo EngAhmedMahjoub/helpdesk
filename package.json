@@ -1,0 +1,10 @@
+{
+  "name": "helpdesk",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun --filter '@helpdesk/api' --filter '@helpdesk/web' dev",
+    "build": "bun --filter '@helpdesk/web' build",
+    "typecheck": "bun --filter '*' typecheck"
+  }
+}
