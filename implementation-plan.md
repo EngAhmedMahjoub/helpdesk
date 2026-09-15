@@ -27,7 +27,7 @@ None.
 | 0.1 | Create Bun workspaces monorepo: `apps/web`, `apps/api`, `packages/shared` | `bun install` succeeds at root | Done |
 | 0.2 | Typecheck script across workspaces | `bun run typecheck` passes in all workspaces | Done |
 | 0.2a | oxlint across all workspaces (installed in `apps/web` by the Vite template), Prettier | `bun run lint` passes in all workspaces | Done |
-| 0.3 | Docker Compose for local PostgreSQL | `docker compose up` starts Postgres; API can connect | |
+| 0.3 | Docker Compose for local PostgreSQL | `docker compose up` starts Postgres; API can connect | Done |
 | 0.4 | Express skeleton on Bun with `GET /api/health`, `/api` 404 handler, error handler | Health endpoint returns 200 | Done |
 | 0.5 | Environment config loaded and validated with Zod | API refuses to start with a missing or invalid variable | |
 | 0.6 | Vite + React + TypeScript skeleton; dev proxy `/api` → API; App calls the health check | Page shows API status | Done (page not yet viewed in a browser) |
