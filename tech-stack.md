@@ -61,6 +61,7 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 | Validation | Zod |
 | ORM | Prisma |
 | Database | PostgreSQL |
+| Local database | `docker compose up -d --wait` at the repo root starts Postgres 18 on `localhost:5432` (user, password, and database `helpdesk`); copy `apps/api/.env.example` to `apps/api/.env` |
 | Background jobs | pg-boss, running inside the API process (Koyeb's free instance cannot run a separate worker) |
 | Scheduled tasks | GitHub Actions scheduled workflow calls protected endpoints (the API sleeps when idle, so in-process schedules are unreliable) |
 | CORS | Allow origin `https://app.<domain>` with `credentials: true` |

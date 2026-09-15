@@ -1,0 +1,23 @@
+# Local development database only. Production uses Neon.
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: helpdesk
+      POSTGRES_PASSWORD: helpdesk
+      POSTGRES_DB: helpdesk
+    ports:
+      - '5432:5432'
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql (not .../data)
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U helpdesk -d helpdesk']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # First start runs initdb, which can take over a minute
+      start_period: 120s
+
+volumes:
+  db-data:
