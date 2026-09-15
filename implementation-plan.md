@@ -29,7 +29,7 @@ None.
 | 0.2a | oxlint across all workspaces (installed in `apps/web` by the Vite template), Prettier | `bun run lint` passes in all workspaces | Done |
 | 0.3 | Docker Compose for local PostgreSQL | `docker compose up` starts Postgres; API can connect | Done |
 | 0.4 | Express skeleton on Bun with `GET /api/health`, `/api` 404 handler, error handler | Health endpoint returns 200 | Done |
-| 0.5 | Environment config loaded and validated with Zod | API refuses to start with a missing or invalid variable | |
+| 0.5 | Environment config loaded and validated with Zod | API refuses to start with a missing or invalid variable | Done |
 | 0.6 | Vite + React + TypeScript skeleton; dev proxy `/api` → API; App calls the health check | Page shows API status | Done (page not yet viewed in a browser) |
 | 0.6a | Add Tailwind CSS and shadcn/ui | A shadcn/ui component renders | |
 | 0.7 | Test setup: choose `bun test` or Vitest after checking Bun compatibility; Supertest for API routes | One passing test per app | |
