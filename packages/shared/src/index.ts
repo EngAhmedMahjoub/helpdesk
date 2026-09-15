@@ -1,4 +1,5 @@
 export type HealthResponse = {
-  status: 'ok'
+  status: 'ok' | 'error'
+  database: 'up' | 'down'
   timestamp: string
 }

@@ -8,7 +8,8 @@ function App() {
   useEffect(() => {
     fetch('/api/health')
       .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        // 503 still carries a health body (database down)
+        if (!res.ok && res.status !== 503) throw new Error(`HTTP ${res.status}`)
         return res.json() as Promise<HealthResponse>
       })
       .then(setHealth)
@@ -19,7 +20,11 @@ function App() {
     <main>
       <h1>Helpdesk</h1>
       {error && <p>API unreachable: {error}</p>}
-      {health && <p>API status: {health.status} ({health.timestamp})</p>}
+      {health && (
+        <p>
+          API status: {health.status}, database: {health.database} ({health.timestamp})
+        </p>
+      )}
       {!health && !error && <p>Checking API…</p>}
     </main>
   )

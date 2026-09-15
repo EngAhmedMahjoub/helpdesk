@@ -5,15 +5,21 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "bun --bun --env-file=.env run prisma generate",
+    "db:migrate": "bun --bun --env-file=.env run prisma migrate dev",
+    "db:studio": "bun --bun --env-file=.env run prisma studio"
   },
   "dependencies": {
     "@helpdesk/shared": "workspace:*",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "express": "^5.2.1"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
     "@types/express": "^5.0.6",
+    "prisma": "7.10.0",
     "typescript": "~6.0.2"
   }
 }
