@@ -1,2 +1,11 @@
 ## Keys and certificates
 *.key
+
+## Dependencies and build output
+node_modules
+dist
+
+## Environment
+.env
+.env.*
+!.env.example
