@@ -18,6 +18,8 @@ Root scripts:
 |---|---|
 | `bun run dev` | API (`bun --watch`) and Vite dev server |
 | `bun run typecheck` | `tsc` in every workspace |
+| `bun run lint` | `oxlint --deny-warnings` in every workspace (warnings fail the run) |
+| `bun run format` / `format:check` | Prettier write / check across the repo (Markdown excluded) |
 | `bun run build` | Frontend production build |
 
 ## Installed Versions
@@ -32,7 +34,8 @@ As installed at scaffold time (2026-09-15):
 | React / React DOM | 19.2 |
 | Vite | 8.3 |
 | @vitejs/plugin-react | 6.1 |
-| oxlint | 1.81 (from the Vite template) |
+| oxlint | 1.83 (all workspaces) |
+| Prettier | 3.9 (root) |
 
 ## Frontend (`apps/web`)
 
