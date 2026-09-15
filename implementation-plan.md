@@ -13,7 +13,7 @@ Based on `project-scope.md` and `tech-stack.md`. Each task is small enough for o
 | AI call fails after retries | Escalate to a human agent: ticket stays Open and is flagged as needing an agent. |
 | Knowledge base content | Written with Claude Code as part of Phase 5. |
 | Hosting | Free tiers: Vercel (frontend), Koyeb (API + background jobs in one process), Neon (Postgres), Resend (email), GitHub Actions (CI/CD and scheduled tasks). |
-
+| Runtime and package manager | Bun, with Bun workspaces |
 | Custom domain | Already owned. Referred to as `<domain>` in these docs. |
 
 ## Decisions Still Needed
@@ -22,25 +22,27 @@ None.
 
 ## Phase 0 — Project Setup
 
-| ID | Task | Done when |
-|---|---|---|
-| 0.1 | Create npm workspaces monorepo: `apps/web`, `apps/api`, `packages/shared` | `npm install` succeeds at root |
-| 0.2 | Shared TypeScript config, ESLint, Prettier | `npm run lint` and `npm run typecheck` pass across all workspaces |
-| 0.3 | Docker Compose for local PostgreSQL | `docker compose up` starts Postgres; API can connect |
-| 0.4 | Express skeleton with `GET /api/health` | Health endpoint returns 200 |
-| 0.5 | Environment config loaded and validated with Zod | API refuses to start with a missing or invalid variable |
-| 0.6 | Vite + React + TypeScript skeleton with Tailwind and shadcn/ui | App renders a placeholder page |
-| 0.7 | Test setup: Vitest (web, api) and Supertest (api) | One passing test per app |
-| 0.8 | GitHub Actions CI: lint, typecheck, test on every PR | CI runs green on a PR |
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 0.1 | Create Bun workspaces monorepo: `apps/web`, `apps/api`, `packages/shared` | `bun install` succeeds at root | Done |
+| 0.2 | Typecheck script across workspaces | `bun run typecheck` passes in all workspaces | Done |
+| 0.2a | oxlint across all workspaces (installed in `apps/web` by the Vite template), Prettier | `bun run lint` passes in all workspaces | |
+| 0.3 | Docker Compose for local PostgreSQL | `docker compose up` starts Postgres; API can connect | |
+| 0.4 | Express skeleton on Bun with `GET /api/health`, `/api` 404 handler, error handler | Health endpoint returns 200 | Done |
+| 0.5 | Environment config loaded and validated with Zod | API refuses to start with a missing or invalid variable | |
+| 0.6 | Vite + React + TypeScript skeleton; dev proxy `/api` → API; App calls the health check | Page shows API status | Done (page not yet viewed in a browser) |
+| 0.6a | Add Tailwind CSS and shadcn/ui | A shadcn/ui component renders | |
+| 0.7 | Test setup: choose `bun test` or Vitest after checking Bun compatibility; Supertest for API routes | One passing test per app | |
+| 0.8 | GitHub Actions CI using `oven-sh/setup-bun`: lint, typecheck, test on every PR | CI runs green on a PR | |
 
 ## Phase 1 — Data Model and Authentication
 
 | ID | Task | Done when |
 |---|---|---|
-| 1.1 | Prisma setup and initial migration | `prisma migrate dev` runs against local Postgres |
+| 1.1 | Prisma setup and initial migration (confirm Prisma works on Bun first) | `bunx prisma migrate dev` runs against local Postgres |
 | 1.2 | `User` model: email, name, passwordHash, role (admin/agent), isActive | Migration applied |
 | 1.3 | `Session` model: tokenHash, userId, expiresAt, createdAt | Migration applied |
-| 1.4 | Password hashing helper (argon2 or bcrypt) | Unit tests for hash and verify |
+| 1.4 | Password hashing helper: check Bun's built-in password hashing before adding argon2 or bcrypt | Unit tests for hash and verify |
 | 1.5 | Seed script creating the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Running seed twice creates one admin |
 | 1.6 | `POST /api/auth/login` — verify password, create session, set cookie | Test: correct password sets cookie; wrong password returns 401 |
 | 1.7 | Auth middleware — hash cookie token, load session and user, reject missing/expired/inactive | Tests for each rejection case |
@@ -145,7 +147,7 @@ None.
 | ID | Task | Done when |
 |---|---|---|
 | 8.1 | DNS records for `app.<domain>` and `api.<domain>` | Both subdomains resolve |
-| 8.2 | Multi-stage Dockerfile for the API | Image builds and runs locally |
+| 8.2 | Multi-stage Dockerfile for the API based on `oven/bun` | Image builds and runs locally |
 | 8.3 | Neon project and production database | API connects to Neon |
 | 8.4 | Koyeb service from the Docker image, with secrets (database URL, Resend API key, Resend webhook secret, tasks secret, Anthropic key, admin seed) | App starts on Koyeb |
 | 8.5 | Custom domain `api.<domain>` on Koyeb | `https://api.<domain>/api/health` returns 200 |

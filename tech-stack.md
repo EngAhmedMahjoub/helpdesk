@@ -2,15 +2,37 @@
 
 ## Overview
 
-TypeScript monorepo: React + Vite frontend on Vercel, Node.js + Express API (with in-process background jobs) in Docker on Koyeb, PostgreSQL on Neon, Resend for email, and Claude for AI. All hosting uses free tiers (portfolio project).
+TypeScript monorepo on Bun: React + Vite frontend on Vercel, Express API running on Bun (with in-process background jobs) in Docker on Koyeb, PostgreSQL on Neon, Resend for email, and Claude for AI. All hosting uses free tiers (portfolio project).
 
 ## Repository
 
-npm workspaces:
+Bun workspaces (`bun.lock` at the root):
 
-- `apps/web` — frontend
-- `apps/api` — API and background jobs
-- `packages/shared` — shared types and Zod schemas
+- `apps/web` (`@helpdesk/web`) — frontend
+- `apps/api` (`@helpdesk/api`) — API and background jobs
+- `packages/shared` (`@helpdesk/shared`) — shared types and Zod schemas, imported as TypeScript source via `workspace:*`
+
+Root scripts:
+
+| Command | Runs |
+|---|---|
+| `bun run dev` | API (`bun --watch`) and Vite dev server |
+| `bun run typecheck` | `tsc` in every workspace |
+| `bun run build` | Frontend production build |
+
+## Installed Versions
+
+As installed at scaffold time (2026-09-15):
+
+| Package | Version |
+|---|---|
+| Bun | 1.4.2 |
+| TypeScript | 6.0.3 (all workspaces) |
+| Express | 5.2.1 |
+| React / React DOM | 19.2 |
+| Vite | 8.3 |
+| @vitejs/plugin-react | 6.1 |
+| oxlint | 1.81 (from the Vite template) |
 
 ## Frontend (`apps/web`)
 
@@ -20,7 +42,9 @@ npm workspaces:
 | Routing | React Router |
 | Data fetching | TanStack Query |
 | UI | Tailwind CSS + shadcn/ui |
+| Linting | oxlint |
 | API calls | `fetch` with `credentials: 'include'` to `VITE_API_URL` |
+| Local development | Vite dev server proxies `/api` to `http://localhost:3000` |
 | Route protection | Call `GET /api/auth/me` on load; 401 redirects to `/login`; `role` hides admin-only screens |
 
 Hiding screens in the UI is not access control. Express enforces permissions on every endpoint.
@@ -29,7 +53,8 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 
 | Concern | Choice |
 |---|---|
-| Runtime / framework | Node.js + Express + TypeScript |
+| Runtime | Bun (runs TypeScript directly; no build step) |
+| Framework | Express 5 + TypeScript |
 | Validation | Zod |
 | ORM | Prisma |
 | Database | PostgreSQL |
@@ -109,7 +134,7 @@ All free tiers.
 | Piece | Provider |
 |---|---|
 | Frontend | Vercel (Hobby) on `app.<domain>` |
-| API + background jobs | Koyeb free instance, Docker image, on `api.<domain>` |
+| API + background jobs | Koyeb free instance, Docker image based on `oven/bun`, on `api.<domain>` |
 | Database | Neon free Postgres |
 | Email | Resend free |
 | Scheduled tasks | GitHub Actions scheduled workflow |
@@ -146,8 +171,11 @@ When an API change and a frontend change ship together, deploy the backend first
 
 ## To Verify During Setup
 
+Checked with Context7 docs and a running scaffold: Bun workspaces, Express on Bun, Vite React TypeScript template, Vite dev proxy.
+
 Not checked against current documentation:
 
-- Library versions and APIs: Vite, React Router, TanStack Query, Express, Prisma, pg-boss, argon2, Resend SDK.
+- Library versions and APIs: React Router, TanStack Query, Tailwind CSS, shadcn/ui, Zod, Prisma, pg-boss, argon2, Resend SDK.
+- Bun compatibility: Prisma, pg-boss, argon2 (native module), Vitest + Supertest. Bun has a built-in test runner and password hashing that may replace some of these.
 - Free tier limits for Koyeb, Neon, and Resend on their pricing pages.
 - Cross-subdomain session cookie between Vercel and Koyeb — test a real login early.
