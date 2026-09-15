@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "helpdesk",
+      "devDependencies": {
+        "prettier": "^3.9.6",
+      },
     },
     "apps/api": {
       "name": "@helpdesk/api",
@@ -16,6 +19,7 @@
       "devDependencies": {
         "@types/bun": "^1.4.2",
         "@types/express": "^5.0.6",
+        "oxlint": "^1.81.0",
         "prisma": "7.10.0",
         "typescript": "~6.0.2",
       },
@@ -41,6 +45,7 @@
     "packages/shared": {
       "name": "@helpdesk/shared",
       "devDependencies": {
+        "oxlint": "^1.81.0",
         "typescript": "~6.0.2",
       },
     },
@@ -527,6 +532,8 @@
     "postgres-date": ["postgres-date@1.0.7", "", {}, "sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q=="],
 
     "postgres-interval": ["postgres-interval@1.2.0", "", { "dependencies": { "xtend": "^4.0.0" } }, "sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ=="],
+
+    "prettier": ["prettier@3.9.6", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g=="],
 
     "prisma": ["prisma@7.10.0", "", { "dependencies": { "@prisma/config": "7.10.0", "@prisma/dev": "0.24.17", "@prisma/engines": "7.10.0", "@prisma/studio-core": "0.33.0", "mysql2": "3.15.3", "postgres": "3.4.7" }, "peerDependencies": { "better-sqlite3": ">=9.0.0", "typescript": ">=5.4.0" }, "optionalPeers": ["better-sqlite3", "typescript"], "bin": { "prisma": "build/index.js" } }, "sha512-o0ornyJOWgygVAzGCpr8PdXV8EJLHyVGDDUr/voBQt8Azzw8cYTByzzPGcA/m4tCkPcnJA8raEOv2CslsKhPEw=="],
 
