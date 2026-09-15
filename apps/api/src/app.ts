@@ -1,14 +1,27 @@
 import express, { type ErrorRequestHandler } from 'express'
 import type { HealthResponse } from '@helpdesk/shared'
+import { prisma } from './db.ts'
 
 export function createApp() {
   const app = express()
 
   app.use(express.json())
 
-  app.get('/api/health', (_req, res) => {
-    const body: HealthResponse = { status: 'ok', timestamp: new Date().toISOString() }
-    res.json(body)
+  app.get('/api/health', async (_req, res) => {
+    let database: HealthResponse['database'] = 'up'
+    try {
+      await prisma.$queryRaw`SELECT 1`
+    } catch (err) {
+      console.error('Database health check failed:', err)
+      database = 'down'
+    }
+
+    const body: HealthResponse = {
+      status: database === 'up' ? 'ok' : 'error',
+      database,
+      timestamp: new Date().toISOString(),
+    }
+    res.status(database === 'up' ? 200 : 503).json(body)
   })
 
   app.use('/api', (_req, res) => {
