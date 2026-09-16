@@ -2,7 +2,14 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.ts'
 import { verifyPassword } from '../auth/password.ts'
-import { createSession, setSessionCookie } from '../auth/session.ts'
+import { requireAuth } from '../auth/middleware.ts'
+import {
+  SESSION_COOKIE,
+  clearSessionCookie,
+  createSession,
+  deleteSession,
+  setSessionCookie,
+} from '../auth/session.ts'
 
 const loginSchema = z.object({
   email: z.email(),
@@ -32,4 +39,24 @@ authRouter.post('/login', async (req, res) => {
 
   setSessionCookie(res, await createSession(user.id))
   res.json({ id: user.id, email: user.email, role: user.role })
+})
+
+/**
+ * Deliberately unauthenticated: logging out must work even when the session is
+ * already expired or unknown, so a client can always get back to a clean state.
+ * The response is the same either way, so it reveals nothing about the token.
+ */
+authRouter.post('/logout', async (req, res) => {
+  const token: unknown = req.cookies?.[SESSION_COOKIE]
+
+  if (typeof token === 'string' && token.length > 0) {
+    await deleteSession(token)
+  }
+
+  clearSessionCookie(res)
+  res.status(204).end()
+})
+
+authRouter.get('/me', requireAuth, (req, res) => {
+  res.json(req.user)
 })
