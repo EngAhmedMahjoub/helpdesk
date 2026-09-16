@@ -22,6 +22,15 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # The Prisma client is generated into apps/api/src/generated and is
+      # gitignored, so it does not exist on a fresh checkout. prisma.config.ts
+      # resolves DATABASE_URL even for generate, hence the placeholder: nothing
+      # here connects to a database.
+      - name: Generate Prisma client
+        run: bun --filter '@helpdesk/api' db:generate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
       - run: bun run lint
 
       - run: bun run typecheck
