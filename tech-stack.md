@@ -143,7 +143,7 @@ All free tiers.
 | Database | Neon free Postgres |
 | Email | Resend free |
 | Scheduled tasks | GitHub Actions scheduled workflow |
-| CI/CD | GitHub Actions |
+| CI/CD | GitHub Actions. `.github/workflows/ci.yml` runs on every PR and push to `main`: Bun 1.4.2, `bun install --frozen-lockfile`, `prisma generate` (the client is gitignored), then lint, typecheck, test, format:check |
 
 Not free: Anthropic API usage. The custom domain is already owned.
 
