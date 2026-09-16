@@ -66,7 +66,7 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 | Background jobs | pg-boss, running inside the API process (Koyeb's free instance cannot run a separate worker) |
 | Scheduled tasks | GitHub Actions scheduled workflow calls protected endpoints (the API sleeps when idle, so in-process schedules are unreliable) |
 | CORS | Allow origin `https://app.<domain>` with `credentials: true` |
-| Tests | Vitest + Supertest |
+| Tests | `bun test` + Supertest (`apps/api/test`); the web app uses `bun test` with happy-dom and Testing Library |
 
 ## Authentication
 
@@ -181,6 +181,6 @@ Checked with Context7 docs and a running scaffold: Bun workspaces, Express on Bu
 Not checked against current documentation:
 
 - Library versions and APIs: React Router, TanStack Query, Tailwind CSS, shadcn/ui, Zod, Prisma, pg-boss, argon2, Resend SDK.
-- Bun compatibility: Prisma, pg-boss, argon2 (native module), Vitest + Supertest. Bun has a built-in test runner and password hashing that may replace some of these.
+- Bun compatibility: pg-boss, argon2 (native module). Bun has built-in password hashing that may replace argon2. Prisma and Supertest are confirmed working on Bun; `bun test` replaced Vitest.
 - Free tier limits for Koyeb, Neon, and Resend on their pricing pages.
 - Cross-subdomain session cookie between Vercel and Koyeb — test a real login early.
