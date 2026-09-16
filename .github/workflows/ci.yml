@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a PR cancels the run still going for the previous one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - run: bun install --frozen-lockfile
+
+      # The Prisma client is generated into apps/api/src/generated and is
+      # gitignored, so it does not exist on a fresh checkout. prisma.config.ts
+      # resolves DATABASE_URL even for generate, hence the placeholder: nothing
+      # here connects to a database.
+      - name: Generate Prisma client
+        run: bun --filter '@helpdesk/api' db:generate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+      - run: bun run lint
+
+      - run: bun run typecheck
+
+      - run: bun run test
+
+      - run: bun run format:check
