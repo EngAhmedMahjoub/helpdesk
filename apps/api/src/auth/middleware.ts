@@ -66,3 +66,20 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
   }
   next()
 }
+
+/**
+ * Restricts a route to admins. Must run after requireAuth, which is what puts
+ * req.user there; without it every caller is an unauthenticated stranger and
+ * gets 403 rather than being waved through.
+ *
+ * 403 rather than 401 on purpose: the caller is authenticated, so the answer is
+ * "not you", not "who are you". Login uses 401 for a deactivated account for the
+ * opposite reason — there, saying "not you" would confirm the account exists.
+ */
+export const requireAdmin: RequestHandler = (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  next()
+}
