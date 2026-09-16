@@ -33,6 +33,7 @@ None.
 | 0.6 | Vite + React + TypeScript skeleton; dev proxy `/api` → API; App calls the health check | Page shows API status | Done |
 | 0.6a | Add Tailwind CSS and shadcn/ui | A shadcn/ui component renders | Done |
 | 0.7 | Test setup: choose `bun test` or Vitest after checking Bun compatibility; Supertest for API routes | One passing test per app | Done (`bun test`) |
+| 0.7a | Database-backed test setup: `helpdesk_test` database, CI Postgres service, truncation between tests | `bun run test` runs API tests against a real Postgres locally and in CI | Done |
 | 0.8 | GitHub Actions CI using `oven-sh/setup-bun`: lint, typecheck, test on every PR | CI runs green on a PR | Done |
 
 ## Phase 1 — Data Model and Authentication
