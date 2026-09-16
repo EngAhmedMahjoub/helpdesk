@@ -8,10 +8,11 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "bun --bun --env-file=.env run prisma generate",
     "db:migrate": "bun --bun --env-file=.env run prisma migrate dev",
+    "db:test:setup": "bun --bun --env-file=.env.test run prisma migrate deploy",
     "db:seed": "bun --bun --env-file=.env run prisma db seed",
     "db:studio": "bun --bun --env-file=.env run prisma studio",
     "lint": "oxlint --deny-warnings",
-    "test": "bun test"
+    "test": "bun run db:test:setup && bun test"
   },
   "dependencies": {
     "@helpdesk/shared": "workspace:*",
