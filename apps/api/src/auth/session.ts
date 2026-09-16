@@ -26,6 +26,16 @@ export async function createSession(userId: string): Promise<string> {
   return token
 }
 
+/**
+ * Deletes the session the token identifies, if it still exists.
+ *
+ * deleteMany rather than delete: logging out twice, or with a token whose row
+ * has already expired away, is a no-op instead of a 500.
+ */
+export async function deleteSession(token: string): Promise<void> {
+  await prisma.session.deleteMany({ where: { tokenHash: hashToken(token) } })
+}
+
 const cookieOptions: CookieOptions = {
   httpOnly: true,
   // Secure would make the cookie unusable over plain HTTP in local development.
