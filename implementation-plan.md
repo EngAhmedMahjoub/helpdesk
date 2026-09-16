@@ -47,7 +47,7 @@ None.
 | 1.5 | Seed script creating the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Running seed twice creates one admin | Done |
 | 1.6 | `POST /api/auth/login` — verify password, create session, set cookie | Test: correct password sets cookie; wrong password returns 401 | Done |
 | 1.7 | Auth middleware — hash cookie token, load session and user, reject missing/expired/inactive | Tests for each rejection case | Done |
-| 1.8 | `requireAdmin` middleware | Agent gets 403 on an admin route |  |
+| 1.8 | `requireAdmin` middleware | Agent gets 403 on an admin route | Done |
 | 1.9 | `POST /api/auth/logout` and `GET /api/auth/me` | Tests pass; logout deletes the session row |  |
 | 1.10 | CORS config for the frontend origin with credentials | Browser request from the web app carries the cookie locally |  |
 | 1.11 | Frontend: API client (`credentials: 'include'`), TanStack Query, React Router | App routes render |  |
