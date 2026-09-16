@@ -6,6 +6,10 @@ const envSchema = z.object({
   DATABASE_URL: z
     .url({ protocol: /^postgres(ql)?$/ })
     .describe('PostgreSQL connection string, e.g. postgresql://user:password@host:5432/db'),
+  WEB_ORIGIN: z
+    .url({ protocol: /^https?$/ })
+    .default('http://localhost:5173')
+    .describe('Origin allowed to call the API with credentials, e.g. https://app.example.com'),
 })
 
 export type Env = z.infer<typeof envSchema>

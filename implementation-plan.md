@@ -49,7 +49,7 @@ None.
 | 1.7 | Auth middleware — hash cookie token, load session and user, reject missing/expired/inactive | Tests for each rejection case | Done |
 | 1.8 | `requireAdmin` middleware | Agent gets 403 on an admin route | Done |
 | 1.9 | `POST /api/auth/logout` and `GET /api/auth/me` | Tests pass; logout deletes the session row | Done |
-| 1.10 | CORS config for the frontend origin with credentials | Browser request from the web app carries the cookie locally |  |
+| 1.10 | CORS config for the frontend origin with credentials | Browser request from the web app carries the cookie locally | Done |
 | 1.11 | Frontend: API client (`credentials: 'include'`), TanStack Query, React Router | App routes render |  |
 | 1.12 | Frontend: login page | Admin can log in with seeded credentials |  |
 | 1.13 | Frontend: auth state from `/api/auth/me`, protected routes, logout | Logged-out user is redirected to `/login` |  |
