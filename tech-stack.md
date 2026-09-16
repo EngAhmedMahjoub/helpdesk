@@ -66,7 +66,7 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 | Background jobs | pg-boss, running inside the API process (Koyeb's free instance cannot run a separate worker) |
 | Scheduled tasks | GitHub Actions scheduled workflow calls protected endpoints (the API sleeps when idle, so in-process schedules are unreliable) |
 | CORS | Allow origin `https://app.<domain>` with `credentials: true` |
-| Tests | `bun test` + Supertest (`apps/api/test`); the web app uses `bun test` with happy-dom and Testing Library |
+| Tests | `bun test` + Supertest (`apps/api/test`) against a real `helpdesk_test` database (`.env.test`, loaded automatically because `bun test` sets `NODE_ENV=test`); `bun run test` applies migrations first and truncates between tests. The web app uses `bun test` with happy-dom and Testing Library |
 
 ## Authentication
 
@@ -143,7 +143,7 @@ All free tiers.
 | Database | Neon free Postgres |
 | Email | Resend free |
 | Scheduled tasks | GitHub Actions scheduled workflow |
-| CI/CD | GitHub Actions. `.github/workflows/ci.yml` runs on every PR and push to `main`: Bun 1.4.2, `bun install --frozen-lockfile`, `prisma generate` (the client is gitignored), then lint, typecheck, test, format:check |
+| CI/CD | GitHub Actions. `.github/workflows/ci.yml` runs on every PR and push to `main`: Bun 1.4.2, `bun install --frozen-lockfile`, `prisma generate` (the client is gitignored), then lint, typecheck, test, format:check. A `postgres:18` service container backs the database tests |
 
 Not free: Anthropic API usage. The custom domain is already owned.
 

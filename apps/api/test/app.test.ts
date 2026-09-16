@@ -1,14 +1,9 @@
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import request from 'supertest'
+import { createApp } from '../src/app.ts'
 
-// env.ts validates process.env at import time; tests never reach a real database.
-process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test'
-
-mock.module('../src/db.ts', () => ({
-  prisma: { $queryRaw: () => Promise.resolve([{ result: 1 }]) },
-}))
-
-const { createApp } = await import('../src/app.ts')
+// Runs against the real test database (see .env.test), so the health check
+// exercises an actual query rather than a stubbed one.
 const app = createApp()
 
 describe('GET /api/health', () => {

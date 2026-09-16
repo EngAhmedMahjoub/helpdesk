@@ -13,6 +13,26 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
+
+    # The API tests run against a real database rather than a mocked client, so
+    # assertions like "logout deleted the session row" mean what they say.
+    # Credentials match compose.yaml and apps/api/.env.test; the test database
+    # itself is created by `prisma migrate deploy`.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: helpdesk
+          POSTGRES_PASSWORD: helpdesk
+          POSTGRES_DB: helpdesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U helpdesk -d helpdesk"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
