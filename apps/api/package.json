@@ -9,7 +9,8 @@
     "db:generate": "bun --bun --env-file=.env run prisma generate",
     "db:migrate": "bun --bun --env-file=.env run prisma migrate dev",
     "db:studio": "bun --bun --env-file=.env run prisma studio",
-    "lint": "oxlint --deny-warnings"
+    "lint": "oxlint --deny-warnings",
+    "test": "bun test"
   },
   "dependencies": {
     "@helpdesk/shared": "workspace:*",
@@ -21,8 +22,10 @@
   "devDependencies": {
     "@types/bun": "^1.4.2",
     "@types/express": "^5.0.6",
+    "@types/supertest": "^7.2.1",
     "oxlint": "^1.81.0",
     "prisma": "7.10.0",
+    "supertest": "^7.2.2",
     "typescript": "~6.0.2"
   }
 }
