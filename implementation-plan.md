@@ -37,22 +37,22 @@ None.
 
 ## Phase 1 — Data Model and Authentication
 
-| ID | Task | Done when |
-|---|---|---|
-| 1.1 | Prisma setup and initial migration (confirm Prisma works on Bun first) | `bunx prisma migrate dev` runs against local Postgres |
-| 1.2 | `User` model: email, name, passwordHash, role (admin/agent), isActive | Migration applied |
-| 1.3 | `Session` model: tokenHash, userId, expiresAt, createdAt | Migration applied |
-| 1.4 | Password hashing helper: check Bun's built-in password hashing before adding argon2 or bcrypt | Unit tests for hash and verify |
-| 1.5 | Seed script creating the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Running seed twice creates one admin |
-| 1.6 | `POST /api/auth/login` — verify password, create session, set cookie | Test: correct password sets cookie; wrong password returns 401 |
-| 1.7 | Auth middleware — hash cookie token, load session and user, reject missing/expired/inactive | Tests for each rejection case |
-| 1.8 | `requireAdmin` middleware | Agent gets 403 on an admin route |
-| 1.9 | `POST /api/auth/logout` and `GET /api/auth/me` | Tests pass; logout deletes the session row |
-| 1.10 | CORS config for the frontend origin with credentials | Browser request from the web app carries the cookie locally |
-| 1.11 | Frontend: API client (`credentials: 'include'`), TanStack Query, React Router | App routes render |
-| 1.12 | Frontend: login page | Admin can log in with seeded credentials |
-| 1.13 | Frontend: auth state from `/api/auth/me`, protected routes, logout | Logged-out user is redirected to `/login` |
-| 1.14 | Frontend: app layout with navigation; admin-only links hidden for agents | Agent does not see User Management link |
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 1.1 | Prisma setup and initial migration (confirm Prisma works on Bun first) | `bunx prisma migrate dev` runs against local Postgres | Done |
+| 1.2 | `User` model: email, name, passwordHash, role (admin/agent), isActive | Migration applied |  |
+| 1.3 | `Session` model: tokenHash, userId, expiresAt, createdAt | Migration applied |  |
+| 1.4 | Password hashing helper: check Bun's built-in password hashing before adding argon2 or bcrypt | Unit tests for hash and verify |  |
+| 1.5 | Seed script creating the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Running seed twice creates one admin |  |
+| 1.6 | `POST /api/auth/login` — verify password, create session, set cookie | Test: correct password sets cookie; wrong password returns 401 |  |
+| 1.7 | Auth middleware — hash cookie token, load session and user, reject missing/expired/inactive | Tests for each rejection case |  |
+| 1.8 | `requireAdmin` middleware | Agent gets 403 on an admin route |  |
+| 1.9 | `POST /api/auth/logout` and `GET /api/auth/me` | Tests pass; logout deletes the session row |  |
+| 1.10 | CORS config for the frontend origin with credentials | Browser request from the web app carries the cookie locally |  |
+| 1.11 | Frontend: API client (`credentials: 'include'`), TanStack Query, React Router | App routes render |  |
+| 1.12 | Frontend: login page | Admin can log in with seeded credentials |  |
+| 1.13 | Frontend: auth state from `/api/auth/me`, protected routes, logout | Logged-out user is redirected to `/login` |  |
+| 1.14 | Frontend: app layout with navigation; admin-only links hidden for agents | Agent does not see User Management link |  |
 
 ## Phase 2 — User Management (Admin)
 

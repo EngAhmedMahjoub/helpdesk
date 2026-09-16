@@ -176,11 +176,11 @@ When an API change and a frontend change ship together, deploy the backend first
 
 ## To Verify During Setup
 
-Checked with Context7 docs and a running scaffold: Bun workspaces, Express on Bun, Vite React TypeScript template, Vite dev proxy.
+Checked with Context7 docs and a running scaffold: Bun workspaces, Express on Bun, Vite React TypeScript template, Vite dev proxy, Prisma 7 migrations on Bun (`bun run db:migrate` against the compose Postgres).
 
 Not checked against current documentation:
 
-- Library versions and APIs: React Router, TanStack Query, Tailwind CSS, shadcn/ui, Zod, Prisma, pg-boss, argon2, Resend SDK.
-- Bun compatibility: pg-boss, argon2 (native module). Bun has built-in password hashing that may replace argon2. Prisma and Supertest are confirmed working on Bun; `bun test` replaced Vitest.
+- Library versions and APIs: React Router, TanStack Query, Tailwind CSS, shadcn/ui, Zod, pg-boss, argon2, Resend SDK.
+- Bun compatibility: pg-boss, argon2 (native module). Bun has built-in password hashing that may replace argon2. Prisma (client and `migrate dev`) and Supertest are confirmed working on Bun; `bun test` replaced Vitest.
 - Free tier limits for Koyeb, Neon, and Resend on their pricing pages.
 - Cross-subdomain session cookie between Vercel and Koyeb — test a real login early.
