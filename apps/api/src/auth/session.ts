@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { Response } from 'express'
+import type { CookieOptions, Response } from 'express'
 import { prisma } from '../db.ts'
 import { env } from '../env.ts'
 
@@ -26,13 +26,19 @@ export async function createSession(userId: string): Promise<string> {
   return token
 }
 
+const cookieOptions: CookieOptions = {
+  httpOnly: true,
+  // Secure would make the cookie unusable over plain HTTP in local development.
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+}
+
 export function setSessionCookie(res: Response, token: string): void {
-  res.cookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    // Secure would make the cookie unusable over plain HTTP in local development.
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: SESSION_TTL_MS,
-  })
+  res.cookie(SESSION_COOKIE, token, { ...cookieOptions, maxAge: SESSION_TTL_MS })
+}
+
+/** Must match the options the cookie was set with, or the browser keeps it. */
+export function clearSessionCookie(res: Response): void {
+  res.clearCookie(SESSION_COOKIE, cookieOptions)
 }
