@@ -44,7 +44,7 @@ As installed at scaffold time (2026-09-15):
 | Framework | React + Vite + TypeScript |
 | Routing | React Router |
 | Data fetching | TanStack Query |
-| UI | Tailwind CSS + shadcn/ui |
+| UI | Tailwind CSS 4 (via `@tailwindcss/vite`) + shadcn/ui (radix base, nova preset); components in `src/components/ui`, imported through the `@/` alias |
 | Linting | oxlint |
 | API calls | `fetch` with `credentials: 'include'` to `VITE_API_URL` |
 | Local development | Vite dev server proxies `/api` to `http://localhost:3000` |
