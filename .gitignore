@@ -9,3 +9,5 @@ dist
 .env
 .env.*
 !.env.example
+# Tracked: it holds only the local test database URL, no secrets.
+!.env.test
