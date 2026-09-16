@@ -11,7 +11,8 @@
     "typecheck": "bun --filter '*' typecheck",
     "lint": "bun --filter '*' lint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "bun --filter '@helpdesk/api' --filter '@helpdesk/web' test"
   },
   "devDependencies": {
     "prettier": "^3.9.6"
