@@ -59,7 +59,7 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 | Runtime | Bun (runs TypeScript directly; no build step) |
 | Framework | Express 5 + TypeScript |
 | Validation | Zod 4 |
-| Environment config | `apps/api/src/env.ts` validates `process.env` at import; invalid or missing variables print the problem and exit 1 |
+| Environment config | `apps/api/src/env.ts` validates `process.env` at import; invalid or missing variables print the problem and exit 1. `ADMIN_EMAIL` / `ADMIN_PASSWORD` are seed-only and validated in `prisma/seed.ts` instead, so the API can start without them |
 | ORM | Prisma |
 | Database | PostgreSQL |
 | Local database | `docker compose up -d --wait` at the repo root starts Postgres 18 on `localhost:5432` (user, password, and database `helpdesk`); copy `apps/api/.env.example` to `apps/api/.env` |
@@ -84,7 +84,7 @@ Database sessions.
 | Current user | `GET /api/auth/me` returns `{ id, email, role }` or 401 |
 | Request middleware | Hash cookie token, load session + user, reject if missing, expired, or user deactivated |
 | Deactivating an agent | Mark user inactive and delete all their sessions |
-| First admin | Seed script using `ADMIN_EMAIL` / `ADMIN_PASSWORD` |
+| First admin | `bun run db:seed` upserts on email using `ADMIN_EMAIL` / `ADMIN_PASSWORD`; re-running never resets the password |
 | Agent creation | `POST /api/users`, admin only |
 
 ## Tickets

@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "bun --bun --env-file=.env run prisma generate",
     "db:migrate": "bun --bun --env-file=.env run prisma migrate dev",
+    "db:seed": "bun --bun --env-file=.env run prisma db seed",
     "db:studio": "bun --bun --env-file=.env run prisma studio",
     "lint": "oxlint --deny-warnings",
     "test": "bun test"
