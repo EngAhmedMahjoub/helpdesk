@@ -1,4 +1,5 @@
 import express, { type ErrorRequestHandler } from 'express'
+import cookieParser from 'cookie-parser'
 import type { HealthResponse } from '@helpdesk/shared'
 import { prisma } from './db.ts'
 import { authRouter } from './routes/auth.ts'
@@ -7,6 +8,7 @@ export function createApp() {
   const app = express()
 
   app.use(express.json())
+  app.use(cookieParser())
 
   app.get('/api/health', async (_req, res) => {
     let database: HealthResponse['database'] = 'up'

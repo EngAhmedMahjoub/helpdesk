@@ -46,7 +46,7 @@ None.
 | 1.4 | Password hashing helper: check Bun's built-in password hashing before adding argon2 or bcrypt | Unit tests for hash and verify | Done |
 | 1.5 | Seed script creating the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Running seed twice creates one admin | Done |
 | 1.6 | `POST /api/auth/login` — verify password, create session, set cookie | Test: correct password sets cookie; wrong password returns 401 | Done |
-| 1.7 | Auth middleware — hash cookie token, load session and user, reject missing/expired/inactive | Tests for each rejection case |  |
+| 1.7 | Auth middleware — hash cookie token, load session and user, reject missing/expired/inactive | Tests for each rejection case | Done |
 | 1.8 | `requireAdmin` middleware | Agent gets 403 on an admin route |  |
 | 1.9 | `POST /api/auth/logout` and `GET /api/auth/me` | Tests pass; logout deletes the session row |  |
 | 1.10 | CORS config for the frontend origin with credentials | Browser request from the web app carries the cookie locally |  |
