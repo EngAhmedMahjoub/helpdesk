@@ -1,6 +1,7 @@
 import express, { type ErrorRequestHandler } from 'express'
 import type { HealthResponse } from '@helpdesk/shared'
 import { prisma } from './db.ts'
+import { authRouter } from './routes/auth.ts'
 
 export function createApp() {
   const app = express()
@@ -23,6 +24,8 @@ export function createApp() {
     }
     res.status(database === 'up' ? 200 : 503).json(body)
   })
+
+  app.use('/api/auth', authRouter)
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not Found' })
