@@ -77,7 +77,7 @@ Database sessions.
 | Session table | Prisma `Session` model: `id`, `tokenHash`, `userId`, `expiresAt`, `createdAt` |
 | Token | 32 random bytes (`crypto.randomBytes`); raw token in the cookie, SHA-256 hash in the database |
 | Cookie | `httpOnly`, `Secure`, `SameSite=Lax`, set by `api.<domain>` |
-| Passwords | argon2 or bcrypt |
+| Passwords | `Bun.password` (argon2id, m=65536 KiB, t=2, p=1); no argon2 or bcrypt dependency |
 | Expiry | 8 hours; expired sessions deleted by a scheduled task |
 | Login | `POST /api/auth/login` creates a session and sets the cookie |
 | Logout | `POST /api/auth/logout` deletes the session and clears the cookie |
@@ -176,11 +176,11 @@ When an API change and a frontend change ship together, deploy the backend first
 
 ## To Verify During Setup
 
-Checked with Context7 docs and a running scaffold: Bun workspaces, Express on Bun, Vite React TypeScript template, Vite dev proxy, Prisma 7 migrations on Bun (`bun run db:migrate` against the compose Postgres).
+Checked with Context7 docs and a running scaffold: Bun workspaces, Express on Bun, Vite React TypeScript template, Vite dev proxy, Prisma 7 migrations on Bun (`bun run db:migrate` against the compose Postgres), `Bun.password`.
 
 Not checked against current documentation:
 
-- Library versions and APIs: React Router, TanStack Query, Tailwind CSS, shadcn/ui, Zod, pg-boss, argon2, Resend SDK.
-- Bun compatibility: pg-boss, argon2 (native module). Bun has built-in password hashing that may replace argon2. Prisma (client and `migrate dev`) and Supertest are confirmed working on Bun; `bun test` replaced Vitest.
+- Library versions and APIs: React Router, TanStack Query, Tailwind CSS, shadcn/ui, Zod, pg-boss, Resend SDK.
+- Bun compatibility: pg-boss. Prisma (client and `migrate dev`), Supertest, and `Bun.password` are confirmed working on Bun; `bun test` replaced Vitest, and `Bun.password` removed the need for an argon2 or bcrypt dependency.
 - Free tier limits for Koyeb, Neon, and Resend on their pricing pages.
 - Cross-subdomain session cookie between Vercel and Koyeb — test a real login early.
