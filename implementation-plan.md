@@ -42,7 +42,7 @@ None.
 | 1.1 | Prisma setup and initial migration (confirm Prisma works on Bun first) | `bunx prisma migrate dev` runs against local Postgres | Done |
 | 1.2 | `User` model: email, name, passwordHash, role (admin/agent), isActive | Migration applied | Done |
 | 1.3 | `Session` model: tokenHash, userId, expiresAt, createdAt | Migration applied | Done |
-| 1.4 | Password hashing helper: check Bun's built-in password hashing before adding argon2 or bcrypt | Unit tests for hash and verify |  |
+| 1.4 | Password hashing helper: check Bun's built-in password hashing before adding argon2 or bcrypt | Unit tests for hash and verify | Done |
 | 1.5 | Seed script creating the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Running seed twice creates one admin |  |
 | 1.6 | `POST /api/auth/login` — verify password, create session, set cookie | Test: correct password sets cookie; wrong password returns 401 |  |
 | 1.7 | Auth middleware — hash cookie token, load session and user, reject missing/expired/inactive | Tests for each rejection case |  |
