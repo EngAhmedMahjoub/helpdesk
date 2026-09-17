@@ -13,7 +13,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:3000',
+      // The end-to-end run overrides this to reach the API it started on its
+      // own port, rather than whatever a developer has on 3000 — which is
+      // pointed at the development database.
+      '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
     },
   },
 })
