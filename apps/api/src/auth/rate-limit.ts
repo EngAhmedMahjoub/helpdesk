@@ -12,9 +12,14 @@ import { env } from '../env.ts'
  * Counts every attempt, successful or not. Skipping successes would let an
  * attacker who already holds one valid credential keep their budget topped up.
  *
- * A factory, so a test can build one that enforces while the suite's own runs
- * with `skip` on — the suite makes many logins in quick succession from one
- * address, and a live limiter would fail unrelated assertions by ordering.
+ * Enforced in production only. It exists to blunt an endpoint facing the open
+ * internet; locally it only throttles the person building the screens that sign
+ * in, and in the test suite a live limiter would fail unrelated assertions by
+ * ordering. Gating on NODE_ENV is safe now that it has no default — a
+ * production deploy that omits it refuses to boot rather than starting with
+ * this quietly off.
+ *
+ * A factory, so the limiter's own tests can build one that enforces regardless.
  *
  * Production note: Koyeb puts a proxy in front of the API, so `req.ip` will be
  * the proxy's until `trust proxy` is configured. Until then the IP half of the
@@ -43,4 +48,4 @@ export function createLoginRateLimit(options: { skip?: boolean } = {}): RateLimi
   })
 }
 
-export const loginRateLimit = createLoginRateLimit({ skip: env.NODE_ENV === 'test' })
+export const loginRateLimit = createLoginRateLimit({ skip: env.NODE_ENV !== 'production' })
