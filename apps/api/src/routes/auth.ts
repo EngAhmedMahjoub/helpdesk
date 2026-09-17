@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.ts'
 import { verifyAgainstDummyHash, verifyPassword } from '../auth/password.ts'
 import { requireAuth } from '../auth/middleware.ts'
+import { loginRateLimit } from '../auth/rate-limit.ts'
 import {
   SESSION_COOKIE,
   clearSessionCookie,
@@ -18,7 +19,7 @@ const loginSchema = z.object({
 
 export const authRouter = Router()
 
-authRouter.post('/login', async (req, res) => {
+authRouter.post('/login', loginRateLimit, async (req, res) => {
   const body = loginSchema.safeParse(req.body)
 
   if (!body.success) {
