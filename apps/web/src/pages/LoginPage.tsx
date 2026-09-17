@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
+import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -10,15 +12,30 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { currentUserQueryKey, login } from '@/lib/auth'
+
+/**
+ * Only what the client can know. The API remains the real validator: it answers
+ * one 401 with the same message for an unknown email, a wrong password and a
+ * deactivated account, and nothing here should imply otherwise.
+ */
+const loginSchema = z.object({
+  email: z.email('Enter a valid email address'),
+  password: z.string().min(1, 'Enter your password'),
+})
+
+type LoginValues = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+
+  const form = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  })
 
   const signIn = useMutation({
     mutationFn: login,
@@ -31,6 +48,8 @@ export default function LoginPage() {
     },
   })
 
+  const errors = form.formState.errors
+
   return (
     <main className="flex min-h-svh items-center justify-center p-6">
       <Card className="w-full max-w-sm">
@@ -42,42 +61,41 @@ export default function LoginPage() {
           <CardDescription>Helpdesk accounts are created by an administrator.</CardDescription>
         </CardHeader>
 
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            signIn.mutate({ email, password })
-          }}
-        >
-          <CardContent className="flex flex-col gap-4">
+        {/* noValidate hands validation to the schema, so the messages a visitor
+            reads are ours rather than the browser's own bubbles. */}
+        <form noValidate onSubmit={form.handleSubmit((values) => signIn.mutate(values))}>
+          <CardContent>
             {signIn.isError && (
-              <p className="text-sm text-destructive" role="alert">
+              <p className="mb-4 text-sm text-destructive" role="alert">
                 {signIn.error.message}
               </p>
             )}
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                autoComplete="username"
-                id="email"
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                type="email"
-                value={email}
-              />
-            </div>
+            <FieldGroup>
+              <Field data-invalid={Boolean(errors.email)}>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input
+                  aria-invalid={Boolean(errors.email)}
+                  autoComplete="username"
+                  id="email"
+                  type="email"
+                  {...form.register('email')}
+                />
+                <FieldError errors={[errors.email]} />
+              </Field>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                autoComplete="current-password"
-                id="password"
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                type="password"
-                value={password}
-              />
-            </div>
+              <Field data-invalid={Boolean(errors.password)}>
+                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <Input
+                  aria-invalid={Boolean(errors.password)}
+                  autoComplete="current-password"
+                  id="password"
+                  type="password"
+                  {...form.register('password')}
+                />
+                <FieldError errors={[errors.password]} />
+              </Field>
+            </FieldGroup>
           </CardContent>
 
           <CardFooter className="mt-6">
