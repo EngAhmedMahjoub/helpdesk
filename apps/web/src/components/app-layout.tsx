@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router'
 import { cn } from 'cn'
+import { ButtonSpinner } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
 import { useCurrentUser, useSignOut } from '@/hooks/use-auth'
 
@@ -57,6 +58,7 @@ export default function AppLayout() {
               size="sm"
               variant="outline"
             >
+              {signOut.isPending && <ButtonSpinner />}
               {signOut.isPending ? 'Signing out…' : 'Sign out'}
             </Button>
           </div>

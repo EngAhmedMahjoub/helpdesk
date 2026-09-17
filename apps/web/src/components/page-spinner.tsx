@@ -9,3 +9,12 @@ export default function PageSpinner({ label = 'Loading' }: { label?: string }) {
     </div>
   )
 }
+
+/**
+ * Sits inside a button while its action is in flight. No role or label of its
+ * own: the button's text already changes to say what is happening, and a second
+ * announcement would only talk over it.
+ */
+export function ButtonSpinner() {
+  return <LoaderCircle aria-hidden className="size-4 animate-spin" />
+}
