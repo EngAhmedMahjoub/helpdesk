@@ -152,6 +152,35 @@ describe('POST /api/auth/login with bad credentials', () => {
     expect(inactive.status).toBe(wrongPassword.status)
     expect(inactive.body).toEqual(wrongPassword.body)
   })
+
+  test('takes as long to refuse an unknown address as a real one', async () => {
+    const user = await createUser()
+    const attempt = (email: string) =>
+      request(app).post('/api/auth/login').send({ email, password: 'wrong password' })
+
+    // Warm up: the first call resolves the dummy hash promise and lets the
+    // runtime settle, so the measurements below compare steady states.
+    await attempt(user.email)
+    await attempt('nobody@example.com')
+
+    const median = async (email: string) => {
+      const samples: number[] = []
+      for (let i = 0; i < 3; i += 1) {
+        const start = performance.now()
+        await attempt(email)
+        samples.push(performance.now() - start)
+      }
+      return samples.sort((a, b) => a - b)[1]!
+    }
+
+    const known = await median(user.email)
+    const unknown = await median('nobody@example.com')
+
+    // Deliberately loose: argon2 dominates both at roughly 110ms, so scheduling
+    // noise cannot close a real gap. Before the dummy hash the ratio was about
+    // 0.02, so anything near parity proves the work is being done either way.
+    expect(unknown / known).toBeGreaterThan(0.5)
+  })
 })
 
 describe('POST /api/auth/login with an invalid body', () => {

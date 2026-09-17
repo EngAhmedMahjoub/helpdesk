@@ -9,5 +9,7 @@ dist
 .env
 .env.*
 !.env.example
-# Tracked: it holds only the local test database URL, no secrets.
-!.env.test
+# Tracked: it holds only the local test database URL, no secrets. Anchored to
+# the one path that needs it — a bare `!.env.test` un-ignores any file of that
+# name at any depth, so a future app's could be staged without anyone noticing.
+!/apps/api/.env.test

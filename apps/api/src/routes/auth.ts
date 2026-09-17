@@ -1,8 +1,9 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.ts'
-import { verifyPassword } from '../auth/password.ts'
+import { verifyAgainstDummyHash, verifyPassword } from '../auth/password.ts'
 import { requireAuth } from '../auth/middleware.ts'
+import { loginRateLimit } from '../auth/rate-limit.ts'
 import {
   SESSION_COOKIE,
   clearSessionCookie,
@@ -18,7 +19,7 @@ const loginSchema = z.object({
 
 export const authRouter = Router()
 
-authRouter.post('/login', async (req, res) => {
+authRouter.post('/login', loginRateLimit, async (req, res) => {
   const body = loginSchema.safeParse(req.body)
 
   if (!body.success) {
@@ -30,9 +31,17 @@ authRouter.post('/login', async (req, res) => {
     where: { email: body.data.email.toLowerCase() },
   })
 
+  // Always one argon2 verification, even with no account to check against, so
+  // the reply takes the same time whichever way it fails. Short-circuiting here
+  // would answer an unknown address in about 2ms and a real one in about 110ms,
+  // which tells an attacker which addresses exist however uniform the body is.
+  const passwordMatches = user
+    ? await verifyPassword(body.data.password, user.passwordHash)
+    : await verifyAgainstDummyHash(body.data.password)
+
   // One response for an unknown email, a wrong password, and a deactivated
   // account, so the endpoint never reveals which addresses have accounts.
-  if (!user || !user.isActive || !(await verifyPassword(body.data.password, user.passwordHash))) {
+  if (!user || !user.isActive || !passwordMatches) {
     res.status(401).json({ error: 'Invalid email or password' })
     return
   }
