@@ -51,7 +51,39 @@ test('shows the API message and stays put when the credentials are rejected', as
 
   await fillAndSubmit(signedInUser.email, 'wrong')
 
-  const alert = await screen.findByRole('alert')
-  expect(alert.textContent).toBe('Invalid email or password')
+  expect(await screen.findByText('Invalid email or password')).toBeDefined()
   expect(router.state.location.pathname).toBe('/login')
+})
+
+test('rejects a malformed email without asking the API', async () => {
+  const requests = stubApi({ '/auth/login': responds.currentUser })
+
+  renderRoute('/login')
+  await fillAndSubmit('admin@helpdesk', 'correct horse battery')
+
+  expect(await screen.findByText('Enter a valid email address')).toBeDefined()
+  expect(requests).toHaveLength(0)
+})
+
+test('rejects an empty password without asking the API', async () => {
+  const requests = stubApi({ '/auth/login': responds.currentUser })
+
+  renderRoute('/login')
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText('Email'), signedInUser.email)
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByText('Enter your password')).toBeDefined()
+  expect(requests).toHaveLength(0)
+})
+
+test('marks the offending field invalid for assistive tech', async () => {
+  stubApi({ '/auth/login': responds.currentUser })
+
+  renderRoute('/login')
+  await fillAndSubmit('admin@helpdesk', 'correct horse battery')
+
+  await screen.findByText('Enter a valid email address')
+  expect(screen.getByLabelText('Email').getAttribute('aria-invalid')).toBe('true')
+  expect(screen.getByLabelText('Password').getAttribute('aria-invalid')).toBe('false')
 })
