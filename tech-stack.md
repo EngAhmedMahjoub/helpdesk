@@ -48,7 +48,7 @@ As installed at scaffold time (2026-09-15):
 | Linting | oxlint |
 | API calls | `apiFetch` in `src/lib/api.ts` — `fetch` with `credentials: 'include'` to `VITE_API_URL`, throwing `ApiError` on a non-2xx |
 | Local development | Vite dev server proxies `/api` to `http://localhost:3000` |
-| Route protection | Call `GET /api/auth/me` on load; 401 redirects to `/login`; `role` hides admin-only screens |
+| Route protection | `RequireAuth` wraps every route but `/login`; `GET /api/auth/me` on load, 401 redirects to `/login`; `role` hides admin-only screens |
 
 Hiding screens in the UI is not access control. Express enforces permissions on every endpoint.
 
