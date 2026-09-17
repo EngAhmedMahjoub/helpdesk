@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 import { z } from 'zod'
+import { ButtonSpinner } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -100,6 +101,7 @@ export default function LoginPage() {
 
           <CardFooter className="mt-6">
             <Button className="w-full" disabled={signIn.isPending} type="submit">
+              {signIn.isPending && <ButtonSpinner />}
               {signIn.isPending ? 'Signing in…' : 'Sign in'}
             </Button>
           </CardFooter>
