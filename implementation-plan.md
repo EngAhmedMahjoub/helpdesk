@@ -52,6 +52,7 @@ None.
 | 1.10 | CORS config for the frontend origin with credentials | Browser request from the web app carries the cookie locally | Done |
 | 1.11 | Frontend: API client (`credentials: 'include'`), TanStack Query, React Router | App routes render | Done |
 | 1.12 | Frontend: login page | Admin can log in with seeded credentials | Done |
+| 1.12a | Adopt react-hook-form with zod for forms, converting the login page | An invalid email shows a field-level message before the request is sent | Done |
 | 1.13 | Frontend: auth state from `/api/auth/me`, protected routes, logout | Logged-out user is redirected to `/login` | Done |
 | 1.14 | Frontend: app layout with navigation; admin-only links hidden for agents | Agent does not see User Management link |  |
 
