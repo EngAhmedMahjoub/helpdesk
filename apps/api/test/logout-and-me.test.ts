@@ -129,16 +129,16 @@ describe('GET /api/auth/me', () => {
     const res = await request(app).get('/api/auth/me').set('Cookie', cookie(token))
 
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ id: user.id, email: user.email, role: 'admin' })
+    expect(res.body).toEqual({ id: user.id, email: user.email, name: 'Agent', role: 'admin' })
   })
 
-  test('returns nothing beyond id, email and role', async () => {
+  test('returns nothing beyond id, email, name and role', async () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
     const res = await request(app).get('/api/auth/me').set('Cookie', cookie(token))
 
-    expect(Object.keys(res.body).sort()).toEqual(['email', 'id', 'role'])
+    expect(Object.keys(res.body).sort()).toEqual(['email', 'id', 'name', 'role'])
     expect(JSON.stringify(res.body)).not.toContain('passwordHash')
   })
 
@@ -173,7 +173,7 @@ describe('the login, me, logout round trip', () => {
     const after = await request(app).get('/api/auth/me').set('Cookie', sessionCookie)
 
     expect(login.status).toBe(200)
-    expect(me.body).toEqual({ id: user.id, email: user.email, role: 'admin' })
+    expect(me.body).toEqual({ id: user.id, email: user.email, name: 'Agent', role: 'admin' })
     expect(logout.status).toBe(204)
     expect(after.status).toBe(401)
     expect(await prisma.session.count()).toBe(0)

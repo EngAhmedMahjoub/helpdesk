@@ -43,7 +43,7 @@ describe('requireAuth accepts a valid session', () => {
     const res = await request(app).get('/guarded').set('Cookie', cookie(token))
 
     expect(res.status).toBe(200)
-    expect(res.body.user).toEqual({ id: user.id, email: user.email, role: 'agent' })
+    expect(res.body.user).toEqual({ id: user.id, email: user.email, name: 'Agent', role: 'agent' })
   })
 
   test('attaches no password hash', async () => {

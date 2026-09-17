@@ -10,5 +10,6 @@ export type Role = 'admin' | 'agent'
 export type CurrentUser = {
   id: string
   email: string
+  name: string
   role: Role
 }
