@@ -1,0 +1,21 @@
+{
+  "name": "@helpdesk/e2e",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "bun run db:prepare && playwright test",
+    "test:e2e:ui": "bun run db:prepare && playwright test --ui",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings",
+    "db:prepare": "bun prepare-database.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^24.13.3",
+    "oxlint": "^1.81.0",
+    "typescript": "~6.0.2"
+  }
+}

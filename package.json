@@ -12,7 +12,9 @@
     "lint": "bun --filter '*' lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "bun --filter '@helpdesk/api' --filter '@helpdesk/web' test"
+    "test": "bun --filter '@helpdesk/api' --filter '@helpdesk/web' test",
+    "test:e2e": "bun --filter '@helpdesk/e2e' test:e2e",
+    "test:e2e:ui": "bun --filter '@helpdesk/e2e' test:e2e:ui"
   },
   "devDependencies": {
     "prettier": "^3.9.6"
