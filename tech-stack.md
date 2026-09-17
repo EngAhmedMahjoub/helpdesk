@@ -68,6 +68,7 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 | Scheduled tasks | GitHub Actions scheduled workflow calls protected endpoints (the API sleeps when idle, so in-process schedules are unreliable) |
 | CORS | `cors` package, single origin from `WEB_ORIGIN` (`https://app.<domain>` in production, `http://localhost:5173` locally), `credentials: true` |
 | Error handling | A body-parser failure answers its own status (400 unparseable, 413 over the 100KB default) and logs only the error type. The error object is never logged for a client error: `express.json()` attaches the raw body, which for a truncated login POST means a cleartext password in the log |
+| End-to-end tests | Playwright in `apps/e2e`, Chromium. Starts its own API on 3100 and web server on 5273 against a third database, `helpdesk_e2e`, so a run cannot reach the development servers or their data. `bun run test:e2e` prepares the database before Playwright starts, because Playwright launches `webServer` ahead of `globalSetup` |
 | Tests | `bun test` + Supertest (`apps/api/test`) against a real `helpdesk_test` database (`.env.test`, loaded automatically because `bun test` sets `NODE_ENV=test`); `bun run test` applies migrations first and truncates between tests. The web app uses `bun test` with happy-dom and Testing Library |
 
 ## Authentication
