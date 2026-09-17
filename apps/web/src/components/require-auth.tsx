@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from 'react-router'
+import PageSpinner from '@/components/page-spinner'
 import { useCurrentUser } from '@/hooks/use-auth'
 
 /**
@@ -9,9 +10,7 @@ import { useCurrentUser } from '@/hooks/use-auth'
 export default function RequireAuth() {
   const currentUser = useCurrentUser()
 
-  // A placeholder while the session check is in flight. The real loading state
-  // belongs to the app layout in task 1.14.
-  if (currentUser.isPending) return <p className="p-8 text-muted-foreground">Loading…</p>
+  if (currentUser.isPending) return <PageSpinner label="Checking your session" />
 
   if (!currentUser.data) return <Navigate replace to="/login" />
 
