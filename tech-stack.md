@@ -60,13 +60,14 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 | Runtime | Bun (runs TypeScript directly; no build step) |
 | Framework | Express 5 + TypeScript |
 | Validation | Zod 4 |
-| Environment config | `apps/api/src/env.ts` validates `process.env` at import; invalid or missing variables print the problem and exit 1. `ADMIN_EMAIL` / `ADMIN_PASSWORD` are seed-only and validated in `prisma/seed.ts` instead, so the API can start without them |
+| Environment config | `apps/api/src/env.ts` validates `process.env` at import; invalid or missing variables print the problem and exit 1. `NODE_ENV` and `WEB_ORIGIN` carry no defaults on purpose — both decide how tightly the API is locked down, so a deploy that forgets one must fail to boot rather than quietly serve an insecure default. `ADMIN_EMAIL` / `ADMIN_PASSWORD` are seed-only and validated in `prisma/seed.ts` instead, so the API can start without them |
 | ORM | Prisma |
 | Database | PostgreSQL |
 | Local database | `docker compose up -d --wait` at the repo root starts Postgres 18 on `localhost:5432` (user, password, and database `helpdesk`); copy `apps/api/.env.example` to `apps/api/.env` |
 | Background jobs | pg-boss, running inside the API process (Koyeb's free instance cannot run a separate worker) |
 | Scheduled tasks | GitHub Actions scheduled workflow calls protected endpoints (the API sleeps when idle, so in-process schedules are unreliable) |
-| CORS | `cors` package, single origin from `WEB_ORIGIN` (`https://app.<domain>` in production, `http://localhost:5173` by default), `credentials: true` |
+| CORS | `cors` package, single origin from `WEB_ORIGIN` (`https://app.<domain>` in production, `http://localhost:5173` locally), `credentials: true` |
+| Error handling | A body-parser failure answers its own status (400 unparseable, 413 over the 100KB default) and logs only the error type. The error object is never logged for a client error: `express.json()` attaches the raw body, which for a truncated login POST means a cleartext password in the log |
 | Tests | `bun test` + Supertest (`apps/api/test`) against a real `helpdesk_test` database (`.env.test`, loaded automatically because `bun test` sets `NODE_ENV=test`); `bun run test` applies migrations first and truncates between tests. The web app uses `bun test` with happy-dom and Testing Library |
 
 ## Authentication
@@ -81,8 +82,10 @@ Database sessions.
 | Passwords | `Bun.password` (argon2id, m=65536 KiB, t=2, p=1); no argon2 or bcrypt dependency |
 | Expiry | 8 hours; expired sessions deleted by a scheduled task |
 | Login | `POST /api/auth/login` creates a session and sets the cookie |
+| Login timing | Always one argon2 verification, against a dummy hash when no account matches. Short-circuiting would answer an unknown address ~60x faster than a real one, which enumerates accounts however uniform the response body is |
+| Login rate limit | `express-rate-limit`, 10 attempts per 15 minutes, keyed by IP *and* submitted address so one target cannot exhaust another's budget. Counts successes too. Needs `trust proxy` set once the API sits behind Koyeb's proxy (task 8.5) |
 | Logout | `POST /api/auth/logout` deletes the session and clears the cookie |
-| Current user | `GET /api/auth/me` returns `{ id, email, role }` or 401 |
+| Current user | `GET /api/auth/me` returns `{ id, email, name, role }` or 401 |
 | Request middleware | Hash cookie token, load session + user, reject if missing, expired, or user deactivated |
 | Deactivating an agent | Mark user inactive and delete all their sessions |
 | First admin | `bun run db:seed` upserts on email using `ADMIN_EMAIL` / `ADMIN_PASSWORD`; re-running never resets the password |
