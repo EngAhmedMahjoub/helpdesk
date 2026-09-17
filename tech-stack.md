@@ -83,7 +83,7 @@ Database sessions.
 | Expiry | 8 hours; expired sessions deleted by a scheduled task |
 | Login | `POST /api/auth/login` creates a session and sets the cookie |
 | Login timing | Always one argon2 verification, against a dummy hash when no account matches. Short-circuiting would answer an unknown address ~60x faster than a real one, which enumerates accounts however uniform the response body is |
-| Login rate limit | `express-rate-limit`, 10 attempts per 15 minutes, keyed by IP *and* submitted address so one target cannot exhaust another's budget. Counts successes too. Needs `trust proxy` set once the API sits behind Koyeb's proxy (task 8.5) |
+| Login rate limit | `express-rate-limit`, 10 attempts per 15 minutes, keyed by IP *and* submitted address so one target cannot exhaust another's budget. Counts successes too. **Production only** — it guards an endpoint facing the internet, and locally would only throttle whoever is building the screens that sign in. Safe to gate on `NODE_ENV` because it has no default, so a deploy that omits it refuses to boot. Needs `trust proxy` set once the API sits behind Koyeb's proxy (task 8.5) |
 | Logout | `POST /api/auth/logout` deletes the session and clears the cookie |
 | Current user | `GET /api/auth/me` returns `{ id, email, name, role }` or 401 |
 | Request middleware | Hash cookie token, load session + user, reject if missing, expired, or user deactivated |
