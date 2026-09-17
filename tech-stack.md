@@ -42,11 +42,11 @@ As installed at scaffold time (2026-09-15):
 | Concern | Choice |
 |---|---|
 | Framework | React + Vite + TypeScript |
-| Routing | React Router |
-| Data fetching | TanStack Query |
+| Routing | React Router 8 in data mode; route table in `src/routes.tsx`, browser router created in `App` |
+| Data fetching | TanStack Query; shared client in `src/lib/query-client.ts`, no retries on 4xx |
 | UI | Tailwind CSS 4 (via `@tailwindcss/vite`) + shadcn/ui (radix base, nova preset); components in `src/components/ui`, imported through the `@/` alias |
 | Linting | oxlint |
-| API calls | `fetch` with `credentials: 'include'` to `VITE_API_URL` |
+| API calls | `apiFetch` in `src/lib/api.ts` — `fetch` with `credentials: 'include'` to `VITE_API_URL`, throwing `ApiError` on a non-2xx |
 | Local development | Vite dev server proxies `/api` to `http://localhost:3000` |
 | Route protection | Call `GET /api/auth/me` on load; 401 redirects to `/login`; `role` hides admin-only screens |
 
