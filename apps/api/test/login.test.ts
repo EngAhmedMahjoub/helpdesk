@@ -34,7 +34,7 @@ describe('POST /api/auth/login with the correct password', () => {
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password })
 
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ id: user.id, email: user.email, role: 'agent' })
+    expect(res.body).toEqual({ id: user.id, email: user.email, name: 'Agent', role: 'agent' })
     // The password must never come back out, hashed or otherwise.
     expect(JSON.stringify(res.body)).not.toContain('passwordHash')
   })

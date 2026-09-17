@@ -38,7 +38,7 @@ authRouter.post('/login', async (req, res) => {
   }
 
   setSessionCookie(res, await createSession(user.id))
-  res.json({ id: user.id, email: user.email, role: user.role })
+  res.json({ id: user.id, email: user.email, name: user.name, role: user.role })
 })
 
 /**
