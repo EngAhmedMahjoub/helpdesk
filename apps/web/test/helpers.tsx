@@ -13,6 +13,13 @@ export const signedInUser: CurrentUser = {
   role: 'admin',
 }
 
+export const agentUser: CurrentUser = {
+  id: 'u2',
+  email: 'agent@helpdesk.io',
+  name: 'Gil Agent',
+  role: 'agent',
+}
+
 const health: HealthResponse = {
   status: 'ok',
   database: 'up',
@@ -22,6 +29,7 @@ const health: HealthResponse = {
 /** Canned responses for the endpoints the app calls while rendering. */
 export const responds = {
   currentUser: () => Response.json(signedInUser),
+  currentAgent: () => Response.json(agentUser),
   noSession: () => Response.json({ error: 'Unauthorized' }, { status: 401 }),
   health: () => Response.json(health),
   noContent: () => new Response(null, { status: 204 }),

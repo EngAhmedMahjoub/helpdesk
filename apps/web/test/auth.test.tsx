@@ -21,12 +21,12 @@ test('a logged-out visitor to a protected route lands on /login', async () => {
   expect(router.state.historyAction).toBe(NavigationType.Replace)
 })
 
-test('the protected route shows a placeholder while the session check is in flight', () => {
+test('the protected route shows a labelled spinner while the session check is in flight', () => {
   stubApi({ '/auth/me': responds.currentUser, '/health': responds.health })
 
   renderRoute('/')
 
-  expect(screen.getByText('Loading…')).toBeDefined()
+  expect(screen.getByRole('status').textContent).toBe('Checking your session')
 })
 
 test('a signed-in visitor stays and sees their name', async () => {
