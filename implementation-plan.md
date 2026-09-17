@@ -51,7 +51,7 @@ None.
 | 1.9 | `POST /api/auth/logout` and `GET /api/auth/me` | Tests pass; logout deletes the session row | Done |
 | 1.10 | CORS config for the frontend origin with credentials | Browser request from the web app carries the cookie locally | Done |
 | 1.11 | Frontend: API client (`credentials: 'include'`), TanStack Query, React Router | App routes render | Done |
-| 1.12 | Frontend: login page | Admin can log in with seeded credentials |  |
+| 1.12 | Frontend: login page | Admin can log in with seeded credentials | Done |
 | 1.13 | Frontend: auth state from `/api/auth/me`, protected routes, logout | Logged-out user is redirected to `/login` |  |
 | 1.14 | Frontend: app layout with navigation; admin-only links hidden for agents | Agent does not see User Management link |  |
 
