@@ -24,3 +24,66 @@ describe('unknown /api routes', () => {
     expect(res.body).toEqual({ error: 'Not Found' })
   })
 })
+
+describe('malformed requests', () => {
+  /** Captures everything the handler writes, so the assertions can read it back. */
+  function captureLogs() {
+    const lines: string[] = []
+    const original = { error: console.error, warn: console.warn }
+    const record =
+      (...prefix: unknown[]) =>
+      (...args: unknown[]) =>
+        void lines.push([...prefix, ...args].map((a) => Bun.inspect(a)).join(' '))
+
+    console.error = record()
+    console.warn = record()
+
+    return {
+      lines,
+      restore() {
+        console.error = original.error
+        console.warn = original.warn
+      },
+    }
+  }
+
+  const secret = 'hunter2-should-never-be-logged'
+
+  test('answers 400 for unparseable JSON without logging the body', async () => {
+    const logs = captureLogs()
+    try {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .set('Content-Type', 'application/json')
+        // Truncated mid-value, exactly as a cut-short request arrives.
+        .send(`{"email":"agent@example.com","password":"${secret}"`)
+
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'Bad Request' })
+    } finally {
+      logs.restore()
+    }
+
+    // express.json() hangs the raw body off the error; logging the error object
+    // would put the submitted password in the log.
+    expect(logs.lines.join('\n')).not.toContain(secret)
+    expect(logs.lines.join('\n')).toContain('entity.parse.failed')
+  })
+
+  test('answers 413 for a body over the limit without logging it', async () => {
+    const logs = captureLogs()
+    try {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ email: 'agent@example.com', password: secret.padEnd(200_000, 'x') }))
+
+      expect(res.status).toBe(413)
+      expect(res.body).toEqual({ error: 'Payload Too Large' })
+    } finally {
+      logs.restore()
+    }
+
+    expect(logs.lines.join('\n')).not.toContain(secret)
+  })
+})

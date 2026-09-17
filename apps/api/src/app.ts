@@ -6,6 +6,33 @@ import { prisma } from './db.ts'
 import { env } from './env.ts'
 import { authRouter } from './routes/auth.ts'
 
+/**
+ * The status a malformed request deserves, or undefined when the error is ours.
+ *
+ * Body-parser errors carry their own status — 400 for unparseable JSON, 413 for
+ * a body over the 100KB default. Answering 500 for those blamed the server for
+ * the client's mistake and let anyone fill the log with fake faults.
+ */
+function clientErrorStatus(err: unknown): number | undefined {
+  if (typeof err !== 'object' || err === null) return undefined
+
+  const status: unknown = 'status' in err ? err.status : undefined
+  const statusCode: unknown = 'statusCode' in err ? err.statusCode : undefined
+  const candidate = typeof status === 'number' ? status : statusCode
+
+  return typeof candidate === 'number' && candidate >= 400 && candidate < 500
+    ? candidate
+    : undefined
+}
+
+/** The error's type alone — never its message or body, which echo the request. */
+function describe(err: unknown): string {
+  if (typeof err === 'object' && err !== null && 'type' in err && typeof err.type === 'string') {
+    return err.type
+  }
+  return 'unknown'
+}
+
 export function createApp() {
   const app = express()
 
@@ -42,6 +69,19 @@ export function createApp() {
   })
 
   const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+    const status = clientErrorStatus(err)
+
+    if (status) {
+      // Never log the error object itself here. express.json() attaches the
+      // raw body to a parse failure, so a login POST cut short by a flaky
+      // client or a proxy would put a cleartext password in the log — and on a
+      // hosted platform, in the log aggregator. The type and status are all
+      // that is diagnostic anyway.
+      console.warn(`Rejected a ${String(status)} request: ${describe(err)}`)
+      res.status(status).json({ error: status === 413 ? 'Payload Too Large' : 'Bad Request' })
+      return
+    }
+
     console.error(err)
     res.status(500).json({ error: 'Internal Server Error' })
   }
