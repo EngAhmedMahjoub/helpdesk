@@ -4,7 +4,7 @@
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
-    "types": ["bun", "node"],
+    "types": ["node"],
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
