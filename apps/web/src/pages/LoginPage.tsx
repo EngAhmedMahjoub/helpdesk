@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,17 +12,23 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { login } from '@/lib/auth'
+import { currentUserQueryKey, login } from '@/lib/auth'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
   const signIn = useMutation({
     mutationFn: login,
-    // replace, so the back button does not land on the login page again.
-    onSuccess: () => void navigate('/', { replace: true }),
+    onSuccess: (user) => {
+      // Login already answered with the user, so seed the cache with it. The
+      // guard on / would otherwise send a second request for what we hold.
+      queryClient.setQueryData(currentUserQueryKey, user)
+      // replace, so the back button does not land on the login page again.
+      void navigate('/', { replace: true })
+    },
   })
 
   return (
