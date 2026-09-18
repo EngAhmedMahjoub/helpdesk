@@ -67,6 +67,7 @@ None.
 | 2.4 | Frontend: users list page | Admin sees all users | Done |
 | 2.5 | Frontend: create agent form | Admin creates an agent who can then log in | Done |
 | 2.6 | Frontend: deactivate/reactivate action | Deactivated agent is logged out | Done |
+| 2.7 | Phase 2 security review fixes (#144): stray sessions on reactivation, protected seeded admin, email cap, production write limit on `/api/users`, cache cleared at login | Each fix has a test that fails without it | Done |
 
 ## Phase 3 — Tickets (Manual, No Email or AI Yet)
 
