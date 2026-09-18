@@ -2,6 +2,9 @@ import { afterEach, expect, test } from 'bun:test'
 import { screen, waitFor } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { NavigationType } from 'react-router'
+import type { CurrentUser } from '@helpdesk/shared'
+import { currentUserQueryKey } from '../src/lib/auth.ts'
+import { createQueryClient } from '../src/lib/query-client.ts'
 import { renderRoute, responds, signedInUser, stubApi } from './helpers.tsx'
 
 const originalFetch = globalThis.fetch
@@ -86,4 +89,21 @@ test('marks the offending field invalid for assistive tech', async () => {
   await screen.findByText('Enter a valid email address')
   expect(screen.getByLabelText('Email').getAttribute('aria-invalid')).toBe('true')
   expect(screen.getByLabelText('Password').getAttribute('aria-invalid')).toBe('false')
+})
+
+test("signing in drops whatever the previous person's session left cached", async () => {
+  stubApi({ '/auth/login': responds.currentUser, '/health': responds.health })
+
+  // What an expired session leaves behind: /auth/me answers null rather than
+  // failing, so no 401 handler ever ran, and their data is still in memory.
+  const queryClient = createQueryClient()
+  queryClient.setQueryData(['users'], [{ id: 'someone-else', email: 'left@behind.io' }])
+
+  const router = renderRoute('/login', queryClient)
+  await fillAndSubmit(signedInUser.email, 'correct horse battery')
+  await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+
+  expect(queryClient.getQueryData(['users'])).toBeUndefined()
+  // The new session's own user survives the clear.
+  expect(queryClient.getQueryData<CurrentUser>(currentUserQueryKey)).toEqual(signedInUser)
 })

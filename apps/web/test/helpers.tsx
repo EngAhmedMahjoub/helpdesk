@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query'
+import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
 import type { CurrentUser, HealthResponse } from '@helpdesk/shared'
 import { createMemoryRouter } from 'react-router'
@@ -63,12 +63,14 @@ export function stubApi(
   return requests
 }
 
-/** Mounts the real route table at one path, the way App does in the browser. */
-export function renderRoute(path: string) {
+/**
+ * Mounts the real route table at one path, the way App does in the browser.
+ * Pass a query client to start from a cache the test has filled in itself.
+ */
+export function renderRoute(path: string, queryClient: QueryClient = createQueryClient()) {
   const router = createMemoryRouter(routes, { initialEntries: [path] })
-  // The app's own defaults, so caching and retry behave as they do in the
-  // browser; a fresh client per test keeps them from sharing a cache.
-  const queryClient = createQueryClient()
+  // By default the app's own client, so caching and retry behave as they do in
+  // the browser; a fresh one per test keeps them from sharing a cache.
 
   render(
     <QueryClientProvider client={queryClient}>
