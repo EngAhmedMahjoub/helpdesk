@@ -17,7 +17,7 @@ const envSchema = z.object({
     .describe('Origin allowed to call the API with credentials, e.g. https://app.example.com'),
 })
 
-export type Env = z.infer<typeof envSchema>
+type Env = z.infer<typeof envSchema>
 
 const result = envSchema.safeParse(process.env)
 

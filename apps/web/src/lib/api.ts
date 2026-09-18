@@ -48,7 +48,7 @@ apiClient.interceptors.response.use(undefined, (error: unknown) => {
   return Promise.reject(error)
 })
 
-export type ApiRequest = AxiosRequestConfig & {
+type ApiRequest = AxiosRequestConfig & {
   /**
    * Statuses whose body is a result rather than a failure. `/api/health`
    * answers 503 with a full health body when the database is down.

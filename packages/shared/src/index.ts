@@ -27,4 +27,4 @@ export type UserSummary = {
 }
 
 export * from './user-fields.ts'
-export { authorise, type Change, type Party, type Verdict } from './user-permissions.ts'
+export { authorise, type Change, type Party } from './user-permissions.ts'
