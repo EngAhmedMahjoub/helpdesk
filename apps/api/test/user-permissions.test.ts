@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type Change, type Party, authorise } from '../src/auth/user-permissions.ts'
+import { type Change, type Party, authorise } from '@helpdesk/shared'
 
 const seeded: Party = { id: 'seed', role: 'admin', isProtected: true }
 const admin: Party = { id: 'admin', role: 'admin', isProtected: false }

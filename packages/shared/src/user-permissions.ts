@@ -1,4 +1,4 @@
-import type { Role } from '@helpdesk/shared'
+import type { Role } from './index.ts'
 
 /** The facts about a user that decide who may change them. */
 export type Party = {
@@ -20,6 +20,10 @@ export type Verdict = { allowed: true } | { allowed: false; status: 403 | 409; e
 /**
  * Who may change whom, for `PATCH /api/users/:id`. Every caller is already an
  * admin: requireAdmin runs first.
+ *
+ * Shared so the API and the users page read one table. The API enforces it;
+ * the page only uses it to offer the pencil and the Active switch where the API
+ * would say yes, so it can never offer something that would be refused.
  *
  * | Acting ↓ / account → | Themselves              | Another admin | Agent |
  * |----------------------|-------------------------|---------------|-------|

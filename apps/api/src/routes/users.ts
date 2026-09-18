@@ -1,13 +1,12 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import type { UserSummary } from '@helpdesk/shared'
+import { type UserSummary, authorise } from '@helpdesk/shared'
 import { prisma } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { hashPassword } from '../auth/password.ts'
 import { requireAdmin, requireAuth } from '../auth/middleware.ts'
 import { userWriteRateLimit } from '../auth/rate-limit.ts'
 import { SESSION_COOKIE, hashToken } from '../auth/session.ts'
-import { authorise } from '../auth/user-permissions.ts'
 
 /** The columns a user list or a creation response may expose. Never the hash. */
 const summaryFields = {
