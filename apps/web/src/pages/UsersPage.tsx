@@ -1,4 +1,5 @@
 import type { UserSummary } from '@helpdesk/shared'
+import TableSkeleton, { type Column } from '@/components/table-skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -13,6 +14,16 @@ import { useUsers } from '@/hooks/use-users'
 // Built once rather than per row. undefined locale means the reader's own.
 const joinedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
 
+// One list for the skeleton and the table, so their headers and widths cannot
+// drift apart. Sums to 100%; Email gets the most because it runs longest.
+const columns: Column[] = [
+  { label: 'Name', width: 'w-[22%]' },
+  { label: 'Email', width: 'w-[32%]' },
+  { label: 'Role', width: 'w-[13%]' },
+  { label: 'Status', width: 'w-[15%]' },
+  { label: 'Joined', width: 'w-[18%]' },
+]
+
 export default function UsersPage() {
   const users = useUsers()
 
@@ -24,7 +35,7 @@ export default function UsersPage() {
       </p>
 
       <div className="mt-6">
-        {users.isPending && <p className="text-muted-foreground">Loading users…</p>}
+        {users.isPending && <TableSkeleton columns={columns} label="Loading users" />}
 
         {users.isError && (
           <p className="text-destructive" role="alert">
@@ -40,22 +51,28 @@ export default function UsersPage() {
 
 function UsersTable({ users }: { users: UserSummary[] }) {
   return (
-    <Table>
+    <Table className="table-fixed">
       <caption className="sr-only">Users, oldest first</caption>
       <TableHeader>
         <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Email</TableHead>
-          <TableHead>Role</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Joined</TableHead>
+          {columns.map((column) => (
+            <TableHead className={column.width} key={column.label}>
+              {column.label}
+            </TableHead>
+          ))}
         </TableRow>
       </TableHeader>
       <TableBody>
         {users.map((user) => (
           <TableRow key={user.id}>
-            <TableCell className="font-medium text-foreground">{user.name}</TableCell>
-            <TableCell className="text-muted-foreground">{user.email}</TableCell>
+            {/* Fixed columns cut long text off instead of widening to fit it;
+                title keeps the whole value a hover away. */}
+            <TableCell className="truncate font-medium text-foreground" title={user.name}>
+              {user.name}
+            </TableCell>
+            <TableCell className="truncate text-muted-foreground" title={user.email}>
+              {user.email}
+            </TableCell>
             <TableCell>
               <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
             </TableCell>

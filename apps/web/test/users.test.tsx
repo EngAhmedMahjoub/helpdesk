@@ -124,3 +124,27 @@ test('an admin is not redirected away from their own screen', async () => {
   expect(signedInUser.role).toBe('admin')
   expect(agentUser.role).toBe('agent')
 })
+
+test('shows a skeleton while the list loads, then swaps in the table', async () => {
+  // Held open so the pending state lasts long enough to look at.
+  let release: (response: Response) => void = () => {}
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/users': () => new Promise<Response>((resolve) => (release = resolve)),
+  })
+
+  renderRoute('/users')
+
+  // Found by its text, then walked up to the region: a status is named by an
+  // author label, not its contents, and the session check's spinner is also a
+  // status that shows first.
+  const loading = (await screen.findByText('Loading users')).closest('[role="status"]')
+  expect(loading?.getAttribute('aria-busy')).toBe('true')
+  // The placeholder is hidden from assistive tech, so it is not a second table.
+  expect(screen.queryByRole('table')).toBeNull()
+
+  release(Response.json(users))
+
+  await screen.findByRole('table')
+  expect(screen.queryByText('Loading users')).toBeNull()
+})

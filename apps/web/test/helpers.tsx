@@ -43,7 +43,7 @@ export const responds = {
  * passes one object, and method, credentials and body all hang off it. Nothing
  * here reads the body, so a test still can — `await requests[0].text()`.
  */
-export function stubApi(handlers: Record<string, () => Response>): Request[] {
+export function stubApi(handlers: Record<string, () => Response | Promise<Response>>): Request[] {
   const requests: Request[] = []
 
   globalThis.fetch = ((input: Request) => {
