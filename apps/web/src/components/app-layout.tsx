@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router'
+import { Link, NavLink, Outlet } from 'react-router'
 import { cn } from 'cn'
 import { ButtonSpinner } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,11 @@ export default function AppLayout() {
     <>
       <header className="border-b">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 p-4">
-          <span className="font-semibold text-foreground">Helpdesk</span>
+          {/* Link, not NavLink: the brand is a way home, not a nav item, so it
+              never takes the current-page styling Dashboard already shows. */}
+          <Link className="font-semibold text-foreground" to="/">
+            Helpdesk
+          </Link>
 
           <nav aria-label="Main" className="flex items-center gap-4">
             {visibleItems.map((item) => (

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { agentUser, renderRoute, responds, signedInUser, stubApi } from './helpers.tsx'
 
@@ -57,4 +57,16 @@ test('a nav link moves between screens without leaving the layout', async () => 
   await waitFor(() => expect(router.state.location.pathname).toBe('/users'))
   expect(screen.getByRole('heading', { name: 'Users' })).toBeDefined()
   expect(nav()).toBeDefined()
+})
+
+test('the Helpdesk name in the header goes home', async () => {
+  stubApi({ '/auth/me': responds.currentUser, '/health': responds.health })
+
+  const router = renderRoute('/tickets')
+  await screen.findByText(signedInUser.name)
+  await userEvent.setup().click(screen.getByRole('link', { name: 'Helpdesk' }))
+
+  await waitFor(() => expect(router.state.location.pathname).toBe('/'))
+  // Outside the Main nav on purpose: it is the brand, not a second Dashboard item.
+  expect(within(nav()).queryByRole('link', { name: 'Helpdesk' })).toBeNull()
 })
