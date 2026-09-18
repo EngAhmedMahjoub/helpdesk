@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { CookieOptions, Response } from 'express'
+import type { CookieOptions, Request, Response } from 'express'
 import { prisma } from '../db.ts'
 import { env } from '../env.ts'
 
@@ -9,6 +9,15 @@ export const SESSION_TTL_MS = 8 * 60 * 60 * 1000
 /** The raw token lives only in the cookie; the database stores this hash. */
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
+}
+
+/**
+ * The session token from the request's cookie, or undefined when there is none
+ * to look up. The cookie is client input, so its type is checked, not assumed.
+ */
+export function readSessionToken(req: Request): string | undefined {
+  const token: unknown = req.cookies?.[SESSION_COOKIE]
+  return typeof token === 'string' && token.length > 0 ? token : undefined
 }
 
 /** Creates a session row and returns the raw token for the cookie. */

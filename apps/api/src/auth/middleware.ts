@@ -1,7 +1,8 @@
 import type { RequestHandler } from 'express'
 import type { CurrentUser } from '@helpdesk/shared'
+import type { User } from '../generated/prisma/client.ts'
 import { prisma } from '../db.ts'
-import { SESSION_COOKIE, clearSessionCookie, hashToken } from './session.ts'
+import { clearSessionCookie, hashToken, readSessionToken } from './session.ts'
 
 // Express exposes global Express.Request as the open interface applications
 // extend; express-serve-static-core is not resolvable by bare name under Bun's
@@ -27,9 +28,9 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const token: unknown = req.cookies?.[SESSION_COOKIE]
+  const token = readSessionToken(req)
 
-  if (typeof token !== 'string' || token.length === 0) {
+  if (token === undefined) {
     reject()
     return
   }
@@ -59,13 +60,16 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     return
   }
 
-  req.user = {
-    id: session.user.id,
-    email: session.user.email,
-    name: session.user.name,
-    role: session.user.role,
-  }
+  req.user = toCurrentUser(session.user)
   next()
+}
+
+/**
+ * The caller as the API describes them, from login and from /me alike. Picked
+ * field by field so a column added to User is not exposed by accident.
+ */
+export function toCurrentUser(user: User): CurrentUser {
+  return { id: user.id, email: user.email, name: user.name, role: user.role }
 }
 
 /**
