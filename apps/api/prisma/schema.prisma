@@ -22,6 +22,10 @@ model User {
   passwordHash String
   role         Role      @default(agent)
   isActive     Boolean   @default(true)
+  // Set by the seed on the admin it creates. Nobody can deactivate a protected
+  // user: with no admin left active, nobody could manage users through the app,
+  // and the seed would not bring them back.
+  isProtected  Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     Session[]

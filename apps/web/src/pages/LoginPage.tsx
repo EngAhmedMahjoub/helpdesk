@@ -41,6 +41,11 @@ export default function LoginPage() {
   const signIn = useMutation({
     mutationFn: login,
     onSuccess: (user) => {
+      // Whatever is cached belongs to whoever was here before. Sign-out and a
+      // 401 already clear it, but a session that simply expired is only noticed
+      // by the /auth/me check, which answers null rather than failing, so
+      // nothing clears the cache that way. Clearing here covers every route in.
+      queryClient.clear()
       // Login already answered with the user, so seed the cache with it. The
       // guard on / would otherwise send a second request for what we hold.
       queryClient.setQueryData(currentUserQueryKey, user)

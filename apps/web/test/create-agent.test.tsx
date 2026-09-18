@@ -16,6 +16,7 @@ const admin: UserSummary = {
   name: 'Ada Admin',
   role: 'admin',
   isActive: true,
+  isProtected: false,
   createdAt: '2026-01-05T09:00:00.000Z',
 }
 
@@ -25,6 +26,7 @@ const created: UserSummary = {
   name: 'Nia New',
   role: 'agent',
   isActive: true,
+  isProtected: false,
   createdAt: '2026-09-18T09:00:00.000Z',
 }
 
@@ -90,6 +92,22 @@ test('a short password is refused before any request is sent', async () => {
   await fill(user, dialog, { ...valid, password: 'short' })
 
   expect(await dialog.findByText('Use at least 12 characters')).toBeDefined()
+  expect(requests.some((request) => request.method === 'POST')).toBe(false)
+})
+
+test('an email over 254 characters is refused before any request is sent', async () => {
+  const requests = stubUsers()
+  renderRoute('/users')
+
+  const { user, dialog } = await openDialog()
+  await user.type(dialog.getByLabelText('Name'), valid.name)
+  // Pasted, not typed: 255 keystrokes would only slow the test down.
+  await user.click(dialog.getByLabelText('Email'))
+  await user.paste(`${'a'.repeat(243)}@example.com`)
+  await user.type(dialog.getByLabelText('Initial password'), valid.password)
+  await user.click(dialog.getByRole('button', { name: 'Add agent' }))
+
+  expect(await dialog.findByText('Use at most 254 characters')).toBeDefined()
   expect(requests.some((request) => request.method === 'POST')).toBe(false)
 })
 

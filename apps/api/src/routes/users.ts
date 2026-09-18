@@ -5,6 +5,7 @@ import { prisma } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { hashPassword } from '../auth/password.ts'
 import { requireAdmin, requireAuth } from '../auth/middleware.ts'
+import { userWriteRateLimit } from '../auth/rate-limit.ts'
 
 /** The columns a user list or a creation response may expose. Never the hash. */
 const summaryFields = {
@@ -13,6 +14,7 @@ const summaryFields = {
   name: true,
   role: true,
   isActive: true,
+  isProtected: true,
   createdAt: true,
 } as const
 
@@ -22,13 +24,17 @@ function toSummary(user: {
   name: string
   role: UserSummary['role']
   isActive: boolean
+  isProtected: boolean
   createdAt: Date
 }): UserSummary {
   return { ...user, createdAt: user.createdAt.toISOString() }
 }
 
 const createUserSchema = z.object({
-  email: z.email(),
+  // 254 is the longest address SMTP can deliver to. Without a cap, a few KB
+  // overflowed the unique index's 2704-byte row limit: Postgres refused the
+  // insert and the admin got a 500, after argon2 had already been paid for.
+  email: z.email().max(254),
   name: z.string().trim().min(1).max(100),
   // 12 to match ADMIN_PASSWORD in the seed script, so the admin an agent is
   // created by cannot hold a weaker password than the agent. The cap keeps a
@@ -61,7 +67,7 @@ usersRouter.get('/', async (_req, res) => {
   res.json(users.map(toSummary))
 })
 
-usersRouter.post('/', async (req, res) => {
+usersRouter.post('/', userWriteRateLimit, async (req, res) => {
   const body = createUserSchema.safeParse(req.body)
 
   if (!body.success) {
@@ -100,7 +106,7 @@ usersRouter.post('/', async (req, res) => {
   }
 })
 
-usersRouter.patch('/:id', async (req, res) => {
+usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
   const body = updateUserSchema.safeParse(req.body)
 
   if (!body.success) {
@@ -108,15 +114,17 @@ usersRouter.patch('/:id', async (req, res) => {
     return
   }
 
-  const id = req.params.id
-
-  // A malformed id answers the same 404 as a well-formed one with no row. It
-  // cannot name a user either way, and Postgres would raise on the uuid cast
-  // rather than miss cleanly.
-  if (!z.uuid().safeParse(id).success) {
+  // A malformed id answers the same 404 as a well-formed one with no row: it
+  // cannot name a user either way. Checked here only to answer early — User.id
+  // is TEXT, so a malformed id would reach Postgres and simply miss. The parsed
+  // value is used from here on: with a middleware ahead of this handler, Express
+  // no longer infers the route's params and types req.params.id as string[] too.
+  const parsedId = z.uuid().safeParse(req.params.id)
+  if (!parsedId.success) {
     res.status(404).json({ error: 'User not found' })
     return
   }
+  const id = parsedId.data
 
   // An admin deactivating themselves is refused: it deletes the session making
   // the request, and with one admin there is then nobody left who can undo it.
@@ -126,19 +134,39 @@ usersRouter.patch('/:id', async (req, res) => {
     return
   }
 
+  // The seeded admin is never deactivated, by anyone. The self check above only
+  // stops an admin locking themselves out; two admins deactivating each other at
+  // the same moment would leave nobody who can manage users. Read outside the
+  // transaction: only the seed ever sets the flag, so it cannot change under us.
+  if (!body.data.isActive) {
+    const target = await prisma.user.findUnique({ where: { id }, select: { isProtected: true } })
+    if (target?.isProtected) {
+      res.status(409).json({ error: 'This account cannot be deactivated' })
+      return
+    }
+  }
+
   try {
     const user = await prisma.$transaction(async (tx) => {
+      const before = await tx.user.findUnique({ where: { id }, select: { isActive: true } })
+
       const updated = await tx.user.update({
         where: { id },
         data: { isActive: body.data.isActive },
         select: summaryFields,
       })
 
-      // In the same transaction as the flag, so the rows can never outlive it.
-      // requireAuth already refuses an inactive user, so this is not what locks
-      // them out — it is what stops a reactivation later handing back sessions
-      // that were live weeks ago.
-      if (!body.data.isActive) {
+      // requireAuth already refuses an inactive user, so deleting sessions is
+      // not what locks them out. It is what stops a reactivation handing back a
+      // session nobody meant to issue.
+      //
+      // On reactivation too, not only deactivation. A login that read the user
+      // as active before a deactivation committed, then spent its ~100ms in
+      // argon2, inserts its session after the deactivation's delete. Refused
+      // while the user is inactive, that row would come alive on reactivation.
+      // Anyone who was inactive holds no session worth keeping. An already
+      // active user is left alone: reactivating them must not sign them out.
+      if (!body.data.isActive || before?.isActive === false) {
         await tx.session.deleteMany({ where: { userId: id } })
       }
 

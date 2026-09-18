@@ -18,6 +18,7 @@ const users: UserSummary[] = [
     name: signedInUser.name,
     role: 'admin',
     isActive: true,
+    isProtected: false,
     createdAt: '2026-01-05T09:00:00.000Z',
   },
   {
@@ -26,6 +27,7 @@ const users: UserSummary[] = [
     name: 'Gil Agent',
     role: 'agent',
     isActive: true,
+    isProtected: false,
     createdAt: '2026-02-10T09:00:00.000Z',
   },
   {
@@ -34,7 +36,17 @@ const users: UserSummary[] = [
     name: 'Fay Former',
     role: 'agent',
     isActive: false,
+    isProtected: false,
     createdAt: '2026-03-15T09:00:00.000Z',
+  },
+  {
+    id: 'u4',
+    email: 'seed@helpdesk.io',
+    name: 'Sam Seed',
+    role: 'admin',
+    isActive: true,
+    isProtected: true,
+    createdAt: '2026-01-01T09:00:00.000Z',
   },
 ]
 
@@ -140,6 +152,16 @@ test("the admin's own row offers no way to deactivate themselves", async () => {
   // The API refuses it with 409; a button that could only fail is not offered.
   expect(own.queryByRole('button')).toBeNull()
   expect(own.getByText('You')).toBeDefined()
+})
+
+test('the seeded admin offers no deactivate button, even to another admin', async () => {
+  stubUsers()
+  renderRoute('/users')
+
+  const seeded = await rowFor('Sam Seed')
+  // The API refuses it with 409; a button that could only fail is not offered.
+  expect(seeded.queryByRole('button')).toBeNull()
+  expect(seeded.getByText('Protected')).toBeDefined()
 })
 
 test('a 401 from a mutation lands on the login form too', async () => {

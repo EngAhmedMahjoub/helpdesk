@@ -62,6 +62,8 @@ export async function prepareDatabase(): Promise<void> {
         name: ADMIN.name,
         passwordHash: await hashPassword(ADMIN.password),
         role: 'admin',
+        // As the seed marks its admin, so the suite runs against the same rule.
+        isProtected: true,
       },
     })
 

@@ -30,6 +30,13 @@ type Props = {
 export default function UserStatusAction({ user, isSelf, onChanged }: Props) {
   if (isSelf) return <span className="text-sm text-muted-foreground">You</span>
 
+  // The seeded admin: the API refuses to deactivate them, so a button that
+  // could only fail is not offered. Reactivation still is, should they ever be
+  // found inactive — it only restores the account the flag exists to keep.
+  if (user.isProtected && user.isActive) {
+    return <span className="text-sm text-muted-foreground">Protected</span>
+  }
+
   return user.isActive ? (
     <DeactivateAction onChanged={onChanged} user={user} />
   ) : (

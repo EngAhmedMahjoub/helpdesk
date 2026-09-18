@@ -21,6 +21,8 @@ export type UserSummary = {
   name: string
   role: Role
   isActive: boolean
+  /** The seeded admin. The API refuses to deactivate them. */
+  isProtected: boolean
   createdAt: string
 }
 

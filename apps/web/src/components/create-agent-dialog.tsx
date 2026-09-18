@@ -27,7 +27,7 @@ import { ApiError } from '@/lib/api'
  */
 const createAgentSchema = z.object({
   name: z.string().trim().min(1, 'Enter a name').max(100, 'Keep the name under 100 characters'),
-  email: z.email('Enter a valid email address'),
+  email: z.email('Enter a valid email address').max(254, 'Use at most 254 characters'),
   password: z
     .string()
     .min(12, 'Use at least 12 characters')

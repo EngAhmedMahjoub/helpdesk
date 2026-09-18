@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
 import type { Role, UserSummary } from '@helpdesk/shared'
@@ -8,7 +9,13 @@ import { prisma, resetDatabase } from './db.ts'
 const app = createApp()
 
 async function createUser(
-  overrides: { email?: string; name?: string; role?: Role; isActive?: boolean } = {},
+  overrides: {
+    email?: string
+    name?: string
+    role?: Role
+    isActive?: boolean
+    isProtected?: boolean
+  } = {},
 ) {
   const role = overrides.role ?? 'agent'
   return prisma.user.create({
@@ -20,6 +27,7 @@ async function createUser(
       passwordHash: 'not-used-here',
       role,
       isActive: overrides.isActive ?? true,
+      isProtected: overrides.isProtected ?? false,
     },
   })
 }
@@ -48,6 +56,7 @@ describe('GET /api/users as an admin', () => {
       name: 'Agent',
       role: 'agent',
       isActive: true,
+      isProtected: false,
       createdAt: agent.createdAt.toISOString(),
     })
   })
@@ -236,6 +245,20 @@ describe('POST /api/users with an invalid body', () => {
     ['a blank name', { email: 'a@example.com', name: '   ', password: 'a-long-enough-password' }],
     ['a password under 12 characters', { email: 'a@example.com', name: 'A', password: 'short' }],
     ['a missing password', { email: 'a@example.com', name: 'A' }],
+    [
+      'an email over 254 characters',
+      { email: `${'a'.repeat(243)}@example.com`, name: 'A', password: 'a-long-enough-password' },
+    ],
+    [
+      // Random, so Postgres cannot compress it under the unique index's 2704-byte
+      // row limit. Before the cap this was a 500, after argon2 had already run.
+      'an email too long for the unique index',
+      {
+        email: `${randomBytes(1500).toString('hex')}@example.com`,
+        name: 'A',
+        password: 'a-long-enough-password',
+      },
+    ],
   ]
 
   for (const [label, payload] of cases) {
@@ -388,6 +411,32 @@ describe('PATCH /api/users/:id reactivating an agent', () => {
     // Reactivating an active user must not sweep away the sessions they hold.
     expect(await prisma.session.count({ where: { userId: agent.id } })).toBe(1)
   })
+
+  test('does not revive a session created while the agent was inactive', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const adminCookie = await cookieFor(admin.id)
+    const agent = await createUser()
+
+    await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', adminCookie)
+      .send({ isActive: false })
+
+    // Where a racing login leaves things: it read the agent as active before
+    // the deactivation committed, and inserted its session after the delete.
+    const straggler = await cookieFor(agent.id)
+    expect((await request(app).get('/api/auth/me').set('Cookie', straggler)).status).toBe(401)
+
+    await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', adminCookie)
+      .send({ isActive: true })
+
+    // Without the delete on reactivation this answers 200: a session nobody
+    // issued to an active user, handed back by the reactivation.
+    expect((await request(app).get('/api/auth/me').set('Cookie', straggler)).status).toBe(401)
+    expect(await prisma.session.count({ where: { userId: agent.id } })).toBe(0)
+  })
 })
 
 describe('PATCH /api/users/:id refusing the request', () => {
@@ -404,6 +453,36 @@ describe('PATCH /api/users/:id refusing the request', () => {
     // Nothing moved: the admin is still active and still signed in.
     expect((await prisma.user.findUnique({ where: { id: admin.id } }))?.isActive).toBe(true)
     expect((await request(app).get('/api/auth/me').set('Cookie', cookie)).status).toBe(200)
+  })
+
+  test('refuses to deactivate the seeded admin, even for another admin', async () => {
+    const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
+    const seededCookie = await cookieFor(seeded.id)
+    const other = await createUser({ role: 'admin', email: 'other@example.com' })
+
+    const res = await request(app)
+      .patch(`/api/users/${seeded.id}`)
+      .set('Cookie', await cookieFor(other.id))
+      .send({ isActive: false })
+
+    expect(res.status).toBe(409)
+    expect(res.body).toEqual({ error: 'This account cannot be deactivated' })
+    // Nothing moved: still active, and still signed in.
+    expect((await prisma.user.findUnique({ where: { id: seeded.id } }))?.isActive).toBe(true)
+    expect((await request(app).get('/api/auth/me').set('Cookie', seededCookie)).status).toBe(200)
+  })
+
+  test('reports the seeded admin as protected in the list', async () => {
+    const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
+    await createUser()
+
+    const res = await request(app)
+      .get('/api/users')
+      .set('Cookie', await cookieFor(seeded.id))
+
+    const body = res.body as UserSummary[]
+    expect(body.find((u) => u.email === 'seed@example.com')?.isProtected).toBe(true)
+    expect(body.find((u) => u.email === 'agent@example.com')?.isProtected).toBe(false)
   })
 
   test('lets one admin deactivate another', async () => {

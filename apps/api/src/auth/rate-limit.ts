@@ -49,3 +49,39 @@ export function createLoginRateLimit(options: { skip?: boolean } = {}): RateLimi
 }
 
 export const loginRateLimit = createLoginRateLimit({ skip: env.NODE_ENV !== 'production' })
+
+/**
+ * Caps user-management writes — creating agents and switching them on or off —
+ * per admin.
+ *
+ * Every create hashes a password at argon2's 64 MiB before the unique index is
+ * even asked, so a duplicate that ends in 409 costs as much as a success. One
+ * admin session, stolen or scripted, could otherwise keep the API busy hashing.
+ *
+ * Keyed by the admin's id rather than IP: requireAuth has already run, so the
+ * caller is known, and a busy office sharing one address should not share one
+ * budget. The IP fallback never fires behind requireAuth; it is there so a
+ * route wired without it still gets a limit instead of a shared bucket.
+ *
+ * Production only, like the login limit. The end-to-end suite creates and
+ * deactivates users all day, and a live limit there would fail specs by order.
+ */
+export function createUserWriteRateLimit(
+  options: { skip?: boolean } = {},
+): RateLimitRequestHandler {
+  const { skip = false } = options
+
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 60,
+    skip: () => skip,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? 'unknown'),
+    message: { error: 'Too many changes to users, please try again later' },
+  })
+}
+
+export const userWriteRateLimit = createUserWriteRateLimit({
+  skip: env.NODE_ENV !== 'production',
+})
