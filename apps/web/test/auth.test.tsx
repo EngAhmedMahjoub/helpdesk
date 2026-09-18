@@ -52,8 +52,8 @@ test('signing out calls the API and returns to /login', async () => {
   await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
 
   const logoutRequest = requests.find((request) => request.url.endsWith('/api/auth/logout'))
-  expect(logoutRequest?.init?.method).toBe('POST')
-  expect(logoutRequest?.init?.credentials).toBe('include')
+  expect(logoutRequest?.method).toBe('POST')
+  expect(logoutRequest?.credentials).toBe('include')
 })
 
 test('the session check is not repeated after signing in', async () => {

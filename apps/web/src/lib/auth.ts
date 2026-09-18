@@ -1,5 +1,5 @@
 import type { CurrentUser } from '@helpdesk/shared'
-import { ApiError, apiFetch } from '@/lib/api'
+import { ApiError, apiRequest } from '@/lib/api'
 
 export type Credentials = {
   email: string
@@ -14,10 +14,8 @@ export const currentUserQueryKey = ['currentUser']
  * cookie the API sets, so there is nothing for the client to store.
  */
 export function login(credentials: Credentials): Promise<CurrentUser> {
-  return apiFetch<CurrentUser>('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify(credentials),
-  })
+  // axios serialises the object and sets the JSON content type itself.
+  return apiRequest<CurrentUser>('/auth/login', { method: 'POST', data: credentials })
 }
 
 /**
@@ -26,7 +24,7 @@ export function login(credentials: Credentials): Promise<CurrentUser> {
  */
 export async function fetchCurrentUser(): Promise<CurrentUser | null> {
   try {
-    return await apiFetch<CurrentUser>('/auth/me')
+    return await apiRequest<CurrentUser>('/auth/me')
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) return null
     throw error
@@ -34,5 +32,5 @@ export async function fetchCurrentUser(): Promise<CurrentUser | null> {
 }
 
 export function logout(): Promise<void> {
-  return apiFetch<void>('/auth/logout', { method: 'POST' })
+  return apiRequest<void>('/auth/logout', { method: 'POST' })
 }

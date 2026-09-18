@@ -43,4 +43,6 @@ Both are defined in `.claude/agents/` and registered at session start; a newly a
 
 Comments explain *why*, not *what* — the trade-off taken, the failure that prompted the line. Prettier: no semicolons, single quotes, 100 columns.
 
+**Data fetching: axios for the HTTP call, TanStack Query for server state.** Never native `fetch`. Go through `apiRequest` (or `apiClient`) in `apps/web/src/lib/api.ts` — it carries the base URL, `withCredentials`, and the interceptor that turns a failure into `ApiError`. Caching, invalidation and loading state belong to `useQuery` / `useMutation`, not to hand-rolled state.
+
 Verify before reporting. Run the thing and read the output; a change that looks right is not a change that works. When a check is skipped or a claim rests on inference, say so.
