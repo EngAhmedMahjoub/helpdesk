@@ -1,5 +1,6 @@
 import type { RouteObject } from 'react-router'
 import AppLayout from '@/components/app-layout'
+import RequireAdmin from '@/components/require-admin'
 import RequireAuth from '@/components/require-auth'
 import HomePage from '@/pages/HomePage'
 import LoginPage from '@/pages/LoginPage'
@@ -21,7 +22,10 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, Component: HomePage },
           { path: 'tickets', Component: TicketsPage },
-          { path: 'users', Component: UsersPage },
+          {
+            Component: RequireAdmin,
+            children: [{ path: 'users', Component: UsersPage }],
+          },
         ],
       },
     ],
