@@ -193,7 +193,7 @@ function EditUserDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form noValidate onSubmit={form.handleSubmit(save)}>
+        <form id={`edit-user-${user.id}`} noValidate onSubmit={form.handleSubmit(save)}>
           {saveDetails.isError && !conflict && (
             <p className="mb-4 text-sm text-destructive" role="alert">
               {saveDetails.error.message}
@@ -242,22 +242,13 @@ function EditUserDialog({
               <FieldError errors={[errors.password]} />
             </Field>
           </FieldGroup>
-
-          <DialogFooter className="mt-6">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button disabled={saveDetails.isPending} type="submit">
-              {saveDetails.isPending && <ButtonSpinner />}
-              {saveDetails.isPending ? 'Saving…' : 'Save changes'}
-            </Button>
-          </DialogFooter>
         </form>
 
         <Separator />
 
+        {/* Outside the form, so its buttons act on their own and cannot submit
+            the details by accident; above the footer, which shadcn styles as
+            the dialog's closing bar. */}
         <section aria-labelledby={`access-${user.id}`} className="flex flex-col gap-2">
           <h3 className="text-sm font-medium" id={`access-${user.id}`}>
             Access
@@ -270,6 +261,19 @@ function EditUserDialog({
             user={user}
           />
         </section>
+
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Cancel
+            </Button>
+          </DialogClose>
+          {/* form=, because the footer sits outside the form it submits. */}
+          <Button disabled={saveDetails.isPending} form={`edit-user-${user.id}`} type="submit">
+            {saveDetails.isPending && <ButtonSpinner />}
+            {saveDetails.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
