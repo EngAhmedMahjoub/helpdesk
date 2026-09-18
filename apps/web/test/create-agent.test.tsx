@@ -1,34 +1,22 @@
-import { afterEach, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { screen, waitFor, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
-import type { UserSummary } from '@helpdesk/shared'
-import { renderRoute, responds, stubApi } from './helpers.tsx'
+import { renderRoute, responds, stubApi, userSummary } from './helpers.tsx'
 
-const originalFetch = globalThis.fetch
-
-afterEach(() => {
-  globalThis.fetch = originalFetch
-})
-
-const admin: UserSummary = {
+const admin = userSummary({
   id: 'u1',
   email: 'admin@helpdesk.io',
   name: 'Ada Admin',
   role: 'admin',
-  isActive: true,
-  isProtected: false,
   createdAt: '2026-01-05T09:00:00.000Z',
-}
+})
 
-const created: UserSummary = {
+const created = userSummary({
   id: 'u9',
   email: 'nia@helpdesk.io',
   name: 'Nia New',
-  role: 'agent',
-  isActive: true,
-  isProtected: false,
   createdAt: '2026-09-18T09:00:00.000Z',
-}
+})
 
 /**
  * GET answers the list; POST answers with `onPost`. The list grows once a POST
@@ -112,9 +100,7 @@ test('an email over 254 characters is refused before any request is sent', async
 })
 
 test('a taken email is marked on the email field, and the dialog stays open', async () => {
-  stubUsers(() =>
-    Response.json({ error: 'A user with that email already exists' }, { status: 409 }),
-  )
+  stubUsers(() => responds.error(409, 'A user with that email already exists'))
   renderRoute('/users')
 
   const { user, dialog } = await openDialog()
@@ -135,7 +121,7 @@ test('a taken email is marked on the email field, and the dialog stays open', as
 })
 
 test('any other failure is shown as a form-level alert', async () => {
-  stubUsers(() => Response.json({ error: 'Internal Server Error' }, { status: 500 }))
+  stubUsers(() => responds.error(500, 'Internal Server Error'))
   renderRoute('/users')
 
   const { user, dialog } = await openDialog()

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { screen, waitFor } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { NavigationType } from 'react-router'
@@ -6,12 +6,6 @@ import type { CurrentUser } from '@helpdesk/shared'
 import { currentUserQueryKey } from '../src/lib/auth.ts'
 import { createQueryClient } from '../src/lib/query-client.ts'
 import { renderRoute, responds, signedInUser, stubApi } from './helpers.tsx'
-
-const originalFetch = globalThis.fetch
-
-afterEach(() => {
-  globalThis.fetch = originalFetch
-})
 
 async function fillAndSubmit(email: string, password: string) {
   const user = userEvent.setup()
@@ -49,7 +43,7 @@ test('replaces the login entry so back does not return to it', async () => {
 test('shows the API message and stays put when the credentials are rejected', async () => {
   const router = renderRoute('/login')
   stubApi({
-    '/auth/login': () => Response.json({ error: 'Invalid email or password' }, { status: 401 }),
+    '/auth/login': () => responds.error(401, 'Invalid email or password'),
   })
 
   await fillAndSubmit(signedInUser.email, 'wrong')

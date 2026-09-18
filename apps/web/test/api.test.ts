@@ -1,11 +1,5 @@
-import { afterEach, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { ApiError, apiRequest } from '../src/lib/api.ts'
-
-const originalFetch = globalThis.fetch
-
-afterEach(() => {
-  globalThis.fetch = originalFetch
-})
 
 /**
  * Captures the request axios hands to fetch. The fetch adapter passes a Request

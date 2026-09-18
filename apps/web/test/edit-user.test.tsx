@@ -1,38 +1,23 @@
-import { afterEach, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { screen, waitFor, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import type { UserSummary } from '@helpdesk/shared'
-import { renderRoute, responds, signedInUser, stubApi } from './helpers.tsx'
-
-const originalFetch = globalThis.fetch
-
-afterEach(() => {
-  globalThis.fetch = originalFetch
-})
-
-const user = (overrides: Partial<UserSummary> & Pick<UserSummary, 'id' | 'name'>): UserSummary => ({
-  email: `${overrides.id}@helpdesk.io`,
-  role: 'agent',
-  isActive: true,
-  isProtected: false,
-  createdAt: '2026-02-01T09:00:00.000Z',
-  ...overrides,
-})
+import { renderRoute, responds, rowFor, signedInUser, stubApi, userSummary } from './helpers.tsx'
 
 /** The list, with the signed-in admin (u1) either the seeded one or not. */
 function usersFor(viewerIsSeeded: boolean): UserSummary[] {
   return [
-    user({
+    userSummary({
       id: signedInUser.id,
       name: signedInUser.name,
       role: 'admin',
       isProtected: viewerIsSeeded,
     }),
     // When the viewer is not the seeded admin, someone else is.
-    user({ id: 'seed', name: 'Sam Seed', role: 'admin', isProtected: !viewerIsSeeded }),
-    user({ id: 'other-admin', name: 'Olga Admin', role: 'admin' }),
-    user({ id: 'gil', name: 'Gil Agent', email: 'gil@helpdesk.io' }),
-    user({ id: 'fay', name: 'Fay Former', isActive: false }),
+    userSummary({ id: 'seed', name: 'Sam Seed', role: 'admin', isProtected: !viewerIsSeeded }),
+    userSummary({ id: 'other-admin', name: 'Olga Admin', role: 'admin' }),
+    userSummary({ id: 'gil', name: 'Gil Agent', email: 'gil@helpdesk.io' }),
+    userSummary({ id: 'fay', name: 'Fay Former', isActive: false }),
   ]
 }
 
@@ -62,11 +47,6 @@ function stubUsers({
     }
   }
   return stubApi(handlers)
-}
-
-async function rowFor(name: string) {
-  const cell = await screen.findByRole('cell', { name })
-  return within(cell.closest('tr')!)
 }
 
 async function openEditor(name: string) {
@@ -139,8 +119,7 @@ test('a short new password is refused before any request', async () => {
 
 test('a taken email is marked on the field, and the dialog stays open', async () => {
   stubUsers({
-    onPatch: () =>
-      Response.json({ error: 'A user with that email already exists' }, { status: 409 }),
+    onPatch: () => responds.error(409, 'A user with that email already exists'),
   })
   renderRoute('/users')
 
@@ -185,7 +164,7 @@ test('cancelling the deactivation changes nothing', async () => {
 
 test('a failed deactivation stays in the confirmation, beside its button', async () => {
   stubUsers({
-    onPatch: () => Response.json({ error: 'Internal Server Error' }, { status: 500 }),
+    onPatch: () => responds.error(500, 'Internal Server Error'),
   })
   renderRoute('/users')
 
@@ -240,7 +219,7 @@ test('the seeded admin can edit and deactivate another admin, but not deactivate
 })
 
 test('a 401 from saving lands on the login form', async () => {
-  stubUsers({ onPatch: () => Response.json({ error: 'Unauthorized' }, { status: 401 }) })
+  stubUsers({ onPatch: () => responds.error(401, 'Unauthorized') })
   const router = renderRoute('/users')
 
   const { u, dialog } = await openEditor('Gil Agent')

@@ -1,52 +1,39 @@
-import { afterEach, expect, test } from 'bun:test'
-import { screen, waitFor, within } from '@testing-library/react'
+import { expect, test } from 'bun:test'
+import { screen, waitFor } from '@testing-library/react'
 import { NavigationType } from 'react-router'
 import type { UserSummary } from '@helpdesk/shared'
-import { agentUser, renderRoute, responds, signedInUser, stubApi } from './helpers.tsx'
-
-const originalFetch = globalThis.fetch
-
-afterEach(() => {
-  globalThis.fetch = originalFetch
-})
+import {
+  agentUser,
+  renderRoute,
+  responds,
+  rowFor,
+  signedInUser,
+  stubApi,
+  userSummary,
+} from './helpers.tsx'
 
 const users: UserSummary[] = [
-  {
+  userSummary({
     id: 'u1',
     email: 'admin@helpdesk.io',
     name: 'Ada Admin',
     role: 'admin',
-    isActive: true,
-    isProtected: false,
     createdAt: '2026-01-05T09:00:00.000Z',
-  },
-  {
+  }),
+  userSummary({
     id: 'u2',
     email: 'gil@helpdesk.io',
     name: 'Gil Agent',
-    role: 'agent',
-    isActive: true,
-    isProtected: false,
     createdAt: '2026-02-10T09:00:00.000Z',
-  },
-  {
+  }),
+  userSummary({
     id: 'u3',
     email: 'former@helpdesk.io',
     name: 'Fay Former',
-    role: 'agent',
     isActive: false,
-    isProtected: false,
     createdAt: '2026-03-15T09:00:00.000Z',
-  },
+  }),
 ]
-
-/** The row a user occupies, found by the name in its first cell. */
-async function rowFor(name: string) {
-  const cell = await screen.findByRole('cell', { name })
-  const row = cell.closest('tr')
-  if (!row) throw new Error(`No row for ${name}`)
-  return within(row)
-}
 
 test('an admin sees every user, in the order the API sent them', async () => {
   stubApi({ '/auth/me': responds.currentUser, '/users': () => Response.json(users) })
@@ -81,7 +68,7 @@ test('each row carries the email, role and status', async () => {
 test('shows the API message when the list cannot be loaded', async () => {
   stubApi({
     '/auth/me': responds.currentUser,
-    '/users': () => Response.json({ error: 'Forbidden' }, { status: 403 }),
+    '/users': () => responds.error(403, 'Forbidden'),
   })
 
   renderRoute('/users')

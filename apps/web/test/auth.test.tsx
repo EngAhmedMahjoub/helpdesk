@@ -1,14 +1,8 @@
-import { afterEach, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { screen, waitFor } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { NavigationType } from 'react-router'
 import { renderRoute, responds, signedInUser, stubApi } from './helpers.tsx'
-
-const originalFetch = globalThis.fetch
-
-afterEach(() => {
-  globalThis.fetch = originalFetch
-})
 
 test('a logged-out visitor to a protected route lands on /login', async () => {
   stubApi({ '/auth/me': responds.noSession })
@@ -79,7 +73,7 @@ test('a 401 from any request, not only the session check, lands on the login for
     '/auth/me': responds.currentUser,
     // The session died between the check and the list: an admin deactivated
     // this account, or it expired.
-    '/users': () => Response.json({ error: 'Unauthorized' }, { status: 401 }),
+    '/users': () => responds.error(401, 'Unauthorized'),
   })
 
   const router = renderRoute('/users')
