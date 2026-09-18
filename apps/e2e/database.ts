@@ -60,6 +60,14 @@ const TEST_USER_PASSWORD_HASH =
   '$argon2id$v=19$m=65536,t=2,p=1$FhLa0Ew7adbRcrD4gTtfgasA0y98MPm5g2TFGsucYiU$jYEamWRDYEpBOOcJjfU10PKOTxgwhsXRIh6hFpNPwug'
 
 /**
+ * An address no other test can collide with. The label goes into it, so a row
+ * a failing run leaves behind says which test made it.
+ */
+export function uniqueEmail(label: string): string {
+  return `e2e-${label}-${randomUUID()}@helpdesk.test`
+}
+
+/**
  * Creates a user with an address no other test can collide with.
  *
  * The database is prepared once per run, so two tests asking for "an agent"
@@ -71,7 +79,7 @@ export async function createUser({
   isActive = true,
   label = 'user',
 }: NewUser = {}): Promise<TestUser> {
-  const email = `e2e-${label}-${randomUUID()}@helpdesk.test`
+  const email = uniqueEmail(label)
 
   const user = await prisma.user.create({
     data: {
@@ -90,6 +98,20 @@ export async function createUser({
 export async function deleteUsers(ids: string[]): Promise<void> {
   if (ids.length === 0) return
   await prisma.user.deleteMany({ where: { id: { in: ids } } })
+}
+
+/**
+ * For users a test had the app create, whose id it never held. Sessions go with
+ * them through the same cascade.
+ */
+export async function deleteUsersByEmail(emails: string[]): Promise<void> {
+  if (emails.length === 0) return
+  await prisma.user.deleteMany({ where: { email: { in: emails } } })
+}
+
+/** Scoped to one address, never a total: other specs' users share this table. */
+export function countUsersWithEmail(email: string): Promise<number> {
+  return prisma.user.count({ where: { email } })
 }
 
 export function setUserActive(id: string, isActive: boolean): Promise<unknown> {

@@ -4,7 +4,9 @@ import {
   createUser,
   deleteSessionByToken,
   deleteUsers,
+  deleteUsersByEmail,
   prisma,
+  uniqueEmail,
   type NewUser,
   type TestUser,
 } from './database.ts'
@@ -28,6 +30,11 @@ type AuthFixtures = {
   adminPage: Page
   /** Makes a user this test owns, and deletes it afterwards. */
   createTestUser: (options?: NewUser) => Promise<TestUser>
+  /**
+   * An address for a user the app itself will create, deleted afterwards.
+   * createTestUser cannot clean those up: it never made them.
+   */
+  claimEmail: (label: string) => string
   /** Deletes whatever session the test's browser is still holding. */
   sessionCleanup: void
 }
@@ -81,6 +88,21 @@ export const test = base.extend<AuthFixtures, WorkerFixtures>({
     // The database is prepared once per run, so a row left behind here is a row
     // every later test in the run has to tolerate.
     await deleteUsers(created)
+  },
+
+  // eslint-disable-next-line no-empty-pattern
+  claimEmail: async ({}, use) => {
+    const claimed: string[] = []
+
+    await use((label) => {
+      const email = uniqueEmail(label)
+      claimed.push(email)
+      return email
+    })
+
+    // By address because the id was never ours to know. Runs even when the test
+    // failed halfway, which is when a stray row is most likely.
+    await deleteUsersByEmail(claimed)
   },
 
   sessionCleanup: [
