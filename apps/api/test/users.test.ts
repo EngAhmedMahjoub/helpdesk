@@ -244,7 +244,15 @@ describe('POST /api/users with an invalid body', () => {
     ['an empty body', {}],
     ['a malformed email', { email: 'not-an-email', name: 'A', password: 'a-long-enough-password' }],
     ['a blank name', { email: 'a@example.com', name: '   ', password: 'a-long-enough-password' }],
+    [
+      'a name over 100 characters',
+      { email: 'a@example.com', name: 'a'.repeat(101), password: 'a-long-enough-password' },
+    ],
     ['a password under 12 characters', { email: 'a@example.com', name: 'A', password: 'short' }],
+    [
+      'a password over 200 characters',
+      { email: 'a@example.com', name: 'A', password: 'a'.repeat(201) },
+    ],
     ['a missing password', { email: 'a@example.com', name: 'A' }],
     [
       'an email over 254 characters',
@@ -552,7 +560,9 @@ describe('PATCH /api/users/:id refusing the request', () => {
       { isProtected: true },
       { email: 'not-an-email' },
       { name: '   ' },
+      { name: 'a'.repeat(101) },
       { password: 'short' },
+      { password: 'a'.repeat(201) },
     ]) {
       const res = await request(app)
         .patch(`/api/users/${agent.id}`)
