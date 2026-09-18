@@ -128,17 +128,25 @@ usersRouter.patch('/:id', async (req, res) => {
 
   try {
     const user = await prisma.$transaction(async (tx) => {
+      const before = await tx.user.findUnique({ where: { id }, select: { isActive: true } })
+
       const updated = await tx.user.update({
         where: { id },
         data: { isActive: body.data.isActive },
         select: summaryFields,
       })
 
-      // In the same transaction as the flag, so the rows can never outlive it.
-      // requireAuth already refuses an inactive user, so this is not what locks
-      // them out — it is what stops a reactivation later handing back sessions
-      // that were live weeks ago.
-      if (!body.data.isActive) {
+      // requireAuth already refuses an inactive user, so deleting sessions is
+      // not what locks them out. It is what stops a reactivation handing back a
+      // session nobody meant to issue.
+      //
+      // On reactivation too, not only deactivation. A login that read the user
+      // as active before a deactivation committed, then spent its ~100ms in
+      // argon2, inserts its session after the deactivation's delete. Refused
+      // while the user is inactive, that row would come alive on reactivation.
+      // Anyone who was inactive holds no session worth keeping. An already
+      // active user is left alone: reactivating them must not sign them out.
+      if (!body.data.isActive || before?.isActive === false) {
         await tx.session.deleteMany({ where: { userId: id } })
       }
 

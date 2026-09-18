@@ -388,6 +388,32 @@ describe('PATCH /api/users/:id reactivating an agent', () => {
     // Reactivating an active user must not sweep away the sessions they hold.
     expect(await prisma.session.count({ where: { userId: agent.id } })).toBe(1)
   })
+
+  test('does not revive a session created while the agent was inactive', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const adminCookie = await cookieFor(admin.id)
+    const agent = await createUser()
+
+    await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', adminCookie)
+      .send({ isActive: false })
+
+    // Where a racing login leaves things: it read the agent as active before
+    // the deactivation committed, and inserted its session after the delete.
+    const straggler = await cookieFor(agent.id)
+    expect((await request(app).get('/api/auth/me').set('Cookie', straggler)).status).toBe(401)
+
+    await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', adminCookie)
+      .send({ isActive: true })
+
+    // Without the delete on reactivation this answers 200: a session nobody
+    // issued to an active user, handed back by the reactivation.
+    expect((await request(app).get('/api/auth/me').set('Cookie', straggler)).status).toBe(401)
+    expect(await prisma.session.count({ where: { userId: agent.id } })).toBe(0)
+  })
 })
 
 describe('PATCH /api/users/:id refusing the request', () => {
