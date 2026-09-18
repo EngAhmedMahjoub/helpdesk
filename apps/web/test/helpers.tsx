@@ -42,8 +42,12 @@ export const responds = {
  * Records the `Request` axios built, not a url and an init: its fetch adapter
  * passes one object, and method, credentials and body all hang off it. Nothing
  * here reads the body, so a test still can — `await requests[0].text()`.
+ *
+ * A handler receives that request, so one path can answer GET and POST apart.
  */
-export function stubApi(handlers: Record<string, () => Response | Promise<Response>>): Request[] {
+export function stubApi(
+  handlers: Record<string, (request: Request) => Response | Promise<Response>>,
+): Request[] {
   const requests: Request[] = []
 
   globalThis.fetch = ((input: Request) => {
@@ -53,7 +57,7 @@ export function stubApi(handlers: Record<string, () => Response | Promise<Respon
     if (!handler) {
       return Promise.resolve(Response.json({ error: `No stub for ${input.url}` }, { status: 404 }))
     }
-    return Promise.resolve(handler())
+    return Promise.resolve(handler(input))
   }) as unknown as typeof fetch
 
   return requests

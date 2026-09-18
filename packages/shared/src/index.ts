@@ -23,3 +23,10 @@ export type UserSummary = {
   isActive: boolean
   createdAt: string
 }
+
+/** The body of `POST /api/users`. The role is not sent: the API only creates agents. */
+export type CreateUserRequest = {
+  email: string
+  name: string
+  password: string
+}

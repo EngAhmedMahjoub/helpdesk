@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { UserSummary } from '@helpdesk/shared'
+import CreateAgentDialog from '@/components/create-agent-dialog'
 import TableSkeleton, { type Column } from '@/components/table-skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -26,12 +28,29 @@ const columns: Column[] = [
 
 export default function UsersPage() {
   const users = useUsers()
+  const [announcement, setAnnouncement] = useState('')
 
   return (
     <main className="mx-auto max-w-5xl p-8">
-      <h1 className="text-2xl font-semibold text-foreground">Users</h1>
-      <p className="mt-2 text-muted-foreground">
-        Everyone who can sign in to the helpdesk, oldest first.
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Users</h1>
+          <p className="mt-2 text-muted-foreground">
+            Everyone who can sign in to the helpdesk, oldest first.
+          </p>
+        </div>
+        <CreateAgentDialog
+          onCreated={(user) => setAnnouncement(`${user.name} was added and can sign in now.`)}
+        />
+      </div>
+
+      {/* Closing the dialog returns focus to its button and says nothing, so a
+          screen reader user would not know it worked. The row it adds lands at
+          the bottom of a list they may not be reading. Always rendered, even
+          empty: a live region hidden until its text arrives is added and filled
+          at once, and most screen readers announce neither. */}
+      <p aria-live="polite" className="mt-4 text-sm text-muted-foreground" role="status">
+        {announcement}
       </p>
 
       <div className="mt-6">
