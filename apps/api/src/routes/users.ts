@@ -110,9 +110,9 @@ usersRouter.patch('/:id', async (req, res) => {
 
   const id = req.params.id
 
-  // A malformed id answers the same 404 as a well-formed one with no row. It
-  // cannot name a user either way, and Postgres would raise on the uuid cast
-  // rather than miss cleanly.
+  // A malformed id answers the same 404 as a well-formed one with no row: it
+  // cannot name a user either way. Checked here only to answer early — User.id
+  // is TEXT, so a malformed id would reach Postgres and simply miss.
   if (!z.uuid().safeParse(id).success) {
     res.status(404).json({ error: 'User not found' })
     return
