@@ -1,11 +1,12 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import type { UserSummary } from '@helpdesk/shared'
+import { type UserSummary, authorise } from '@helpdesk/shared'
 import { prisma } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { hashPassword } from '../auth/password.ts'
 import { requireAdmin, requireAuth } from '../auth/middleware.ts'
 import { userWriteRateLimit } from '../auth/rate-limit.ts'
+import { SESSION_COOKIE, hashToken } from '../auth/session.ts'
 
 /** The columns a user list or a creation response may expose. Never the hash. */
 const summaryFields = {
@@ -30,21 +31,36 @@ function toSummary(user: {
   return { ...user, createdAt: user.createdAt.toISOString() }
 }
 
+// One definition per field, shared by create and edit so their limits cannot
+// drift apart.
+//
+// 254 is the longest address SMTP can deliver to. Without a cap, a few KB
+// overflowed the unique index's 2704-byte row limit: Postgres refused the insert
+// and the admin got a 500, after argon2 had already been paid for.
+const emailField = z.email().max(254)
+const nameField = z.string().trim().min(1).max(100)
+// 12 to match ADMIN_PASSWORD in the seed script, so the admin an agent is
+// created by cannot hold a weaker password than the agent. The cap keeps a
+// 100KB body — what express.json() allows — out of argon2.
+const passwordField = z.string().min(12).max(200)
+
 const createUserSchema = z.object({
-  // 254 is the longest address SMTP can deliver to. Without a cap, a few KB
-  // overflowed the unique index's 2704-byte row limit: Postgres refused the
-  // insert and the admin got a 500, after argon2 had already been paid for.
-  email: z.email().max(254),
-  name: z.string().trim().min(1).max(100),
-  // 12 to match ADMIN_PASSWORD in the seed script, so the admin an agent is
-  // created by cannot hold a weaker password than the agent. The cap keeps a
-  // 100KB body — what express.json() allows — out of argon2.
-  password: z.string().min(12).max(200),
+  email: emailField,
+  name: nameField,
+  password: passwordField,
 })
 
-// Only isActive: this route deactivates and reactivates. Name, email and
-// password changes are their own decisions and are not in Phase 2.
-const updateUserSchema = z.object({ isActive: z.boolean() })
+// Every field optional, at least one required. Anything else in the body —
+// role, isProtected — is stripped by zod, so an empty change is a 400 rather
+// than a silent no-op that looks like it did something.
+const updateUserSchema = z
+  .object({
+    name: nameField.optional(),
+    email: emailField.optional(),
+    password: passwordField.optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((body) => Object.values(body).some((value) => value !== undefined))
 
 export const usersRouter = Router()
 
@@ -125,26 +141,34 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
     return
   }
   const id = parsedId.data
+  const actorId = req.user?.id ?? ''
 
-  // An admin deactivating themselves is refused: it deletes the session making
-  // the request, and with one admin there is then nobody left who can undo it.
-  // Another admin can still deactivate them, so an admin is never unremovable.
-  if (id === req.user?.id && !body.data.isActive) {
-    res.status(409).json({ error: 'You cannot deactivate your own account' })
+  // Both parties in one read: who is asking decides as much as who is asked
+  // about. requireAuth only carries id, email, name and role, not isProtected.
+  const parties = await prisma.user.findMany({
+    where: { id: { in: [id, actorId] } },
+    select: { id: true, role: true, isProtected: true },
+  })
+  const target = parties.find((party) => party.id === id)
+  const actor = parties.find((party) => party.id === actorId)
+
+  if (!target || !actor) {
+    res.status(404).json({ error: 'User not found' })
     return
   }
 
-  // The seeded admin is never deactivated, by anyone. The self check above only
-  // stops an admin locking themselves out; two admins deactivating each other at
-  // the same moment would leave nobody who can manage users. Read outside the
-  // transaction: only the seed ever sets the flag, so it cannot change under us.
-  if (!body.data.isActive) {
-    const target = await prisma.user.findUnique({ where: { id }, select: { isProtected: true } })
-    if (target?.isProtected) {
-      res.status(409).json({ error: 'This account cannot be deactivated' })
-      return
-    }
+  const { name, email, password, isActive } = body.data
+  const verdict = authorise(actor, target, {
+    editsDetails: name !== undefined || email !== undefined || password !== undefined,
+    isActive,
+  })
+  if (!verdict.allowed) {
+    res.status(verdict.status).json({ error: verdict.error })
+    return
   }
+
+  // Hashed before the transaction, so argon2's ~100ms is not spent holding it.
+  const passwordHash = password === undefined ? undefined : await hashPassword(password)
 
   try {
     const user = await prisma.$transaction(async (tx) => {
@@ -152,7 +176,13 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
 
       const updated = await tx.user.update({
         where: { id },
-        data: { isActive: body.data.isActive },
+        data: {
+          name,
+          // Lowercased for the same reason as on create: login looks it up so.
+          email: email?.toLowerCase(),
+          passwordHash,
+          isActive,
+        },
         select: summaryFields,
       })
 
@@ -166,8 +196,17 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
       // while the user is inactive, that row would come alive on reactivation.
       // Anyone who was inactive holds no session worth keeping. An already
       // active user is left alone: reactivating them must not sign them out.
-      if (!body.data.isActive || before?.isActive === false) {
+      if (isActive === false || (isActive === true && before?.isActive === false)) {
         await tx.session.deleteMany({ where: { userId: id } })
+      } else if (passwordHash !== undefined) {
+        // A password is usually reset because it leaked or was forgotten, so
+        // whoever is signed in with the old one is signed out. An admin changing
+        // their own keeps the session they are changing it from.
+        const token: unknown = req.cookies?.[SESSION_COOKIE]
+        const current = id === actorId && typeof token === 'string' ? hashToken(token) : undefined
+        await tx.session.deleteMany({
+          where: { userId: id, ...(current && { tokenHash: { not: current } }) },
+        })
       }
 
       return updated
@@ -175,9 +214,15 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
 
     res.json(toSummary(user))
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-      res.status(404).json({ error: 'User not found' })
-      return
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (err.code === 'P2002') {
+        res.status(409).json({ error: 'A user with that email already exists' })
+        return
+      }
+      if (err.code === 'P2025') {
+        res.status(404).json({ error: 'User not found' })
+        return
+      }
     }
     throw err
   }

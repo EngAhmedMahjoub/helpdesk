@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { UserSummary } from '@helpdesk/shared'
 import CreateAgentDialog from '@/components/create-agent-dialog'
 import TableSkeleton, { type Column } from '@/components/table-skeleton'
-import UserStatusAction from '@/components/user-status-action'
+import UserActions from '@/components/edit-user-dialog'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -87,6 +87,10 @@ function UsersTable({
   currentUserId: string | undefined
   onChanged: (message: string) => void
 }) {
+  // The signed-in admin's own row: /auth/me does not say whether they are the
+  // seeded admin, and the list does.
+  const viewer = users.find((user) => user.id === currentUserId)
+
   return (
     <Table className="table-fixed">
       <caption className="sr-only">Users, oldest first</caption>
@@ -124,11 +128,7 @@ function UsersTable({
               <time dateTime={user.createdAt}>{joinedFormat.format(new Date(user.createdAt))}</time>
             </TableCell>
             <TableCell>
-              <UserStatusAction
-                isSelf={user.id === currentUserId}
-                onChanged={onChanged}
-                user={user}
-              />
+              <UserActions onChanged={onChanged} user={user} viewer={viewer} />
             </TableCell>
           </TableRow>
         ))}

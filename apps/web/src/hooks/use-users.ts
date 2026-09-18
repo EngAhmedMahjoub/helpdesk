@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { CurrentUser, UpdateUserRequest } from '@helpdesk/shared'
+import { currentUserQueryKey } from '@/lib/auth'
 import { createUser, fetchUsers, updateUser, usersQueryKey } from '@/lib/users'
 
 /** Every user, as the admin list shows them. Admin only; the API returns 403. */
@@ -20,13 +22,22 @@ export function useCreateUser() {
   })
 }
 
-/** Deactivates or reactivates a user. Deactivating signs them out everywhere. */
-export function useSetUserActive() {
+/**
+ * Changes any of a user's name, email, password and active flag. Deactivating
+ * signs them out everywhere, and so does a new password.
+ */
+export function useUpdateUser() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
-      updateUser(id, { isActive }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: usersQueryKey }),
+    mutationFn: ({ id, changes }: { id: string; changes: UpdateUserRequest }) =>
+      updateUser(id, changes),
+    onSuccess: async (_user, { id }) => {
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey })
+      // An admin editing their own row changes the name the header shows too.
+      if (queryClient.getQueryData<CurrentUser | null>(currentUserQueryKey)?.id === id) {
+        await queryClient.invalidateQueries({ queryKey: currentUserQueryKey })
+      }
+    },
   })
 }

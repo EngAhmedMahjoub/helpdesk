@@ -33,7 +33,16 @@ export type CreateUserRequest = {
   password: string
 }
 
-/** The body of `PATCH /api/users/:id`. Deactivating also ends every session the user holds. */
+/**
+ * The body of `PATCH /api/users/:id`: any of these, at least one. Deactivating
+ * ends every session the user holds, and so does setting their password, except
+ * the one an admin changes their own from.
+ */
 export type UpdateUserRequest = {
-  isActive: boolean
+  name?: string
+  email?: string
+  password?: string
+  isActive?: boolean
 }
+
+export { authorise, type Change, type Party, type Verdict } from './user-permissions.ts'
