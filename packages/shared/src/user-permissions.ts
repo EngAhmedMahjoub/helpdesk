@@ -15,7 +15,7 @@ export type Change = {
   isActive?: boolean
 }
 
-export type Verdict = { allowed: true } | { allowed: false; status: 403 | 409; error: string }
+type Verdict = { allowed: true } | { allowed: false; status: 403 | 409; error: string }
 
 /**
  * Who may change whom, for `PATCH /api/users/:id`. Every caller is already an

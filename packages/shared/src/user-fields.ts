@@ -10,11 +10,16 @@ import { z } from 'zod'
 // and the admin got a 500, after argon2 had already been paid for.
 export const EMAIL_MAX_LENGTH = 254
 export const NAME_MAX_LENGTH = 100
-// 12 to match ADMIN_PASSWORD in the seed script, so the admin an agent is
+// The seed holds ADMIN_PASSWORD to the same minimum, so the admin an agent is
 // created by cannot hold a weaker password than the agent. The cap keeps a
 // 100KB body — what express.json() allows — out of argon2.
 export const PASSWORD_MIN_LENGTH = 12
 export const PASSWORD_MAX_LENGTH = 200
+
+// Named, because the edit dialog builds its own blank-or-valid password rule
+// and must report the same words as this one.
+export const PASSWORD_TOO_SHORT = `Use at least ${PASSWORD_MIN_LENGTH} characters`
+export const PASSWORD_TOO_LONG = `Keep the password under ${PASSWORD_MAX_LENGTH} characters`
 
 export const emailField = z
   .email('Enter a valid email address')
@@ -28,8 +33,8 @@ export const nameField = z
 
 export const passwordField = z
   .string()
-  .min(PASSWORD_MIN_LENGTH, `Use at least ${PASSWORD_MIN_LENGTH} characters`)
-  .max(PASSWORD_MAX_LENGTH, `Keep the password under ${PASSWORD_MAX_LENGTH} characters`)
+  .min(PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT)
+  .max(PASSWORD_MAX_LENGTH, PASSWORD_TOO_LONG)
 
 /** The body of `POST /api/users`. The role is not sent: the API only creates agents. */
 export const createUserSchema = z.object({
@@ -40,13 +45,14 @@ export const createUserSchema = z.object({
 
 export type CreateUserRequest = z.infer<typeof createUserSchema>
 
-// Every field optional, at least one required. Anything else in the body —
-// role, isProtected — is stripped by zod, so an empty change is a 400 rather
-// than a silent no-op that looks like it did something.
 /**
  * The body of `PATCH /api/users/:id`: any of these, at least one. Deactivating
  * ends every session the user holds, and so does setting their password, except
  * the one an admin changes their own from.
+ *
+ * Anything else in the body — role, isProtected — is stripped by zod, so an
+ * empty change is a 400 rather than a silent no-op that looks like it did
+ * something.
  */
 export const updateUserSchema = z
   .object({

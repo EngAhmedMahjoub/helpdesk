@@ -8,6 +8,8 @@ import {
   type UserSummary,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
+  PASSWORD_TOO_LONG,
+  PASSWORD_TOO_SHORT,
   emailField,
   nameField,
 } from '@helpdesk/shared'
@@ -37,11 +39,8 @@ const detailsSchema = z.object({
   // passwordField.or(''): a union reports its own message, not the minimum's.
   password: z
     .string()
-    .max(PASSWORD_MAX_LENGTH, `Keep the password under ${PASSWORD_MAX_LENGTH} characters`)
-    .refine(
-      (value) => value === '' || value.length >= PASSWORD_MIN_LENGTH,
-      `Use at least ${PASSWORD_MIN_LENGTH} characters`,
-    ),
+    .max(PASSWORD_MAX_LENGTH, PASSWORD_TOO_LONG)
+    .refine((value) => value === '' || value.length >= PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT),
 })
 
 type DetailsValues = z.infer<typeof detailsSchema>
