@@ -30,3 +30,8 @@ export type CreateUserRequest = {
   name: string
   password: string
 }
+
+/** The body of `PATCH /api/users/:id`. Deactivating also ends every session the user holds. */
+export type UpdateUserRequest = {
+  isActive: boolean
+}

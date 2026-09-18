@@ -66,7 +66,7 @@ None.
 | 2.3a | Adopt axios for API calls, converting `apiFetch`; TanStack Query keeps server state | Web and end-to-end suites pass against the axios client | Done |
 | 2.4 | Frontend: users list page | Admin sees all users | Done |
 | 2.5 | Frontend: create agent form | Admin creates an agent who can then log in | Done |
-| 2.6 | Frontend: deactivate/reactivate action | Deactivated agent is logged out | |
+| 2.6 | Frontend: deactivate/reactivate action | Deactivated agent is logged out | Done |
 
 ## Phase 3 — Tickets (Manual, No Email or AI Yet)
 

@@ -73,3 +73,20 @@ test('the session check is not repeated after signing in', async () => {
   // /auth/me is absent: login's own response seeded the cache.
   expect(requests.filter((request) => request.url.endsWith('/api/auth/me'))).toHaveLength(0)
 })
+
+test('a 401 from any request, not only the session check, lands on the login form', async () => {
+  const requests = stubApi({
+    '/auth/me': responds.currentUser,
+    // The session died between the check and the list: an admin deactivated
+    // this account, or it expired.
+    '/users': () => Response.json({ error: 'Unauthorized' }, { status: 401 }),
+  })
+
+  const router = renderRoute('/users')
+
+  await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+  expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeDefined()
+  // Clearing the cache must not make the page still mounted ask again, and
+  // again, before the redirect unmounts it.
+  expect(requests.filter((request) => request.url.endsWith('/api/users'))).toHaveLength(1)
+})
