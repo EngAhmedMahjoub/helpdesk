@@ -21,16 +21,22 @@ if (!result.success) {
 const email = result.data.ADMIN_EMAIL.toLowerCase()
 
 // Upsert keyed on the unique email, so a second run matches the existing row
-// instead of inserting a duplicate. update is empty on purpose: re-seeding must
-// not reset the password of an admin who has since changed it.
+// instead of inserting a duplicate. update never touches the password:
+// re-seeding must not reset the password of an admin who has since changed it.
+//
+// It does mark the admin protected and active. Protected, so no one can
+// deactivate them through the app. Active, so re-running the seed recovers the
+// one account that can manage users if it was switched off some other way —
+// before this column existed, or by hand in the database.
 const admin = await prisma.user.upsert({
   where: { email },
-  update: {},
+  update: { isProtected: true, isActive: true },
   create: {
     email,
     name: 'Admin',
     passwordHash: await hashPassword(result.data.ADMIN_PASSWORD),
     role: 'admin',
+    isProtected: true,
   },
 })
 

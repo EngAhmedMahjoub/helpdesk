@@ -9,7 +9,13 @@ import { prisma, resetDatabase } from './db.ts'
 const app = createApp()
 
 async function createUser(
-  overrides: { email?: string; name?: string; role?: Role; isActive?: boolean } = {},
+  overrides: {
+    email?: string
+    name?: string
+    role?: Role
+    isActive?: boolean
+    isProtected?: boolean
+  } = {},
 ) {
   const role = overrides.role ?? 'agent'
   return prisma.user.create({
@@ -21,6 +27,7 @@ async function createUser(
       passwordHash: 'not-used-here',
       role,
       isActive: overrides.isActive ?? true,
+      isProtected: overrides.isProtected ?? false,
     },
   })
 }
@@ -49,6 +56,7 @@ describe('GET /api/users as an admin', () => {
       name: 'Agent',
       role: 'agent',
       isActive: true,
+      isProtected: false,
       createdAt: agent.createdAt.toISOString(),
     })
   })
@@ -445,6 +453,36 @@ describe('PATCH /api/users/:id refusing the request', () => {
     // Nothing moved: the admin is still active and still signed in.
     expect((await prisma.user.findUnique({ where: { id: admin.id } }))?.isActive).toBe(true)
     expect((await request(app).get('/api/auth/me').set('Cookie', cookie)).status).toBe(200)
+  })
+
+  test('refuses to deactivate the seeded admin, even for another admin', async () => {
+    const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
+    const seededCookie = await cookieFor(seeded.id)
+    const other = await createUser({ role: 'admin', email: 'other@example.com' })
+
+    const res = await request(app)
+      .patch(`/api/users/${seeded.id}`)
+      .set('Cookie', await cookieFor(other.id))
+      .send({ isActive: false })
+
+    expect(res.status).toBe(409)
+    expect(res.body).toEqual({ error: 'This account cannot be deactivated' })
+    // Nothing moved: still active, and still signed in.
+    expect((await prisma.user.findUnique({ where: { id: seeded.id } }))?.isActive).toBe(true)
+    expect((await request(app).get('/api/auth/me').set('Cookie', seededCookie)).status).toBe(200)
+  })
+
+  test('reports the seeded admin as protected in the list', async () => {
+    const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
+    await createUser()
+
+    const res = await request(app)
+      .get('/api/users')
+      .set('Cookie', await cookieFor(seeded.id))
+
+    const body = res.body as UserSummary[]
+    expect(body.find((u) => u.email === 'seed@example.com')?.isProtected).toBe(true)
+    expect(body.find((u) => u.email === 'agent@example.com')?.isProtected).toBe(false)
   })
 
   test('lets one admin deactivate another', async () => {

@@ -17,6 +17,7 @@ const users: UserSummary[] = [
     name: 'Ada Admin',
     role: 'admin',
     isActive: true,
+    isProtected: false,
     createdAt: '2026-01-05T09:00:00.000Z',
   },
   {
@@ -25,6 +26,7 @@ const users: UserSummary[] = [
     name: 'Gil Agent',
     role: 'agent',
     isActive: true,
+    isProtected: false,
     createdAt: '2026-02-10T09:00:00.000Z',
   },
   {
@@ -33,6 +35,7 @@ const users: UserSummary[] = [
     name: 'Fay Former',
     role: 'agent',
     isActive: false,
+    isProtected: false,
     createdAt: '2026-03-15T09:00:00.000Z',
   },
 ]

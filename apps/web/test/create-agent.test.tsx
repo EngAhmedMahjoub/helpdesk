@@ -16,6 +16,7 @@ const admin: UserSummary = {
   name: 'Ada Admin',
   role: 'admin',
   isActive: true,
+  isProtected: false,
   createdAt: '2026-01-05T09:00:00.000Z',
 }
 
@@ -25,6 +26,7 @@ const created: UserSummary = {
   name: 'Nia New',
   role: 'agent',
   isActive: true,
+  isProtected: false,
   createdAt: '2026-09-18T09:00:00.000Z',
 }
 

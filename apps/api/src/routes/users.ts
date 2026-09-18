@@ -13,6 +13,7 @@ const summaryFields = {
   name: true,
   role: true,
   isActive: true,
+  isProtected: true,
   createdAt: true,
 } as const
 
@@ -22,6 +23,7 @@ function toSummary(user: {
   name: string
   role: UserSummary['role']
   isActive: boolean
+  isProtected: boolean
   createdAt: Date
 }): UserSummary {
   return { ...user, createdAt: user.createdAt.toISOString() }
@@ -127,6 +129,18 @@ usersRouter.patch('/:id', async (req, res) => {
   if (id === req.user?.id && !body.data.isActive) {
     res.status(409).json({ error: 'You cannot deactivate your own account' })
     return
+  }
+
+  // The seeded admin is never deactivated, by anyone. The self check above only
+  // stops an admin locking themselves out; two admins deactivating each other at
+  // the same moment would leave nobody who can manage users. Read outside the
+  // transaction: only the seed ever sets the flag, so it cannot change under us.
+  if (!body.data.isActive) {
+    const target = await prisma.user.findUnique({ where: { id }, select: { isProtected: true } })
+    if (target?.isProtected) {
+      res.status(409).json({ error: 'This account cannot be deactivated' })
+      return
+    }
   }
 
   try {
