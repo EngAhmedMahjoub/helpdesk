@@ -93,6 +93,22 @@ test('a short password is refused before any request is sent', async () => {
   expect(requests.some((request) => request.method === 'POST')).toBe(false)
 })
 
+test('an email over 254 characters is refused before any request is sent', async () => {
+  const requests = stubUsers()
+  renderRoute('/users')
+
+  const { user, dialog } = await openDialog()
+  await user.type(dialog.getByLabelText('Name'), valid.name)
+  // Pasted, not typed: 255 keystrokes would only slow the test down.
+  await user.click(dialog.getByLabelText('Email'))
+  await user.paste(`${'a'.repeat(243)}@example.com`)
+  await user.type(dialog.getByLabelText('Initial password'), valid.password)
+  await user.click(dialog.getByRole('button', { name: 'Add agent' }))
+
+  expect(await dialog.findByText('Use at most 254 characters')).toBeDefined()
+  expect(requests.some((request) => request.method === 'POST')).toBe(false)
+})
+
 test('a taken email is marked on the email field, and the dialog stays open', async () => {
   stubUsers(() =>
     Response.json({ error: 'A user with that email already exists' }, { status: 409 }),

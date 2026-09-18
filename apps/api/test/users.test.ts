@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
 import type { Role, UserSummary } from '@helpdesk/shared'
@@ -236,6 +237,20 @@ describe('POST /api/users with an invalid body', () => {
     ['a blank name', { email: 'a@example.com', name: '   ', password: 'a-long-enough-password' }],
     ['a password under 12 characters', { email: 'a@example.com', name: 'A', password: 'short' }],
     ['a missing password', { email: 'a@example.com', name: 'A' }],
+    [
+      'an email over 254 characters',
+      { email: `${'a'.repeat(243)}@example.com`, name: 'A', password: 'a-long-enough-password' },
+    ],
+    [
+      // Random, so Postgres cannot compress it under the unique index's 2704-byte
+      // row limit. Before the cap this was a 500, after argon2 had already run.
+      'an email too long for the unique index',
+      {
+        email: `${randomBytes(1500).toString('hex')}@example.com`,
+        name: 'A',
+        password: 'a-long-enough-password',
+      },
+    ],
   ]
 
   for (const [label, payload] of cases) {

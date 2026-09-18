@@ -28,7 +28,10 @@ function toSummary(user: {
 }
 
 const createUserSchema = z.object({
-  email: z.email(),
+  // 254 is the longest address SMTP can deliver to. Without a cap, a few KB
+  // overflowed the unique index's 2704-byte row limit: Postgres refused the
+  // insert and the admin got a 500, after argon2 had already been paid for.
+  email: z.email().max(254),
   name: z.string().trim().min(1).max(100),
   // 12 to match ADMIN_PASSWORD in the seed script, so the admin an agent is
   // created by cannot hold a weaker password than the agent. The cap keeps a
