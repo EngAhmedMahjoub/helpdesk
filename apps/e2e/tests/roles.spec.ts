@@ -1,3 +1,4 @@
+import { ADMIN } from '../config.ts'
 import { expect, test } from '../fixtures.ts'
 
 test('an admin sees the Users link', async ({ adminPage }) => {
@@ -19,17 +20,12 @@ test('an agent does not see the Users link', async ({ page, signIn, createTestUs
 })
 
 /**
- * Today an agent who types the URL gets the page: the router guard only checks
- * for a session, and leaving the link out of the nav is convenience, not access
- * control. That is deliberate — the API is where roles are enforced, by
- * `requireAdmin` on every admin endpoint — and the page carries no data of its
- * own until task 2.4 wires it to `GET /api/users`, which will refuse an agent.
- *
- * This test records that behaviour rather than a boundary the app does not
- * have. When 2.4 lands, the thing to assert is that the agent's request for the
- * list is refused, not that the route is unreachable.
+ * The redirect is a courtesy, not the boundary: `requireAdmin` on
+ * `GET /api/users` is, and it answers an agent 403 whatever the browser does.
+ * Sending them home spares them a screen that could only ever show that error,
+ * the same way leaving the link out of the nav spares them the trip.
  */
-test('an agent reaching /users by URL gets the page, because the API is the boundary', async ({
+test('an agent reaching /users by URL is sent back to the dashboard', async ({
   page,
   signIn,
   createTestUser,
@@ -39,6 +35,27 @@ test('an agent reaching /users by URL gets the page, because the API is the boun
 
   await page.goto('/users')
 
-  await expect(page).toHaveURL('/users')
-  await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Users' })).toBeHidden()
+})
+
+test('an admin sees the users on the list', async ({ adminPage, createTestUser }) => {
+  // Label without "agent" in it: the label goes into the address, and a role
+  // cell matched by name would then also match the email cell beside it.
+  const agent = await createTestUser({ label: 'listed-user', role: 'agent' })
+
+  await adminPage.goto('/users')
+
+  // Scoped to the two rows this spec can vouch for. The database is prepared
+  // once per run, so every other spec's users are on this page too and a row
+  // count would depend on whatever else happened to be running.
+  const agentRow = adminPage.getByRole('row').filter({ hasText: agent.email })
+  await expect(agentRow.getByRole('cell', { name: agent.name, exact: true })).toBeVisible()
+  await expect(agentRow.getByRole('cell', { name: 'agent', exact: true })).toBeVisible()
+  await expect(agentRow.getByRole('cell', { name: 'Active', exact: true })).toBeVisible()
+
+  const adminRow = adminPage.getByRole('row').filter({ hasText: ADMIN.email })
+  await expect(adminRow.getByRole('cell', { name: ADMIN.name, exact: true })).toBeVisible()
+  await expect(adminRow.getByRole('cell', { name: 'admin', exact: true })).toBeVisible()
 })
