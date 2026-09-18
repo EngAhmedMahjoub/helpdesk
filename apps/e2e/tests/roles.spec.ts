@@ -1,5 +1,6 @@
 import { ADMIN } from '../config.ts'
 import { expect, test } from '../fixtures.ts'
+import { userRow } from '../users-page.ts'
 
 test('an admin sees the Users link', async ({ adminPage }) => {
   await adminPage.goto('/')
@@ -50,12 +51,12 @@ test('an admin sees the users on the list', async ({ adminPage, createTestUser }
   // Scoped to the two rows this spec can vouch for. The database is prepared
   // once per run, so every other spec's users are on this page too and a row
   // count would depend on whatever else happened to be running.
-  const agentRow = adminPage.getByRole('row').filter({ hasText: agent.email })
+  const agentRow = userRow(adminPage, agent.email)
   await expect(agentRow.getByRole('cell', { name: agent.name, exact: true })).toBeVisible()
   await expect(agentRow.getByRole('cell', { name: 'agent', exact: true })).toBeVisible()
   await expect(agentRow.getByRole('cell', { name: 'Active', exact: true })).toBeVisible()
 
-  const adminRow = adminPage.getByRole('row').filter({ hasText: ADMIN.email })
+  const adminRow = userRow(adminPage, ADMIN.email)
   await expect(adminRow.getByRole('cell', { name: ADMIN.name, exact: true })).toBeVisible()
   await expect(adminRow.getByRole('cell', { name: 'admin', exact: true })).toBeVisible()
 })

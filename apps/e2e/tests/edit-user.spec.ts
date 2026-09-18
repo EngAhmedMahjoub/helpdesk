@@ -1,6 +1,7 @@
 import { ADMIN, API_URL } from '../config.ts'
 import { countSessionsFor, findSessionByToken, prisma } from '../database.ts'
 import { expect, sessionCookie, test } from '../fixtures.ts'
+import { submitLoginForm } from '../login-form.ts'
 import { announcement, openEditDialog, signInElsewhere, userRow } from '../users-page.ts'
 
 test('an agent whose email and password the admin changes signs in with the new ones', async ({
@@ -54,9 +55,7 @@ test('an agent whose email and password the admin changes signs in with the new 
     const { page } = signedIn
 
     await test.step('the old email and password are refused', async () => {
-      await page.getByLabel('Email').fill(agent.email)
-      await page.getByLabel('Password').fill(agent.password)
-      await page.getByRole('button', { name: 'Sign in' }).click()
+      await submitLoginForm(page, agent)
 
       await expect(page.getByRole('alert')).toHaveText('Invalid email or password')
       await expect(page).toHaveURL('/login')
@@ -64,9 +63,7 @@ test('an agent whose email and password the admin changes signs in with the new 
     })
 
     await test.step('the new email and password get the agent in', async () => {
-      await page.getByLabel('Email').fill(newEmail)
-      await page.getByLabel('Password').fill(newPassword)
-      await page.getByRole('button', { name: 'Sign in' }).click()
+      await submitLoginForm(page, { email: newEmail, password: newPassword })
 
       await expect(page).toHaveURL('/')
       await expect(page.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()

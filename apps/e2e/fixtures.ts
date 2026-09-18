@@ -1,4 +1,10 @@
-import { test as base, expect, type Cookie, type Page } from '@playwright/test'
+import {
+  test as base,
+  expect,
+  type APIRequestContext,
+  type Cookie,
+  type Page,
+} from '@playwright/test'
 import { ADMIN, API_URL } from './config.ts'
 import {
   createUser,
@@ -63,10 +69,7 @@ export const test = base.extend<AuthFixtures, WorkerFixtures>({
       //
       // Through the API rather than the form on purpose: only the sign-in spec
       // is testing the form, and every other spec would inherit its flakiness.
-      const response = await page.request.post(`${API_URL}/api/auth/login`, {
-        data: credentials,
-      })
-      await expect(response).toBeOK()
+      await loginViaApi(page.request, credentials)
     })
   },
 
@@ -119,6 +122,18 @@ export const test = base.extend<AuthFixtures, WorkerFixtures>({
     { auto: true },
   ],
 })
+
+/**
+ * Logs in over HTTP. Pass a context's request, not the standalone one, when the
+ * session should land in that context's browser: only it shares the cookie jar.
+ */
+export async function loginViaApi(
+  request: APIRequestContext,
+  credentials: Credentials,
+): Promise<void> {
+  const response = await request.post(`${API_URL}/api/auth/login`, { data: credentials })
+  await expect(response).toBeOK()
+}
 
 /** The session cookie, or undefined when the browser is holding none. */
 export async function findSessionCookie(page: Page): Promise<Cookie | undefined> {

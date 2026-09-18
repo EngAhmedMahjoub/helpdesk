@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { ADMIN } from '../config.ts'
 import { countSessionsFor, findSessionByToken } from '../database.ts'
 import { expect, findSessionCookie, sessionCookie, test } from '../fixtures.ts'
+import { submitLoginForm } from '../login-form.ts'
 
 /**
  * The one message the API answers for an unknown address, a wrong password and
@@ -14,9 +15,7 @@ const REFUSAL = 'Invalid email or password'
 
 async function submitLogin(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/login')
-  await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(password)
-  await page.getByRole('button', { name: 'Sign in' }).click()
+  await submitLoginForm(page, { email, password })
 }
 
 /** Records login calls, so a test can prove the form never made one. */
