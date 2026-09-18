@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { UserSummary } from '@helpdesk/shared'
 import CreateAgentDialog from '@/components/create-agent-dialog'
 import TableSkeleton, { type Column } from '@/components/table-skeleton'
+import UserStatusAction from '@/components/user-status-action'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -11,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useCurrentUser } from '@/hooks/use-auth'
 import { useUsers } from '@/hooks/use-users'
 
 // Built once rather than per row. undefined locale means the reader's own.
@@ -19,15 +21,17 @@ const joinedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
 // One list for the skeleton and the table, so their headers and widths cannot
 // drift apart. Sums to 100%; Email gets the most because it runs longest.
 const columns: Column[] = [
-  { label: 'Name', width: 'w-[22%]' },
-  { label: 'Email', width: 'w-[32%]' },
-  { label: 'Role', width: 'w-[13%]' },
-  { label: 'Status', width: 'w-[15%]' },
-  { label: 'Joined', width: 'w-[18%]' },
+  { label: 'Name', width: 'w-[19%]' },
+  { label: 'Email', width: 'w-[27%]' },
+  { label: 'Role', width: 'w-[10%]' },
+  { label: 'Status', width: 'w-[13%]' },
+  { label: 'Joined', width: 'w-[15%]' },
+  { label: 'Actions', width: 'w-[16%]' },
 ]
 
 export default function UsersPage() {
   const users = useUsers()
+  const currentUser = useCurrentUser()
   const [announcement, setAnnouncement] = useState('')
 
   return (
@@ -62,13 +66,27 @@ export default function UsersPage() {
           </p>
         )}
 
-        {users.data && <UsersTable users={users.data} />}
+        {users.data && (
+          <UsersTable
+            currentUserId={currentUser.data?.id}
+            onChanged={setAnnouncement}
+            users={users.data}
+          />
+        )}
       </div>
     </main>
   )
 }
 
-function UsersTable({ users }: { users: UserSummary[] }) {
+function UsersTable({
+  users,
+  currentUserId,
+  onChanged,
+}: {
+  users: UserSummary[]
+  currentUserId: string | undefined
+  onChanged: (message: string) => void
+}) {
   return (
     <Table className="table-fixed">
       <caption className="sr-only">Users, oldest first</caption>
@@ -104,6 +122,13 @@ function UsersTable({ users }: { users: UserSummary[] }) {
             </TableCell>
             <TableCell className="text-muted-foreground">
               <time dateTime={user.createdAt}>{joinedFormat.format(new Date(user.createdAt))}</time>
+            </TableCell>
+            <TableCell>
+              <UserStatusAction
+                isSelf={user.id === currentUserId}
+                onChanged={onChanged}
+                user={user}
+              />
             </TableCell>
           </TableRow>
         ))}
