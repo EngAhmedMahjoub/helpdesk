@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { z } from 'zod'
+import { loginSchema } from '@helpdesk/shared'
 import { prisma } from '../db.ts'
 import { verifyAgainstDummyHash, verifyPassword } from '../auth/password.ts'
 import { requireAuth } from '../auth/middleware.ts'
@@ -11,11 +11,6 @@ import {
   deleteSession,
   setSessionCookie,
 } from '../auth/session.ts'
-
-const loginSchema = z.object({
-  email: z.email(),
-  password: z.string().min(1),
-})
 
 export const authRouter = Router()
 

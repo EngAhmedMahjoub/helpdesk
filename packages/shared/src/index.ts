@@ -26,23 +26,5 @@ export type UserSummary = {
   createdAt: string
 }
 
-/** The body of `POST /api/users`. The role is not sent: the API only creates agents. */
-export type CreateUserRequest = {
-  email: string
-  name: string
-  password: string
-}
-
-/**
- * The body of `PATCH /api/users/:id`: any of these, at least one. Deactivating
- * ends every session the user holds, and so does setting their password, except
- * the one an admin changes their own from.
- */
-export type UpdateUserRequest = {
-  name?: string
-  email?: string
-  password?: string
-  isActive?: boolean
-}
-
+export * from './user-fields.ts'
 export { authorise, type Change, type Party, type Verdict } from './user-permissions.ts'

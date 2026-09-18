@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
-import { z } from 'zod'
+import { type LoginRequest, loginSchema } from '@helpdesk/shared'
 import { ButtonSpinner } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,23 +17,11 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field
 import { Input } from '@/components/ui/input'
 import { currentUserQueryKey, login } from '@/lib/auth'
 
-/**
- * Only what the client can know. The API remains the real validator: it answers
- * one 401 with the same message for an unknown email, a wrong password and a
- * deactivated account, and nothing here should imply otherwise.
- */
-const loginSchema = z.object({
-  email: z.email('Enter a valid email address'),
-  password: z.string().min(1, 'Enter your password'),
-})
-
-type LoginValues = z.infer<typeof loginSchema>
-
 export default function LoginPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const form = useForm<LoginValues>({
+  const form = useForm<LoginRequest>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   })

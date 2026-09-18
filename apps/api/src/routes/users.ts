@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { type UserSummary, authorise } from '@helpdesk/shared'
+import { type UserSummary, authorise, createUserSchema, updateUserSchema } from '@helpdesk/shared'
 import { prisma } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { hashPassword } from '../auth/password.ts'
@@ -30,37 +30,6 @@ function toSummary(user: {
 }): UserSummary {
   return { ...user, createdAt: user.createdAt.toISOString() }
 }
-
-// One definition per field, shared by create and edit so their limits cannot
-// drift apart.
-//
-// 254 is the longest address SMTP can deliver to. Without a cap, a few KB
-// overflowed the unique index's 2704-byte row limit: Postgres refused the insert
-// and the admin got a 500, after argon2 had already been paid for.
-const emailField = z.email().max(254)
-const nameField = z.string().trim().min(1).max(100)
-// 12 to match ADMIN_PASSWORD in the seed script, so the admin an agent is
-// created by cannot hold a weaker password than the agent. The cap keeps a
-// 100KB body — what express.json() allows — out of argon2.
-const passwordField = z.string().min(12).max(200)
-
-const createUserSchema = z.object({
-  email: emailField,
-  name: nameField,
-  password: passwordField,
-})
-
-// Every field optional, at least one required. Anything else in the body —
-// role, isProtected — is stripped by zod, so an empty change is a 400 rather
-// than a silent no-op that looks like it did something.
-const updateUserSchema = z
-  .object({
-    name: nameField.optional(),
-    email: emailField.optional(),
-    password: passwordField.optional(),
-    isActive: z.boolean().optional(),
-  })
-  .refine((body) => Object.values(body).some((value) => value !== undefined))
 
 export const usersRouter = Router()
 

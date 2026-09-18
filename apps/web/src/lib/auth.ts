@@ -1,10 +1,7 @@
-import type { CurrentUser } from '@helpdesk/shared'
+import type { CurrentUser, LoginRequest } from '@helpdesk/shared'
 import { ApiError, apiRequest } from '@/lib/api'
 
-export type Credentials = {
-  email: string
-  password: string
-}
+export type Credentials = LoginRequest
 
 /** The one query key the signed-in user is cached under. */
 export const currentUserQueryKey = ['currentUser']

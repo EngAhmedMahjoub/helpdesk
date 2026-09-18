@@ -8,7 +8,11 @@ import {
   type Party,
   type UpdateUserRequest,
   type UserSummary,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
   authorise,
+  emailField,
+  nameField,
 } from '@helpdesk/shared'
 import { ButtonSpinner } from '@/components/page-spinner'
 import {
@@ -77,13 +81,17 @@ export default function UserActions({ user, viewer, onChanged }: Props) {
 }
 
 const detailsSchema = z.object({
-  name: z.string().trim().min(1, 'Enter a name').max(100, 'Keep the name under 100 characters'),
-  email: z.email('Enter a valid email address').max(254, 'Use at most 254 characters'),
-  // Blank keeps the current password; anything else meets the API's limits.
+  name: nameField,
+  email: emailField,
+  // Blank keeps the current password; anything else meets the API's limits. Not
+  // passwordField.or(''): a union reports its own message, not the minimum's.
   password: z
     .string()
-    .max(200, 'Keep the password under 200 characters')
-    .refine((value) => value === '' || value.length >= 12, 'Use at least 12 characters'),
+    .max(PASSWORD_MAX_LENGTH, `Keep the password under ${PASSWORD_MAX_LENGTH} characters`)
+    .refine(
+      (value) => value === '' || value.length >= PASSWORD_MIN_LENGTH,
+      `Use at least ${PASSWORD_MIN_LENGTH} characters`,
+    ),
 })
 
 type DetailsValues = z.infer<typeof detailsSchema>
@@ -237,7 +245,7 @@ function EditUserDialog({
                 {...form.register('password')}
               />
               <FieldDescription id={`edit-password-hint-${user.id}`}>
-                Leave blank to keep the current password. At least 12 characters.
+                Leave blank to keep the current password. At least {PASSWORD_MIN_LENGTH} characters.
               </FieldDescription>
               <FieldError errors={[errors.password]} />
             </Field>

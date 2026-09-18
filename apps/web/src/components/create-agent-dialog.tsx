@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { z } from 'zod'
-import type { UserSummary } from '@helpdesk/shared'
+import {
+  type CreateUserRequest,
+  type UserSummary,
+  PASSWORD_MIN_LENGTH,
+  createUserSchema,
+} from '@helpdesk/shared'
 import { ButtonSpinner } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,23 +24,7 @@ import { Input } from '@/components/ui/input'
 import { useCreateUser } from '@/hooks/use-users'
 import { ApiError } from '@/lib/api'
 
-/**
- * The same limits as the API's createUserSchema, so an admin hears about a short
- * password before the request rather than as a bare 400 after it. The API stays
- * the real validator; this only moves the message earlier.
- */
-const createAgentSchema = z.object({
-  name: z.string().trim().min(1, 'Enter a name').max(100, 'Keep the name under 100 characters'),
-  email: z.email('Enter a valid email address').max(254, 'Use at most 254 characters'),
-  password: z
-    .string()
-    .min(12, 'Use at least 12 characters')
-    .max(200, 'Keep the password under 200 characters'),
-})
-
-type CreateAgentValues = z.infer<typeof createAgentSchema>
-
-const emptyValues: CreateAgentValues = { name: '', email: '', password: '' }
+const emptyValues: CreateUserRequest = { name: '', email: '', password: '' }
 
 export default function CreateAgentDialog({
   onCreated,
@@ -46,8 +34,11 @@ export default function CreateAgentDialog({
   const [open, setOpen] = useState(false)
   const createUser = useCreateUser()
 
-  const form = useForm<CreateAgentValues>({
-    resolver: zodResolver(createAgentSchema),
+  const form = useForm<CreateUserRequest>({
+    // The API's own schema, so an admin hears about a short password before the
+    // request rather than as a bare 400 after it. The API stays the real
+    // validator; this only moves the message earlier.
+    resolver: zodResolver(createUserSchema),
     defaultValues: emptyValues,
   })
 
@@ -64,7 +55,7 @@ export default function CreateAgentDialog({
     }
   }
 
-  function submit(values: CreateAgentValues) {
+  function submit(values: CreateUserRequest) {
     createUser.mutate(values, {
       onSuccess: (user) => {
         handleOpenChange(false)
@@ -145,7 +136,9 @@ export default function CreateAgentDialog({
                 type="password"
                 {...form.register('password')}
               />
-              <FieldDescription id="agent-password-hint">At least 12 characters.</FieldDescription>
+              <FieldDescription id="agent-password-hint">
+                At least {PASSWORD_MIN_LENGTH} characters.
+              </FieldDescription>
               <FieldError errors={[errors.password]} />
             </Field>
           </FieldGroup>
