@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
 import { createApp } from '../src/app.ts'
-import { hashPassword } from '../src/auth/password.ts'
-import { SESSION_COOKIE, createSession } from '../src/auth/session.ts'
 import { env } from '../src/env.ts'
-import { prisma, resetDatabase } from './db.ts'
+import { resetDatabase } from './db.ts'
+import { TEST_PASSWORD, createUser, sessionCookieFor } from './fixtures.ts'
 
 const app = createApp()
 const allowed = env.WEB_ORIGIN
@@ -13,14 +12,8 @@ const foreign = 'http://evil.example'
 beforeEach(resetDatabase)
 
 async function signIn() {
-  const user = await prisma.user.create({
-    data: {
-      email: 'agent@example.com',
-      name: 'Agent',
-      passwordHash: await hashPassword('a-long-enough-password'),
-    },
-  })
-  return `${SESSION_COOKIE}=${await createSession(user.id)}`
+  const user = await createUser()
+  return sessionCookieFor(user.id)
 }
 
 describe('preflight from the allowed origin', () => {
@@ -49,18 +42,12 @@ describe('preflight from the allowed origin', () => {
 
 describe('requests from the allowed origin', () => {
   test('login is allowed to expose its response and set a cookie', async () => {
-    const user = await prisma.user.create({
-      data: {
-        email: 'agent@example.com',
-        name: 'Agent',
-        passwordHash: await hashPassword('a-long-enough-password'),
-      },
-    })
+    const user = await createUser({ password: TEST_PASSWORD })
 
     const res = await request(app)
       .post('/api/auth/login')
       .set('Origin', allowed)
-      .send({ email: user.email, password: 'a-long-enough-password' })
+      .send({ email: user.email, password: TEST_PASSWORD })
 
     expect(res.status).toBe(200)
     expect(res.headers['access-control-allow-origin']).toBe(allowed)

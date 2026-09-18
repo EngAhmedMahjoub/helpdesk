@@ -1,29 +1,17 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
 import { createApp } from '../src/app.ts'
-import { hashPassword } from '../src/auth/password.ts'
-import { SESSION_COOKIE, SESSION_TTL_MS, hashToken } from '../src/auth/session.ts'
+import { SESSION_TTL_MS, hashToken } from '../src/auth/session.ts'
 import { prisma, resetDatabase } from './db.ts'
+import * as fixtures from './fixtures.ts'
+import { TEST_PASSWORD, sessionCookieFrom } from './fixtures.ts'
 
 const app = createApp()
-const password = 'a-long-enough-password'
+const password = TEST_PASSWORD
 
-async function createUser(overrides: { email?: string; isActive?: boolean } = {}) {
-  return prisma.user.create({
-    data: {
-      email: overrides.email ?? 'agent@example.com',
-      name: 'Agent',
-      passwordHash: await hashPassword(password),
-      isActive: overrides.isActive ?? true,
-    },
-  })
-}
-
-/** Pulls the session cookie's value out of a Set-Cookie header. */
-function sessionCookie(res: request.Response): string | undefined {
-  const header = res.headers['set-cookie'] as string[] | undefined
-  return header?.find((c) => c.startsWith(`${SESSION_COOKIE}=`))
-}
+/** Every user here signs in, and login answers with their name. */
+const createUser = (overrides: fixtures.NewUser = {}) =>
+  fixtures.createUser({ name: 'Agent', password, ...overrides })
 
 beforeEach(resetDatabase)
 
@@ -43,7 +31,7 @@ describe('POST /api/auth/login with the correct password', () => {
     const user = await createUser()
 
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password })
-    const cookie = sessionCookie(res)
+    const cookie = sessionCookieFrom(res)
 
     expect(cookie).toBeDefined()
     expect(cookie).toContain('HttpOnly')
@@ -58,7 +46,7 @@ describe('POST /api/auth/login with the correct password', () => {
     const user = await createUser()
 
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password })
-    const token = sessionCookie(res)?.split(';')[0]?.split('=')[1] ?? ''
+    const token = sessionCookieFrom(res)?.split(';')[0]?.split('=')[1] ?? ''
 
     const session = await prisma.session.findFirstOrThrow({ where: { userId: user.id } })
     expect(token).toHaveLength(64)
@@ -94,7 +82,7 @@ describe('POST /api/auth/login with the correct password', () => {
     const first = await request(app).post('/api/auth/login').send({ email: user.email, password })
     const second = await request(app).post('/api/auth/login').send({ email: user.email, password })
 
-    expect(sessionCookie(first)).not.toBe(sessionCookie(second))
+    expect(sessionCookieFrom(first)).not.toBe(sessionCookieFrom(second))
     expect(await prisma.session.count()).toBe(2)
   })
 })
@@ -109,7 +97,7 @@ describe('POST /api/auth/login with bad credentials', () => {
 
     expect(res.status).toBe(401)
     expect(res.body).toEqual({ error: 'Invalid email or password' })
-    expect(sessionCookie(res)).toBeUndefined()
+    expect(sessionCookieFrom(res)).toBeUndefined()
     expect(await prisma.session.count()).toBe(0)
   })
 
@@ -119,7 +107,7 @@ describe('POST /api/auth/login with bad credentials', () => {
       .send({ email: 'nobody@example.com', password })
 
     expect(res.status).toBe(401)
-    expect(sessionCookie(res)).toBeUndefined()
+    expect(sessionCookieFrom(res)).toBeUndefined()
   })
 
   test('returns 401 for a deactivated user', async () => {
@@ -128,7 +116,7 @@ describe('POST /api/auth/login with bad credentials', () => {
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password })
 
     expect(res.status).toBe(401)
-    expect(sessionCookie(res)).toBeUndefined()
+    expect(sessionCookieFrom(res)).toBeUndefined()
     expect(await prisma.session.count()).toBe(0)
   })
 

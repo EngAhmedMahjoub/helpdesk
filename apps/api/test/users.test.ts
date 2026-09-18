@@ -1,41 +1,12 @@
 import { randomBytes } from 'node:crypto'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
-import type { Role, UserSummary } from '@helpdesk/shared'
+import type { UserSummary } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
-import { hashPassword } from '../src/auth/password.ts'
-import { SESSION_COOKIE, createSession } from '../src/auth/session.ts'
 import { prisma, resetDatabase } from './db.ts'
+import { createUser, sessionCookieFor } from './fixtures.ts'
 
 const app = createApp()
-
-async function createUser(
-  overrides: {
-    email?: string
-    name?: string
-    role?: Role
-    isActive?: boolean
-    isProtected?: boolean
-  } = {},
-) {
-  const role = overrides.role ?? 'agent'
-  return prisma.user.create({
-    data: {
-      email: overrides.email ?? `${role}@example.com`,
-      name: overrides.name ?? role,
-      // The list never verifies a password, so a real hash would only slow the
-      // suite down by ~100ms per user.
-      passwordHash: 'not-used-here',
-      role,
-      isActive: overrides.isActive ?? true,
-      isProtected: overrides.isProtected ?? false,
-    },
-  })
-}
-
-async function cookieFor(userId: string) {
-  return `${SESSION_COOKIE}=${await createSession(userId)}`
-}
 
 beforeEach(resetDatabase)
 
@@ -46,7 +17,7 @@ describe('GET /api/users as an admin', () => {
 
     const res = await request(app)
       .get('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
 
     expect(res.status).toBe(200)
     const body = res.body as UserSummary[]
@@ -71,7 +42,7 @@ describe('GET /api/users as an admin', () => {
 
     const res = await request(app)
       .get('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
 
     expect(res.text).not.toContain('a-recognisable-secret')
     expect(res.text).not.toContain('passwordHash')
@@ -83,7 +54,7 @@ describe('GET /api/users as an admin', () => {
 
     const res = await request(app)
       .get('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
 
     const body = res.body as UserSummary[]
     expect(body).toHaveLength(2)
@@ -95,7 +66,7 @@ describe('GET /api/users as an admin', () => {
 
     const res = await request(app)
       .get('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
 
     expect(res.status).toBe(200)
     expect(res.body).toHaveLength(1)
@@ -109,7 +80,7 @@ describe('GET /api/users without admin rights', () => {
 
     const res = await request(app)
       .get('/api/users')
-      .set('Cookie', await cookieFor(agent.id))
+      .set('Cookie', await sessionCookieFor(agent.id))
 
     expect(res.status).toBe(403)
     expect(res.body).toEqual({ error: 'Forbidden' })
@@ -127,7 +98,7 @@ describe('GET /api/users without admin rights', () => {
 
   test('gives a deactivated admin 401', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
-    const cookie = await cookieFor(admin.id)
+    const cookie = await sessionCookieFor(admin.id)
     await prisma.user.update({ where: { id: admin.id }, data: { isActive: false } })
 
     const res = await request(app).get('/api/users').set('Cookie', cookie)
@@ -148,7 +119,7 @@ describe('POST /api/users as an admin', () => {
 
     const res = await request(app)
       .post('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send(body)
 
     expect(res.status).toBe(201)
@@ -165,7 +136,7 @@ describe('POST /api/users as an admin', () => {
 
   test('stores a hash the new agent can log in with', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
-    const cookie = await cookieFor(admin.id)
+    const cookie = await sessionCookieFor(admin.id)
 
     await request(app).post('/api/users').set('Cookie', cookie).send(body)
 
@@ -184,7 +155,7 @@ describe('POST /api/users as an admin', () => {
 
     const res = await request(app)
       .post('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ ...body, email: 'Mixed.Case@Example.COM' })
 
     expect(res.status).toBe(201)
@@ -199,7 +170,7 @@ describe('POST /api/users as an admin', () => {
 
     const res = await request(app)
       .post('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ ...body, role: 'admin', isActive: false })
 
     expect(res.status).toBe(201)
@@ -216,7 +187,7 @@ describe('POST /api/users with a duplicate email', () => {
 
     const res = await request(app)
       .post('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send(body)
 
     expect(res.status).toBe(409)
@@ -230,7 +201,7 @@ describe('POST /api/users with a duplicate email', () => {
 
     const res = await request(app)
       .post('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ ...body, email: 'TAKEN@example.com' })
 
     // Lowercasing before the insert is what makes the unique index catch this;
@@ -276,7 +247,7 @@ describe('POST /api/users with an invalid body', () => {
 
       const res = await request(app)
         .post('/api/users')
-        .set('Cookie', await cookieFor(admin.id))
+        .set('Cookie', await sessionCookieFor(admin.id))
         .send(payload)
 
       expect(res.status).toBe(400)
@@ -298,7 +269,7 @@ describe('POST /api/users without admin rights', () => {
 
     const res = await request(app)
       .post('/api/users')
-      .set('Cookie', await cookieFor(agent.id))
+      .set('Cookie', await sessionCookieFor(agent.id))
       .send(body)
 
     expect(res.status).toBe(403)
@@ -317,14 +288,14 @@ describe('PATCH /api/users/:id deactivating an agent', () => {
   test("the agent's next request returns 401", async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const agent = await createUser()
-    const agentCookie = await cookieFor(agent.id)
+    const agentCookie = await sessionCookieFor(agent.id)
 
     // The session works right up to the moment it is revoked.
     expect((await request(app).get('/api/auth/me').set('Cookie', agentCookie)).status).toBe(200)
 
     const res = await request(app)
       .patch(`/api/users/${agent.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ isActive: false })
 
     expect(res.status).toBe(200)
@@ -338,13 +309,13 @@ describe('PATCH /api/users/:id deactivating an agent', () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const agent = await createUser()
     const other = await createUser({ email: 'other@example.com' })
-    await cookieFor(agent.id)
-    await cookieFor(agent.id)
-    await cookieFor(other.id)
+    await sessionCookieFor(agent.id)
+    await sessionCookieFor(agent.id)
+    await sessionCookieFor(other.id)
 
     await request(app)
       .patch(`/api/users/${agent.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ isActive: false })
 
     expect(await prisma.session.count({ where: { userId: agent.id } })).toBe(0)
@@ -356,12 +327,12 @@ describe('PATCH /api/users/:id deactivating an agent', () => {
     const password = 'a-long-enough-password'
     const created = await request(app)
       .post('/api/users')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ email: 'agent@example.com', name: 'Agent', password })
 
     await request(app)
       .patch(`/api/users/${(created.body as UserSummary).id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ isActive: false })
 
     // Revoking sessions is only half of it: the password must stop working too.
@@ -375,7 +346,7 @@ describe('PATCH /api/users/:id deactivating an agent', () => {
 describe('PATCH /api/users/:id reactivating an agent', () => {
   test('lets the agent log in again, but does not restore old sessions', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
-    const adminCookie = await cookieFor(admin.id)
+    const adminCookie = await sessionCookieFor(admin.id)
     const password = 'a-long-enough-password'
     const created = await request(app)
       .post('/api/users')
@@ -383,7 +354,7 @@ describe('PATCH /api/users/:id reactivating an agent', () => {
       .send({ email: 'agent@example.com', name: 'Agent', password })
     const agentId = (created.body as UserSummary).id
 
-    const oldCookie = `${SESSION_COOKIE}=${await createSession(agentId)}`
+    const oldCookie = await sessionCookieFor(agentId)
     await request(app)
       .patch(`/api/users/${agentId}`)
       .set('Cookie', adminCookie)
@@ -409,11 +380,11 @@ describe('PATCH /api/users/:id reactivating an agent', () => {
   test('is a no-op on a user who is already active', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const agent = await createUser()
-    await cookieFor(agent.id)
+    await sessionCookieFor(agent.id)
 
     const res = await request(app)
       .patch(`/api/users/${agent.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ isActive: true })
 
     expect(res.status).toBe(200)
@@ -423,7 +394,7 @@ describe('PATCH /api/users/:id reactivating an agent', () => {
 
   test('does not revive a session created while the agent was inactive', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
-    const adminCookie = await cookieFor(admin.id)
+    const adminCookie = await sessionCookieFor(admin.id)
     const agent = await createUser()
 
     await request(app)
@@ -433,7 +404,7 @@ describe('PATCH /api/users/:id reactivating an agent', () => {
 
     // Where a racing login leaves things: it read the agent as active before
     // the deactivation committed, and inserted its session after the delete.
-    const straggler = await cookieFor(agent.id)
+    const straggler = await sessionCookieFor(agent.id)
     expect((await request(app).get('/api/auth/me').set('Cookie', straggler)).status).toBe(401)
 
     await request(app)
@@ -451,7 +422,7 @@ describe('PATCH /api/users/:id reactivating an agent', () => {
 describe('PATCH /api/users/:id refusing the request', () => {
   test('refuses an admin deactivating their own account', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
-    const cookie = await cookieFor(admin.id)
+    const cookie = await sessionCookieFor(admin.id)
 
     const res = await request(app)
       .patch(`/api/users/${admin.id}`)
@@ -466,12 +437,12 @@ describe('PATCH /api/users/:id refusing the request', () => {
 
   test('refuses to deactivate the seeded admin, even for another admin', async () => {
     const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
-    const seededCookie = await cookieFor(seeded.id)
+    const seededCookie = await sessionCookieFor(seeded.id)
     const other = await createUser({ role: 'admin', email: 'other@example.com' })
 
     const res = await request(app)
       .patch(`/api/users/${seeded.id}`)
-      .set('Cookie', await cookieFor(other.id))
+      .set('Cookie', await sessionCookieFor(other.id))
       .send({ isActive: false })
 
     expect(res.status).toBe(409)
@@ -487,7 +458,7 @@ describe('PATCH /api/users/:id refusing the request', () => {
 
     const res = await request(app)
       .get('/api/users')
-      .set('Cookie', await cookieFor(seeded.id))
+      .set('Cookie', await sessionCookieFor(seeded.id))
 
     const body = res.body as UserSummary[]
     expect(body.find((u) => u.email === 'seed@example.com')?.isProtected).toBe(true)
@@ -500,7 +471,7 @@ describe('PATCH /api/users/:id refusing the request', () => {
 
     const res = await request(app)
       .patch(`/api/users/${second.id}`)
-      .set('Cookie', await cookieFor(seeded.id))
+      .set('Cookie', await sessionCookieFor(seeded.id))
       .send({ isActive: false })
 
     // The self guard must not make an admin account unremovable.
@@ -514,7 +485,7 @@ describe('PATCH /api/users/:id refusing the request', () => {
 
     const res = await request(app)
       .patch(`/api/users/${second.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ isActive: false })
 
     // Two ordinary admins deactivating each other at once used to leave nobody
@@ -529,7 +500,7 @@ describe('PATCH /api/users/:id refusing the request', () => {
 
     const res = await request(app)
       .patch('/api/users/3f2504e0-4f89-11d3-9a0c-0305e82c3301')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ isActive: false })
 
     expect(res.status).toBe(404)
@@ -541,7 +512,7 @@ describe('PATCH /api/users/:id refusing the request', () => {
 
     const res = await request(app)
       .patch('/api/users/not-a-uuid')
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ isActive: false })
 
     expect(res.status).toBe(404)
@@ -550,7 +521,7 @@ describe('PATCH /api/users/:id refusing the request', () => {
   test('rejects an empty change, a wrong type, and fields it does not accept', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const agent = await createUser()
-    const cookie = await cookieFor(admin.id)
+    const cookie = await sessionCookieFor(admin.id)
 
     for (const payload of [
       {},
@@ -580,7 +551,7 @@ describe('PATCH /api/users/:id refusing the request', () => {
 
     const res = await request(app)
       .patch(`/api/users/${target.id}`)
-      .set('Cookie', await cookieFor(caller.id))
+      .set('Cookie', await sessionCookieFor(caller.id))
       .send({ isActive: false })
 
     expect(res.status).toBe(403)
@@ -603,14 +574,7 @@ describe('PATCH /api/users/:id editing details', () => {
 
   /** An agent with a real hash, so a login can prove which password works. */
   async function agentWithPassword() {
-    return prisma.user.create({
-      data: {
-        email: 'agent@example.com',
-        name: 'Agent',
-        passwordHash: await hashPassword(oldPassword),
-        role: 'agent',
-      },
-    })
+    return createUser({ name: 'Agent', password: oldPassword })
   }
 
   const login = (email: string, password: string) =>
@@ -619,11 +583,11 @@ describe('PATCH /api/users/:id editing details', () => {
   test('renames an agent, trimmed, and leaves their sessions alone', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const agent = await createUser()
-    const agentCookie = await cookieFor(agent.id)
+    const agentCookie = await sessionCookieFor(agent.id)
 
     const res = await request(app)
       .patch(`/api/users/${agent.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ name: '  Renamed Agent  ' })
 
     expect(res.status).toBe(200)
@@ -638,7 +602,7 @@ describe('PATCH /api/users/:id editing details', () => {
 
     const res = await request(app)
       .patch(`/api/users/${agent.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ email: 'Moved@Example.COM' })
 
     expect(res.status).toBe(200)
@@ -654,7 +618,7 @@ describe('PATCH /api/users/:id editing details', () => {
 
     const res = await request(app)
       .patch(`/api/users/${agent.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ email: 'TAKEN@example.com', name: 'Should Not Stick' })
 
     expect(res.status).toBe(409)
@@ -668,11 +632,11 @@ describe('PATCH /api/users/:id editing details', () => {
   test("sets a password, which works, and ends the agent's sessions", async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const agent = await agentWithPassword()
-    const agentCookie = await cookieFor(agent.id)
+    const agentCookie = await sessionCookieFor(agent.id)
 
     const res = await request(app)
       .patch(`/api/users/${agent.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ password: newPassword })
 
     expect(res.status).toBe(200)
@@ -686,8 +650,8 @@ describe('PATCH /api/users/:id editing details', () => {
 
   test('an admin changing their own password stays signed in, and only there', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
-    const here = await cookieFor(admin.id)
-    const elsewhere = await cookieFor(admin.id)
+    const here = await sessionCookieFor(admin.id)
+    const elsewhere = await sessionCookieFor(admin.id)
 
     const res = await request(app)
       .patch(`/api/users/${admin.id}`)
@@ -704,7 +668,7 @@ describe('PATCH /api/users/:id editing details', () => {
 
     const res = await request(app)
       .patch(`/api/users/${admin.id}`)
-      .set('Cookie', await cookieFor(admin.id))
+      .set('Cookie', await sessionCookieFor(admin.id))
       .send({ name: 'New Name' })
 
     expect(res.status).toBe(200)
@@ -715,7 +679,7 @@ describe('PATCH /api/users/:id editing details', () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
     const other = await createUser({ role: 'admin', email: 'other@example.com' })
-    const cookie = await cookieFor(admin.id)
+    const cookie = await sessionCookieFor(admin.id)
 
     for (const target of [seeded, other]) {
       const res = await request(app)
@@ -738,7 +702,7 @@ describe('PATCH /api/users/:id editing details', () => {
 
     const res = await request(app)
       .patch(`/api/users/${other.id}`)
-      .set('Cookie', await cookieFor(seeded.id))
+      .set('Cookie', await sessionCookieFor(seeded.id))
       .send({ name: 'Renamed By Seed' })
 
     expect(res.status).toBe(200)

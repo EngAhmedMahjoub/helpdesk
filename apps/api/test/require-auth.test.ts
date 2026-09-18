@@ -3,8 +3,10 @@ import cookieParser from 'cookie-parser'
 import express from 'express'
 import request from 'supertest'
 import { requireAuth } from '../src/auth/middleware.ts'
-import { SESSION_COOKIE, createSession, hashToken } from '../src/auth/session.ts'
+import { createSession, hashToken } from '../src/auth/session.ts'
 import { prisma, resetDatabase } from './db.ts'
+import * as fixtures from './fixtures.ts'
+import { clearsSessionCookie, cookieHeader } from './fixtures.ts'
 
 // requireAuth guards no real route until 1.9, so it is mounted on a stub that
 // echoes whatever the middleware attached to the request.
@@ -14,24 +16,9 @@ app.get('/guarded', requireAuth, (req, res) => {
   res.json({ user: req.user })
 })
 
-const cookie = (token: string) => `${SESSION_COOKIE}=${token}`
-
-async function createUser(overrides: { isActive?: boolean } = {}) {
-  return prisma.user.create({
-    data: {
-      email: 'agent@example.com',
-      name: 'Agent',
-      passwordHash: 'not-used-here',
-      isActive: overrides.isActive ?? true,
-    },
-  })
-}
-
-/** True when the response tells the browser to drop the session cookie. */
-function clearsCookie(res: request.Response): boolean {
-  const header = (res.headers['set-cookie'] as string[] | undefined) ?? []
-  return header.some((c) => c.startsWith(`${SESSION_COOKIE}=;`))
-}
+/** The middleware attaches the name, so the tests pin it. */
+const createUser = (overrides: fixtures.NewUser = {}) =>
+  fixtures.createUser({ name: 'Agent', ...overrides })
 
 beforeEach(resetDatabase)
 
@@ -40,7 +27,7 @@ describe('requireAuth accepts a valid session', () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
-    const res = await request(app).get('/guarded').set('Cookie', cookie(token))
+    const res = await request(app).get('/guarded').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(200)
     expect(res.body.user).toEqual({ id: user.id, email: user.email, name: 'Agent', role: 'agent' })
@@ -50,7 +37,7 @@ describe('requireAuth accepts a valid session', () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
-    const res = await request(app).get('/guarded').set('Cookie', cookie(token))
+    const res = await request(app).get('/guarded').set('Cookie', cookieHeader(token))
 
     expect(JSON.stringify(res.body)).not.toContain('passwordHash')
     expect(JSON.stringify(res.body)).not.toContain('not-used-here')
@@ -60,7 +47,7 @@ describe('requireAuth accepts a valid session', () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
-    await request(app).get('/guarded').set('Cookie', cookie(token))
+    await request(app).get('/guarded').set('Cookie', cookieHeader(token))
 
     expect(await prisma.session.count()).toBe(1)
   })
@@ -75,7 +62,7 @@ describe('requireAuth rejects a missing cookie', () => {
   })
 
   test('returns 401 when the session cookie is empty', async () => {
-    const res = await request(app).get('/guarded').set('Cookie', cookie(''))
+    const res = await request(app).get('/guarded').set('Cookie', cookieHeader(''))
 
     expect(res.status).toBe(401)
   })
@@ -91,10 +78,10 @@ describe('requireAuth rejects an unknown token', () => {
   test('returns 401 and clears the stale cookie', async () => {
     const res = await request(app)
       .get('/guarded')
-      .set('Cookie', cookie('a'.repeat(64)))
+      .set('Cookie', cookieHeader('a'.repeat(64)))
 
     expect(res.status).toBe(401)
-    expect(clearsCookie(res)).toBe(true)
+    expect(clearsSessionCookie(res)).toBe(true)
   })
 
   test('rejects the stored hash presented as though it were the token', async () => {
@@ -104,7 +91,7 @@ describe('requireAuth rejects an unknown token', () => {
 
     // Someone reading the database must not be able to authenticate with what
     // they find there.
-    const res = await request(app).get('/guarded').set('Cookie', cookie(tokenHash))
+    const res = await request(app).get('/guarded').set('Cookie', cookieHeader(tokenHash))
 
     expect(tokenHash).toBe(hashToken(token))
     expect(res.status).toBe(401)
@@ -120,10 +107,10 @@ describe('requireAuth rejects an expired session', () => {
       data: { expiresAt: new Date(Date.now() - 1000) },
     })
 
-    const res = await request(app).get('/guarded').set('Cookie', cookie(token))
+    const res = await request(app).get('/guarded').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(401)
-    expect(clearsCookie(res)).toBe(true)
+    expect(clearsSessionCookie(res)).toBe(true)
   })
 
   test('deletes the expired row rather than leaving it to be replayed', async () => {
@@ -134,7 +121,7 @@ describe('requireAuth rejects an expired session', () => {
       data: { expiresAt: new Date(Date.now() - 1000) },
     })
 
-    await request(app).get('/guarded').set('Cookie', cookie(token))
+    await request(app).get('/guarded').set('Cookie', cookieHeader(token))
 
     expect(await prisma.session.count()).toBe(0)
   })
@@ -147,7 +134,7 @@ describe('requireAuth rejects an expired session', () => {
       data: { expiresAt: new Date(Date.now() + 1000) },
     })
 
-    const res = await request(app).get('/guarded').set('Cookie', cookie(token))
+    const res = await request(app).get('/guarded').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(200)
   })
@@ -161,10 +148,10 @@ describe('requireAuth rejects a deactivated user', () => {
     // Session still live; only the user was switched off, as 2.3 will do.
     await prisma.user.update({ where: { id: user.id }, data: { isActive: false } })
 
-    const res = await request(app).get('/guarded').set('Cookie', cookie(token))
+    const res = await request(app).get('/guarded').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(401)
-    expect(clearsCookie(res)).toBe(true)
+    expect(clearsSessionCookie(res)).toBe(true)
   })
 
   test('accepts the same session again once the user is reactivated', async () => {
@@ -172,10 +159,10 @@ describe('requireAuth rejects a deactivated user', () => {
     const token = await createSession(user.id)
 
     await prisma.user.update({ where: { id: user.id }, data: { isActive: false } })
-    await request(app).get('/guarded').set('Cookie', cookie(token))
+    await request(app).get('/guarded').set('Cookie', cookieHeader(token))
     await prisma.user.update({ where: { id: user.id }, data: { isActive: true } })
 
-    const res = await request(app).get('/guarded').set('Cookie', cookie(token))
+    const res = await request(app).get('/guarded').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(200)
   })
@@ -186,7 +173,7 @@ describe('requireAuth gives the same answer for every rejection', () => {
     const missing = await request(app).get('/guarded')
     const unknown = await request(app)
       .get('/guarded')
-      .set('Cookie', cookie('b'.repeat(64)))
+      .set('Cookie', cookieHeader('b'.repeat(64)))
 
     const expiredUser = await createUser()
     const expiredToken = await createSession(expiredUser.id)
@@ -194,11 +181,11 @@ describe('requireAuth gives the same answer for every rejection', () => {
       where: { userId: expiredUser.id },
       data: { expiresAt: new Date(Date.now() - 1000) },
     })
-    const expired = await request(app).get('/guarded').set('Cookie', cookie(expiredToken))
+    const expired = await request(app).get('/guarded').set('Cookie', cookieHeader(expiredToken))
 
     await prisma.user.update({ where: { id: expiredUser.id }, data: { isActive: false } })
     const inactiveToken = await createSession(expiredUser.id)
-    const inactive = await request(app).get('/guarded').set('Cookie', cookie(inactiveToken))
+    const inactive = await request(app).get('/guarded').set('Cookie', cookieHeader(inactiveToken))
 
     for (const res of [unknown, expired, inactive]) {
       expect(res.status).toBe(missing.status)

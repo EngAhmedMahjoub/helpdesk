@@ -1,32 +1,17 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
-import type { Role } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
-import { hashPassword } from '../src/auth/password.ts'
-import { SESSION_COOKIE, createSession } from '../src/auth/session.ts'
+import { createSession } from '../src/auth/session.ts'
 import { prisma, resetDatabase } from './db.ts'
+import * as fixtures from './fixtures.ts'
+import { TEST_PASSWORD, clearsSessionCookie, cookieHeader, sessionCookieFrom } from './fixtures.ts'
 
 const app = createApp()
-const password = 'a-long-enough-password'
+const password = TEST_PASSWORD
 
-async function createUser(overrides: { role?: Role; email?: string } = {}) {
-  return prisma.user.create({
-    data: {
-      email: overrides.email ?? 'agent@example.com',
-      name: 'Agent',
-      passwordHash: await hashPassword(password),
-      role: overrides.role ?? 'agent',
-    },
-  })
-}
-
-const cookie = (token: string) => `${SESSION_COOKIE}=${token}`
-
-/** True when the response tells the browser to drop the session cookie. */
-function clearsCookie(res: request.Response): boolean {
-  const header = (res.headers['set-cookie'] as string[] | undefined) ?? []
-  return header.some((c) => c.startsWith(`${SESSION_COOKIE}=;`))
-}
+/** Named and hashed alike whatever the role: the round trip signs in and reads the name back. */
+const createUser = (overrides: fixtures.NewUser = {}) =>
+  fixtures.createUser({ email: 'agent@example.com', name: 'Agent', password, ...overrides })
 
 beforeEach(resetDatabase)
 
@@ -36,7 +21,7 @@ describe('POST /api/auth/logout', () => {
     const token = await createSession(user.id)
     expect(await prisma.session.count()).toBe(1)
 
-    const res = await request(app).post('/api/auth/logout').set('Cookie', cookie(token))
+    const res = await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(204)
     expect(await prisma.session.count()).toBe(0)
@@ -46,16 +31,16 @@ describe('POST /api/auth/logout', () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
-    const res = await request(app).post('/api/auth/logout').set('Cookie', cookie(token))
+    const res = await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
 
-    expect(clearsCookie(res)).toBe(true)
+    expect(clearsSessionCookie(res)).toBe(true)
   })
 
   test('leaves the user account alone', async () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
-    await request(app).post('/api/auth/logout').set('Cookie', cookie(token))
+    await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
 
     const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
     expect(after.isActive).toBe(true)
@@ -66,20 +51,22 @@ describe('POST /api/auth/logout', () => {
     const phone = await createSession(user.id)
     const laptop = await createSession(user.id)
 
-    await request(app).post('/api/auth/logout').set('Cookie', cookie(phone))
+    await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(phone))
 
     // Signing out on one device must not sign the user out everywhere.
     const remaining = await prisma.session.findMany({ where: { userId: user.id } })
     expect(remaining).toHaveLength(1)
-    expect((await request(app).get('/api/auth/me').set('Cookie', cookie(laptop))).status).toBe(200)
+    expect(
+      (await request(app).get('/api/auth/me').set('Cookie', cookieHeader(laptop))).status,
+    ).toBe(200)
   })
 
   test('the token stops working afterwards', async () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
-    await request(app).post('/api/auth/logout').set('Cookie', cookie(token))
-    const res = await request(app).get('/api/auth/me').set('Cookie', cookie(token))
+    await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
+    const res = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(401)
   })
@@ -93,7 +80,7 @@ describe('POST /api/auth/logout', () => {
   test('succeeds with an unknown token', async () => {
     const res = await request(app)
       .post('/api/auth/logout')
-      .set('Cookie', cookie('a'.repeat(64)))
+      .set('Cookie', cookieHeader('a'.repeat(64)))
 
     expect(res.status).toBe(204)
   })
@@ -102,8 +89,8 @@ describe('POST /api/auth/logout', () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
-    const first = await request(app).post('/api/auth/logout').set('Cookie', cookie(token))
-    const second = await request(app).post('/api/auth/logout').set('Cookie', cookie(token))
+    const first = await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
+    const second = await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
 
     expect(first.status).toBe(204)
     expect(second.status).toBe(204)
@@ -115,7 +102,7 @@ describe('POST /api/auth/logout', () => {
     const myToken = await createSession(mine.id)
     await createSession(theirs.id)
 
-    await request(app).post('/api/auth/logout').set('Cookie', cookie(myToken))
+    await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(myToken))
 
     expect(await prisma.session.count({ where: { userId: theirs.id } })).toBe(1)
   })
@@ -126,7 +113,7 @@ describe('GET /api/auth/me', () => {
     const user = await createUser({ role: 'admin' })
     const token = await createSession(user.id)
 
-    const res = await request(app).get('/api/auth/me').set('Cookie', cookie(token))
+    const res = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ id: user.id, email: user.email, name: 'Agent', role: 'admin' })
@@ -136,7 +123,7 @@ describe('GET /api/auth/me', () => {
     const user = await createUser()
     const token = await createSession(user.id)
 
-    const res = await request(app).get('/api/auth/me').set('Cookie', cookie(token))
+    const res = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(token))
 
     expect(Object.keys(res.body).sort()).toEqual(['email', 'id', 'name', 'role'])
     expect(JSON.stringify(res.body)).not.toContain('passwordHash')
@@ -154,7 +141,7 @@ describe('GET /api/auth/me', () => {
     const token = await createSession(user.id)
     await prisma.user.update({ where: { id: user.id }, data: { isActive: false } })
 
-    const res = await request(app).get('/api/auth/me').set('Cookie', cookie(token))
+    const res = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(token))
 
     expect(res.status).toBe(401)
   })
@@ -165,8 +152,7 @@ describe('the login, me, logout round trip', () => {
     const user = await createUser({ role: 'admin' })
 
     const login = await request(app).post('/api/auth/login').send({ email: user.email, password })
-    // Supertest types headers as strings, but set-cookie really is an array.
-    const sessionCookie = ((login.headers['set-cookie'] as string[] | undefined) ?? [])[0] ?? ''
+    const sessionCookie = sessionCookieFrom(login) ?? ''
 
     const me = await request(app).get('/api/auth/me').set('Cookie', sessionCookie)
     const logout = await request(app).post('/api/auth/logout').set('Cookie', sessionCookie)
