@@ -5,6 +5,7 @@ import type { HealthResponse } from '@helpdesk/shared'
 import { prisma } from './db.ts'
 import { env } from './env.ts'
 import { authRouter } from './routes/auth.ts'
+import { usersRouter } from './routes/users.ts'
 
 /**
  * The status a malformed request deserves, or undefined when the error is ours.
@@ -63,6 +64,7 @@ export function createApp() {
   })
 
   app.use('/api/auth', authRouter)
+  app.use('/api/users', usersRouter)
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not Found' })

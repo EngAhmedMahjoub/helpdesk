@@ -13,3 +13,13 @@ export type CurrentUser = {
   name: string
   role: Role
 }
+
+/** A user as the admin user list shows them. `passwordHash` is never included. */
+export type UserSummary = {
+  id: string
+  email: string
+  name: string
+  role: Role
+  isActive: boolean
+  createdAt: string
+}
