@@ -45,13 +45,14 @@ As installed at scaffold time (2026-09-15):
 | Framework | React + Vite + TypeScript |
 | Routing | React Router 8 in data mode; route table in `src/routes.tsx`, browser router created in `App` |
 | Data fetching | axios for the HTTP call, TanStack Query for server state — two jobs, two libraries. Never native `fetch`. Query client in `src/lib/query-client.ts`, no retries on 4xx |
+| Tables | shadcn `Table`, with a visually hidden `<caption>`. Status and role read as words in a badge; the colour only seconds them, so nothing is lost by a reader who cannot tell two badges apart |
 | UI | Tailwind CSS 4 (via `@tailwindcss/vite`) + shadcn/ui (radix base, nova preset); components in `src/components/ui`, imported through the `@/` alias |
 | Forms | react-hook-form with `zodResolver`; shadcn `Field`/`FieldError`, `noValidate` so the schema's messages replace the browser's. A rejected request stays a form-level alert — marking a field would disclose which one the API refused to name |
 | Linting | oxlint |
 | API calls | `apiRequest` in `src/lib/api.ts` over an axios instance — `baseURL` from `VITE_API_URL`, `withCredentials: true`, and a response interceptor turning any HTTP failure into `ApiError`. A request that got no response at all is left alone, so the query client retries a dropped connection where it would not retry a 401 |
 | Axios adapter | `adapter: 'fetch'` rather than the default xhr. It is what runs where the app ships, and it keeps one seam — global `fetch` — for the tests to stand in front of, instead of an XMLHttpRequest happy-dom would put on the wire for real |
 | Local development | Vite dev server proxies `/api` to `http://localhost:3000` |
-| Route protection | `RequireAuth` wraps every route but `/login`; `GET /api/auth/me` on load, 401 redirects to `/login`. `AppLayout` drops admin-only nav items for agents — a convenience, not a boundary; Express refuses the request either way |
+| Route protection | `RequireAuth` wraps every route but `/login`; `GET /api/auth/me` on load, 401 redirects to `/login`. `RequireAdmin` nests inside it around admin-only routes and sends a non-admin to `/` — signed in, so `/login` would name the wrong problem. `AppLayout` drops admin-only nav items for agents. All three are convenience, not a boundary; Express refuses the request either way |
 
 Hiding screens in the UI is not access control. Express enforces permissions on every endpoint.
 
