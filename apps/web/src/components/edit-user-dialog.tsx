@@ -4,29 +4,16 @@ import { Pencil } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import {
-  type Change,
-  type Party,
   type UpdateUserRequest,
   type UserSummary,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
-  authorise,
   emailField,
   nameField,
 } from '@helpdesk/shared'
 import { FormAlert, FormField } from '@/components/form-field'
 import { PendingLabel } from '@/components/page-spinner'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+import UserAccessControl from '@/components/user-access-control'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -42,43 +29,6 @@ import { FieldGroup } from '@/components/ui/field'
 import { Separator } from '@/components/ui/separator'
 import { useUpdateUser } from '@/hooks/use-users'
 import { isApiError } from '@/lib/api'
-
-type Props = {
-  user: UserSummary
-  /** The signed-in admin, as the list reports them; undefined until it loads. */
-  viewer: Party | undefined
-  onChanged: (message: string) => void
-}
-
-/**
- * The Actions cell: a pencil where the viewer may change this user, a reason
- * where they may not. Decided by the same authorise() the API enforces, so the
- * page never offers what the API would refuse.
- */
-export default function UserActions({ user, viewer, onChanged }: Props) {
-  const may = (change: Change) => viewer !== undefined && authorise(viewer, user, change).allowed
-
-  const canEdit = may({ editsDetails: true })
-  const canSetActive = may({ editsDetails: false, isActive: !user.isActive })
-
-  if (!canEdit) {
-    return (
-      <span className="text-sm text-muted-foreground">
-        {user.isProtected ? 'Protected' : '—'}
-        <span className="sr-only">: only the seeded admin can change this account</span>
-      </span>
-    )
-  }
-
-  return (
-    <EditUserDialog
-      canSetActive={canSetActive}
-      isSelf={viewer?.id === user.id}
-      onChanged={onChanged}
-      user={user}
-    />
-  )
-}
 
 const detailsSchema = z.object({
   name: nameField,
@@ -96,7 +46,8 @@ const detailsSchema = z.object({
 
 type DetailsValues = z.infer<typeof detailsSchema>
 
-function EditUserDialog({
+/** The pencil and the dialog it opens: the user's details, and their access. */
+export default function EditUserDialog({
   user,
   isSelf,
   canSetActive,
@@ -245,7 +196,7 @@ function EditUserDialog({
           <h3 className="text-sm font-medium" id={`access-${user.id}`}>
             Access
           </h3>
-          <AccessControl
+          <UserAccessControl
             canSetActive={canSetActive}
             isSelf={isSelf}
             onChange={changeAccess}
@@ -269,100 +220,5 @@ function EditUserDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-/**
- * Deactivation keeps its confirmation, because it cannot be quietly undone:
- * reactivating restores the account, but the sessions it ended stay ended.
- * Reactivation only gives back access and asks nothing.
- */
-function AccessControl({
-  user,
-  isSelf,
-  canSetActive,
-  onChange,
-  setAccess,
-}: {
-  user: UserSummary
-  isSelf: boolean
-  canSetActive: boolean
-  onChange: (isActive: boolean) => void
-  setAccess: ReturnType<typeof useUpdateUser>
-}) {
-  const failure = setAccess.isError && (
-    <p className="text-sm text-destructive" role="alert">
-      {setAccess.error.message}
-    </p>
-  )
-
-  if (!canSetActive) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        {isSelf ? 'You cannot deactivate your own account.' : 'This account cannot be deactivated.'}
-      </p>
-    )
-  }
-
-  if (!user.isActive) {
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <p className="text-sm text-muted-foreground">Deactivated. They cannot sign in.</p>
-        <Button
-          aria-label={`Reactivate ${user.name}`}
-          disabled={setAccess.isPending}
-          onClick={() => onChange(true)}
-          size="sm"
-          variant="outline"
-        >
-          <PendingLabel busy="Reactivating…" pending={setAccess.isPending}>
-            Reactivate
-          </PendingLabel>
-        </Button>
-        {failure}
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col items-start gap-2">
-      <p className="text-sm text-muted-foreground">Active. They can sign in.</p>
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button aria-label={`Deactivate ${user.name}`} size="sm" variant="outline">
-            Deactivate
-          </Button>
-        </AlertDialogTrigger>
-
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate {user.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              They are signed out everywhere at once and cannot sign in until you reactivate them.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {failure}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={setAccess.isPending}
-              onClick={(event) => {
-                // Held open until the API answers, so a failure is shown here,
-                // beside the button that caused it, rather than lost on close.
-                event.preventDefault()
-                onChange(false)
-              }}
-              variant="destructive"
-            >
-              <PendingLabel busy="Deactivating…" pending={setAccess.isPending}>
-                Deactivate
-              </PendingLabel>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
   )
 }

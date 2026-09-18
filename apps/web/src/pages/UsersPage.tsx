@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { UserSummary } from '@helpdesk/shared'
 import CreateAgentDialog from '@/components/create-agent-dialog'
 import TableSkeleton, { type Column } from '@/components/table-skeleton'
-import UserActions from '@/components/edit-user-dialog'
+import UserActions from '@/components/user-actions'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
