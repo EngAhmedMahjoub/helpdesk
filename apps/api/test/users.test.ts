@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
 import type { Role, UserSummary } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
+import { hashPassword } from '../src/auth/password.ts'
 import { SESSION_COOKIE, createSession } from '../src/auth/session.ts'
 import { prisma, resetDatabase } from './db.ts'
 
@@ -485,7 +486,21 @@ describe('PATCH /api/users/:id refusing the request', () => {
     expect(body.find((u) => u.email === 'agent@example.com')?.isProtected).toBe(false)
   })
 
-  test('lets one admin deactivate another', async () => {
+  test('lets the seeded admin deactivate another admin', async () => {
+    const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
+    const second = await createUser({ role: 'admin', email: 'second@example.com' })
+
+    const res = await request(app)
+      .patch(`/api/users/${second.id}`)
+      .set('Cookie', await cookieFor(seeded.id))
+      .send({ isActive: false })
+
+    // The self guard must not make an admin account unremovable.
+    expect(res.status).toBe(200)
+    expect((res.body as UserSummary).isActive).toBe(false)
+  })
+
+  test('refuses an admin who is not the seeded one deactivating another admin', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const second = await createUser({ role: 'admin', email: 'second@example.com' })
 
@@ -494,9 +509,11 @@ describe('PATCH /api/users/:id refusing the request', () => {
       .set('Cookie', await cookieFor(admin.id))
       .send({ isActive: false })
 
-    // The self guard must not make an admin account unremovable.
-    expect(res.status).toBe(200)
-    expect((res.body as UserSummary).isActive).toBe(false)
+    // Two ordinary admins deactivating each other at once used to leave nobody
+    // who could manage users. Only the seeded admin touches another admin now.
+    expect(res.status).toBe(403)
+    expect(res.body).toEqual({ error: 'Only the seeded admin can change another admin' })
+    expect((await prisma.user.findUnique({ where: { id: second.id } }))?.isActive).toBe(true)
   })
 
   test('answers 404 for an id that names no user', async () => {
@@ -522,12 +539,21 @@ describe('PATCH /api/users/:id refusing the request', () => {
     expect(res.status).toBe(404)
   })
 
-  test('rejects a body without isActive, and a non-boolean one', async () => {
+  test('rejects an empty change, a wrong type, and fields it does not accept', async () => {
     const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
     const agent = await createUser()
     const cookie = await cookieFor(admin.id)
 
-    for (const payload of [{}, { isActive: 'false' }, { name: 'Renamed' }]) {
+    for (const payload of [
+      {},
+      { isActive: 'false' },
+      // Stripped, leaving nothing to change: a 400, not a silent no-op.
+      { role: 'admin' },
+      { isProtected: true },
+      { email: 'not-an-email' },
+      { name: '   ' },
+      { password: 'short' },
+    ]) {
       const res = await request(app)
         .patch(`/api/users/${agent.id}`)
         .set('Cookie', cookie)
@@ -558,5 +584,154 @@ describe('PATCH /api/users/:id refusing the request', () => {
 
     expect(res.status).toBe(401)
     expect((await prisma.user.findUnique({ where: { id: target.id } }))?.isActive).toBe(true)
+  })
+})
+
+describe('PATCH /api/users/:id editing details', () => {
+  const oldPassword = 'the-old-password-1'
+  const newPassword = 'the-new-password-2'
+
+  /** An agent with a real hash, so a login can prove which password works. */
+  async function agentWithPassword() {
+    return prisma.user.create({
+      data: {
+        email: 'agent@example.com',
+        name: 'Agent',
+        passwordHash: await hashPassword(oldPassword),
+        role: 'agent',
+      },
+    })
+  }
+
+  const login = (email: string, password: string) =>
+    request(app).post('/api/auth/login').send({ email, password })
+
+  test('renames an agent, trimmed, and leaves their sessions alone', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await createUser()
+    const agentCookie = await cookieFor(agent.id)
+
+    const res = await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ name: '  Renamed Agent  ' })
+
+    expect(res.status).toBe(200)
+    expect((res.body as UserSummary).name).toBe('Renamed Agent')
+    // A new name is no reason to sign anyone out.
+    expect((await request(app).get('/api/auth/me').set('Cookie', agentCookie)).status).toBe(200)
+  })
+
+  test('changes an email, lowercased, and the agent signs in with the new one', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await agentWithPassword()
+
+    const res = await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ email: 'Moved@Example.COM' })
+
+    expect(res.status).toBe(200)
+    expect((res.body as UserSummary).email).toBe('moved@example.com')
+    expect((await login('moved@example.com', oldPassword)).status).toBe(200)
+    expect((await login('agent@example.com', oldPassword)).status).toBe(401)
+  })
+
+  test('refuses an email another user already has, and changes nothing', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await createUser()
+    await createUser({ email: 'taken@example.com', name: 'Taken' })
+
+    const res = await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ email: 'TAKEN@example.com', name: 'Should Not Stick' })
+
+    expect(res.status).toBe(409)
+    expect(res.body).toEqual({ error: 'A user with that email already exists' })
+    // One transaction: the name in the same request did not land either.
+    const after = await prisma.user.findUnique({ where: { id: agent.id } })
+    expect(after?.email).toBe('agent@example.com')
+    expect(after?.name).toBe('agent')
+  })
+
+  test("sets a password, which works, and ends the agent's sessions", async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await agentWithPassword()
+    const agentCookie = await cookieFor(agent.id)
+
+    const res = await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ password: newPassword })
+
+    expect(res.status).toBe(200)
+    expect(res.text).not.toContain(newPassword)
+    expect(res.text).not.toContain('passwordHash')
+    // Whoever was signed in with the old password is out.
+    expect((await request(app).get('/api/auth/me').set('Cookie', agentCookie)).status).toBe(401)
+    expect((await login('agent@example.com', newPassword)).status).toBe(200)
+    expect((await login('agent@example.com', oldPassword)).status).toBe(401)
+  })
+
+  test('an admin changing their own password stays signed in, and only there', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const here = await cookieFor(admin.id)
+    const elsewhere = await cookieFor(admin.id)
+
+    const res = await request(app)
+      .patch(`/api/users/${admin.id}`)
+      .set('Cookie', here)
+      .send({ password: newPassword })
+
+    expect(res.status).toBe(200)
+    expect((await request(app).get('/api/auth/me').set('Cookie', here)).status).toBe(200)
+    expect((await request(app).get('/api/auth/me').set('Cookie', elsewhere)).status).toBe(401)
+  })
+
+  test('lets an admin who is not the seeded one edit their own details', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+
+    const res = await request(app)
+      .patch(`/api/users/${admin.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ name: 'New Name' })
+
+    expect(res.status).toBe(200)
+    expect((res.body as UserSummary).name).toBe('New Name')
+  })
+
+  test("refuses an admin who is not the seeded one editing another admin's details", async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
+    const other = await createUser({ role: 'admin', email: 'other@example.com' })
+    const cookie = await cookieFor(admin.id)
+
+    for (const target of [seeded, other]) {
+      const res = await request(app)
+        .patch(`/api/users/${target.id}`)
+        .set('Cookie', cookie)
+        .send({ password: newPassword })
+
+      // Changing another admin's password would lock them out as surely as
+      // deactivating them.
+      expect(res.status).toBe(403)
+      expect((await prisma.user.findUnique({ where: { id: target.id } }))?.passwordHash).toBe(
+        'not-used-here',
+      )
+    }
+  })
+
+  test("lets the seeded admin edit another admin's details", async () => {
+    const seeded = await createUser({ role: 'admin', email: 'seed@example.com', isProtected: true })
+    const other = await createUser({ role: 'admin', email: 'other@example.com' })
+
+    const res = await request(app)
+      .patch(`/api/users/${other.id}`)
+      .set('Cookie', await cookieFor(seeded.id))
+      .send({ name: 'Renamed By Seed' })
+
+    expect(res.status).toBe(200)
+    expect((res.body as UserSummary).name).toBe('Renamed By Seed')
   })
 })
