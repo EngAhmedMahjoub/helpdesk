@@ -68,6 +68,7 @@ None.
 | 2.5 | Frontend: create agent form | Admin creates an agent who can then log in | Done |
 | 2.6 | Frontend: deactivate/reactivate action | Deactivated agent is logged out | Done |
 | 2.7 | Phase 2 security review fixes (#144): stray sessions on reactivation, protected seeded admin, email cap, production write limit on `/api/users`, cache cleared at login | Each fix has a test that fails without it | Done |
+| 2.8 | Edit users from a pencil in the Actions column: name, email, password, and deactivate/reactivate; only the seeded admin may change other admins | Every cell of the permission table tested; an agent signs in with the email and password an admin set, and their old session is gone | Done |
 
 ## Phase 3 — Tickets (Manual, No Email or AI Yet)
 
