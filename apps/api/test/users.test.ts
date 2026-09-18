@@ -280,3 +280,204 @@ describe('POST /api/users without admin rights', () => {
     expect(await prisma.user.count()).toBe(0)
   })
 })
+
+describe('PATCH /api/users/:id deactivating an agent', () => {
+  test("the agent's next request returns 401", async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await createUser()
+    const agentCookie = await cookieFor(agent.id)
+
+    // The session works right up to the moment it is revoked.
+    expect((await request(app).get('/api/auth/me').set('Cookie', agentCookie)).status).toBe(200)
+
+    const res = await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ isActive: false })
+
+    expect(res.status).toBe(200)
+    expect((res.body as UserSummary).isActive).toBe(false)
+
+    const after = await request(app).get('/api/auth/me').set('Cookie', agentCookie)
+    expect(after.status).toBe(401)
+  })
+
+  test("deletes the agent's sessions, and only theirs", async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await createUser()
+    const other = await createUser({ email: 'other@example.com' })
+    await cookieFor(agent.id)
+    await cookieFor(agent.id)
+    await cookieFor(other.id)
+
+    await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ isActive: false })
+
+    expect(await prisma.session.count({ where: { userId: agent.id } })).toBe(0)
+    expect(await prisma.session.count({ where: { userId: other.id } })).toBe(1)
+  })
+
+  test('refuses a fresh login while deactivated', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const password = 'a-long-enough-password'
+    const created = await request(app)
+      .post('/api/users')
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ email: 'agent@example.com', name: 'Agent', password })
+
+    await request(app)
+      .patch(`/api/users/${(created.body as UserSummary).id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ isActive: false })
+
+    // Revoking sessions is only half of it: the password must stop working too.
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'agent@example.com', password })
+    expect(login.status).toBe(401)
+  })
+})
+
+describe('PATCH /api/users/:id reactivating an agent', () => {
+  test('lets the agent log in again, but does not restore old sessions', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const adminCookie = await cookieFor(admin.id)
+    const password = 'a-long-enough-password'
+    const created = await request(app)
+      .post('/api/users')
+      .set('Cookie', adminCookie)
+      .send({ email: 'agent@example.com', name: 'Agent', password })
+    const agentId = (created.body as UserSummary).id
+
+    const oldCookie = `${SESSION_COOKIE}=${await createSession(agentId)}`
+    await request(app)
+      .patch(`/api/users/${agentId}`)
+      .set('Cookie', adminCookie)
+      .send({ isActive: false })
+
+    const res = await request(app)
+      .patch(`/api/users/${agentId}`)
+      .set('Cookie', adminCookie)
+      .send({ isActive: true })
+
+    expect(res.status).toBe(200)
+    expect((res.body as UserSummary).isActive).toBe(true)
+    // A revoked token stays revoked: reactivation is not a way back into a
+    // session that was already taken away.
+    expect((await request(app).get('/api/auth/me').set('Cookie', oldCookie)).status).toBe(401)
+
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'agent@example.com', password })
+    expect(login.status).toBe(200)
+  })
+
+  test('is a no-op on a user who is already active', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await createUser()
+    await cookieFor(agent.id)
+
+    const res = await request(app)
+      .patch(`/api/users/${agent.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ isActive: true })
+
+    expect(res.status).toBe(200)
+    // Reactivating an active user must not sweep away the sessions they hold.
+    expect(await prisma.session.count({ where: { userId: agent.id } })).toBe(1)
+  })
+})
+
+describe('PATCH /api/users/:id refusing the request', () => {
+  test('refuses an admin deactivating their own account', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const cookie = await cookieFor(admin.id)
+
+    const res = await request(app)
+      .patch(`/api/users/${admin.id}`)
+      .set('Cookie', cookie)
+      .send({ isActive: false })
+
+    expect(res.status).toBe(409)
+    // Nothing moved: the admin is still active and still signed in.
+    expect((await prisma.user.findUnique({ where: { id: admin.id } }))?.isActive).toBe(true)
+    expect((await request(app).get('/api/auth/me').set('Cookie', cookie)).status).toBe(200)
+  })
+
+  test('lets one admin deactivate another', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const second = await createUser({ role: 'admin', email: 'second@example.com' })
+
+    const res = await request(app)
+      .patch(`/api/users/${second.id}`)
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ isActive: false })
+
+    // The self guard must not make an admin account unremovable.
+    expect(res.status).toBe(200)
+    expect((res.body as UserSummary).isActive).toBe(false)
+  })
+
+  test('answers 404 for an id that names no user', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+
+    const res = await request(app)
+      .patch('/api/users/3f2504e0-4f89-11d3-9a0c-0305e82c3301')
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ isActive: false })
+
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'User not found' })
+  })
+
+  test('answers 404 for a malformed id rather than a 500', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+
+    const res = await request(app)
+      .patch('/api/users/not-a-uuid')
+      .set('Cookie', await cookieFor(admin.id))
+      .send({ isActive: false })
+
+    expect(res.status).toBe(404)
+  })
+
+  test('rejects a body without isActive, and a non-boolean one', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await createUser()
+    const cookie = await cookieFor(admin.id)
+
+    for (const payload of [{}, { isActive: 'false' }, { name: 'Renamed' }]) {
+      const res = await request(app)
+        .patch(`/api/users/${agent.id}`)
+        .set('Cookie', cookie)
+        .send(payload)
+      expect(res.status).toBe(400)
+    }
+
+    expect((await prisma.user.findUnique({ where: { id: agent.id } }))?.isActive).toBe(true)
+  })
+
+  test('gives an agent 403 and leaves the target active', async () => {
+    const caller = await createUser()
+    const target = await createUser({ email: 'target@example.com' })
+
+    const res = await request(app)
+      .patch(`/api/users/${target.id}`)
+      .set('Cookie', await cookieFor(caller.id))
+      .send({ isActive: false })
+
+    expect(res.status).toBe(403)
+    expect((await prisma.user.findUnique({ where: { id: target.id } }))?.isActive).toBe(true)
+  })
+
+  test('gives an unauthenticated caller 401 and leaves the target active', async () => {
+    const target = await createUser({ email: 'target@example.com' })
+
+    const res = await request(app).patch(`/api/users/${target.id}`).send({ isActive: false })
+
+    expect(res.status).toBe(401)
+    expect((await prisma.user.findUnique({ where: { id: target.id } }))?.isActive).toBe(true)
+  })
+})

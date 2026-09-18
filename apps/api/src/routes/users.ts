@@ -36,6 +36,10 @@ const createUserSchema = z.object({
   password: z.string().min(12).max(200),
 })
 
+// Only isActive: this route deactivates and reactivates. Name, email and
+// password changes are their own decisions and are not in Phase 2.
+const updateUserSchema = z.object({ isActive: z.boolean() })
+
 export const usersRouter = Router()
 
 // Guards on the router rather than each route: 2.2 and 2.3 add more admin-only
@@ -90,6 +94,61 @@ usersRouter.post('/', async (req, res) => {
     // would get a 500.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       res.status(409).json({ error: 'A user with that email already exists' })
+      return
+    }
+    throw err
+  }
+})
+
+usersRouter.patch('/:id', async (req, res) => {
+  const body = updateUserSchema.safeParse(req.body)
+
+  if (!body.success) {
+    res.status(400).json({ error: 'Invalid request body' })
+    return
+  }
+
+  const id = req.params.id
+
+  // A malformed id answers the same 404 as a well-formed one with no row. It
+  // cannot name a user either way, and Postgres would raise on the uuid cast
+  // rather than miss cleanly.
+  if (!z.uuid().safeParse(id).success) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  // An admin deactivating themselves is refused: it deletes the session making
+  // the request, and with one admin there is then nobody left who can undo it.
+  // Another admin can still deactivate them, so an admin is never unremovable.
+  if (id === req.user?.id && !body.data.isActive) {
+    res.status(409).json({ error: 'You cannot deactivate your own account' })
+    return
+  }
+
+  try {
+    const user = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: { isActive: body.data.isActive },
+        select: summaryFields,
+      })
+
+      // In the same transaction as the flag, so the rows can never outlive it.
+      // requireAuth already refuses an inactive user, so this is not what locks
+      // them out — it is what stops a reactivation later handing back sessions
+      // that were live weeks ago.
+      if (!body.data.isActive) {
+        await tx.session.deleteMany({ where: { userId: id } })
+      }
+
+      return updated
+    })
+
+    res.json(toSummary(user))
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      res.status(404).json({ error: 'User not found' })
       return
     }
     throw err

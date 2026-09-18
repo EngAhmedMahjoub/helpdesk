@@ -101,6 +101,9 @@ Database sessions.
 | Field selection | An explicit Prisma `select`, never an `omit` of `passwordHash`: a column added to `User` later is then absent from the response until someone chooses to expose it |
 | Creating an agent | `POST /api/users` takes `{ email, name, password }` and answers 201 with a `UserSummary`. `role` is fixed to `agent` in code and never read from the body, so one stolen admin session cannot mint a second admin. Password minimum 12, matching `ADMIN_PASSWORD` in the seed, capped at 200 so a 100KB body never reaches argon2 |
 | Duplicate address | The unique index decides, not a `findUnique` first: the `P2002` violation is mapped to 409. Check-then-insert would let two concurrent requests both pass the check and turn one into a 500. Addresses are lowercased before the insert, because login looks them up lowercased — a row stored with capitals would be an account nobody could sign in to |
+| Deactivating and reactivating | `PATCH /api/users/:id` takes `{ isActive }` alone. Deactivation flips the flag and deletes the user's sessions in one transaction, so the rows cannot outlive the flag. `requireAuth` refusing an inactive user is what actually locks them out; deleting the sessions is what stops a later reactivation handing back tokens that were live weeks ago — reactivation restores the account, never a session |
+| Deactivating yourself | Refused with 409. It would delete the session making the request, and with one admin nobody would be left who could undo it. Another admin can still deactivate them, so no admin account is unremovable |
+| Unknown user | 404 for an id with no row (Prisma `P2025`) and for a malformed id alike — neither names a user, and letting a non-uuid reach Postgres raises on the cast rather than missing cleanly |
 
 ## Tickets
 
