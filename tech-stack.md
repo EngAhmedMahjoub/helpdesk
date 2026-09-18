@@ -46,6 +46,8 @@ As installed at scaffold time (2026-09-15):
 | Routing | React Router 8 in data mode; route table in `src/routes.tsx`, browser router created in `App` |
 | Data fetching | axios for the HTTP call, TanStack Query for server state — two jobs, two libraries. Never native `fetch`. Query client in `src/lib/query-client.ts`, no retries on 4xx |
 | Tables | shadcn `Table`, with a visually hidden `<caption>`. Status and role read as words in a badge; the colour only seconds them, so nothing is lost by a reader who cannot tell two badges apart |
+| Dialog forms | shadcn `Dialog`, same react-hook-form + zod pattern as login. Closing by any route resets the form and the mutation, so a half-typed password never waits in a closed dialog. A 409 is set on the field it names with `setError` and focused — unlike login, the admin needs to know which value to change. After a create, the list is invalidated rather than patched, and a polite live region, always rendered, announces it |
+| New-password fields | `autoComplete="new-password"` on any password an admin sets for someone else. Without it a password manager fills in the admin's own saved password and the account is created with it |
 | UI | Tailwind CSS 4 (via `@tailwindcss/vite`) + shadcn/ui (radix base, nova preset); components in `src/components/ui`, imported through the `@/` alias |
 | Forms | react-hook-form with `zodResolver`; shadcn `Field`/`FieldError`, `noValidate` so the schema's messages replace the browser's. A rejected request stays a form-level alert — marking a field would disclose which one the API refused to name |
 | Linting | oxlint |

@@ -65,7 +65,7 @@ None.
 | 2.3 | `PATCH /api/users/:id` — deactivate/reactivate; deactivation deletes the user's sessions | Deactivated agent's next request returns 401 | Done |
 | 2.3a | Adopt axios for API calls, converting `apiFetch`; TanStack Query keeps server state | Web and end-to-end suites pass against the axios client | Done |
 | 2.4 | Frontend: users list page | Admin sees all users | Done |
-| 2.5 | Frontend: create agent form | Admin creates an agent who can then log in | |
+| 2.5 | Frontend: create agent form | Admin creates an agent who can then log in | Done |
 | 2.6 | Frontend: deactivate/reactivate action | Deactivated agent is logged out | |
 
 ## Phase 3 — Tickets (Manual, No Email or AI Yet)
