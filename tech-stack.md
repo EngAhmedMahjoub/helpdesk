@@ -99,6 +99,8 @@ Database sessions.
 | Routes | `apps/api/src/routes/users.ts`, mounted at `/api/users`. `requireAuth` and `requireAdmin` are applied to the router, not to each route, so a route added later cannot be left unguarded by omission |
 | List response | `GET /api/users` returns every user — active and deactivated — as `{ id, email, name, role, isActive, createdAt }`, oldest first with `id` breaking ties. The `UserSummary` type in `@helpdesk/shared` is the contract |
 | Field selection | An explicit Prisma `select`, never an `omit` of `passwordHash`: a column added to `User` later is then absent from the response until someone chooses to expose it |
+| Creating an agent | `POST /api/users` takes `{ email, name, password }` and answers 201 with a `UserSummary`. `role` is fixed to `agent` in code and never read from the body, so one stolen admin session cannot mint a second admin. Password minimum 12, matching `ADMIN_PASSWORD` in the seed, capped at 200 so a 100KB body never reaches argon2 |
+| Duplicate address | The unique index decides, not a `findUnique` first: the `P2002` violation is mapped to 409. Check-then-insert would let two concurrent requests both pass the check and turn one into a 500. Addresses are lowercased before the insert, because login looks them up lowercased — a row stored with capitals would be an account nobody could sign in to |
 
 ## Tickets
 

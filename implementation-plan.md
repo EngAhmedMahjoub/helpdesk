@@ -61,7 +61,7 @@ None.
 | ID | Task | Done when | Status |
 |---|---|---|---|
 | 2.1 | `GET /api/users` — list users (admin only) | Test passes | Done |
-| 2.2 | `POST /api/users` — create agent with email, name, initial password (admin only) | Test passes; duplicate email rejected | |
+| 2.2 | `POST /api/users` — create agent with email, name, initial password (admin only) | Test passes; duplicate email rejected | Done |
 | 2.3 | `PATCH /api/users/:id` — deactivate/reactivate; deactivation deletes the user's sessions | Deactivated agent's next request returns 401 | |
 | 2.4 | Frontend: users list page | Admin sees all users | |
 | 2.5 | Frontend: create agent form | Admin creates an agent who can then log in | |
