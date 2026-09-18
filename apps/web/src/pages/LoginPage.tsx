@@ -3,7 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 import { type LoginRequest, loginSchema } from '@helpdesk/shared'
-import { ButtonSpinner } from '@/components/page-spinner'
+import { FormAlert, FormField } from '@/components/form-field'
+import { PendingLabel } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -13,8 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { FieldGroup } from '@/components/ui/field'
 import { currentUserQueryKey, login } from '@/lib/auth'
 
 export default function LoginPage() {
@@ -59,43 +59,34 @@ export default function LoginPage() {
             reads are ours rather than the browser's own bubbles. */}
         <form noValidate onSubmit={form.handleSubmit((values) => signIn.mutate(values))}>
           <CardContent>
-            {signIn.isError && (
-              <p className="mb-4 text-sm text-destructive" role="alert">
-                {signIn.error.message}
-              </p>
-            )}
+            {signIn.isError && <FormAlert>{signIn.error.message}</FormAlert>}
 
             <FieldGroup>
-              <Field data-invalid={Boolean(errors.email)}>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input
-                  aria-invalid={Boolean(errors.email)}
-                  autoComplete="username"
-                  id="email"
-                  type="email"
-                  {...form.register('email')}
-                />
-                <FieldError errors={[errors.email]} />
-              </Field>
+              <FormField
+                autoComplete="username"
+                error={errors.email}
+                id="email"
+                label="Email"
+                type="email"
+                {...form.register('email')}
+              />
 
-              <Field data-invalid={Boolean(errors.password)}>
-                <FieldLabel htmlFor="password">Password</FieldLabel>
-                <Input
-                  aria-invalid={Boolean(errors.password)}
-                  autoComplete="current-password"
-                  id="password"
-                  type="password"
-                  {...form.register('password')}
-                />
-                <FieldError errors={[errors.password]} />
-              </Field>
+              <FormField
+                autoComplete="current-password"
+                error={errors.password}
+                id="password"
+                label="Password"
+                type="password"
+                {...form.register('password')}
+              />
             </FieldGroup>
           </CardContent>
 
           <CardFooter className="mt-6">
             <Button className="w-full" disabled={signIn.isPending} type="submit">
-              {signIn.isPending && <ButtonSpinner />}
-              {signIn.isPending ? 'Signing in…' : 'Sign in'}
+              <PendingLabel busy="Signing in…" pending={signIn.isPending}>
+                Sign in
+              </PendingLabel>
             </Button>
           </CardFooter>
         </form>

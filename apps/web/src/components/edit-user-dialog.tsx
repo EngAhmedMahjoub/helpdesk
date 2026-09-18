@@ -14,7 +14,8 @@ import {
   emailField,
   nameField,
 } from '@helpdesk/shared'
-import { ButtonSpinner } from '@/components/page-spinner'
+import { FormAlert, FormField } from '@/components/form-field'
+import { PendingLabel } from '@/components/page-spinner'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,11 +38,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { FieldGroup } from '@/components/ui/field'
 import { Separator } from '@/components/ui/separator'
 import { useUpdateUser } from '@/hooks/use-users'
-import { ApiError } from '@/lib/api'
+import { isApiError } from '@/lib/api'
 
 type Props = {
   user: UserSummary
@@ -157,7 +157,7 @@ function EditUserDialog({
           onChanged(`${updated.name} was updated.${signedOut}`)
         },
         onError: (error) => {
-          if (error instanceof ApiError && error.status === 409) {
+          if (isApiError(error, 409)) {
             form.setError('email', { message: error.message }, { shouldFocus: true })
           }
         },
@@ -181,7 +181,7 @@ function EditUserDialog({
     )
   }
 
-  const conflict = saveDetails.error instanceof ApiError && saveDetails.error.status === 409
+  const conflict = isApiError(saveDetails.error, 409)
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
@@ -202,53 +202,37 @@ function EditUserDialog({
         </DialogHeader>
 
         <form id={`edit-user-${user.id}`} noValidate onSubmit={form.handleSubmit(save)}>
-          {saveDetails.isError && !conflict && (
-            <p className="mb-4 text-sm text-destructive" role="alert">
-              {saveDetails.error.message}
-            </p>
-          )}
+          {saveDetails.isError && !conflict && <FormAlert>{saveDetails.error.message}</FormAlert>}
 
           <FieldGroup>
-            <Field data-invalid={Boolean(errors.name)}>
-              <FieldLabel htmlFor={`edit-name-${user.id}`}>Name</FieldLabel>
-              <Input
-                aria-invalid={Boolean(errors.name)}
-                autoComplete="off"
-                id={`edit-name-${user.id}`}
-                {...form.register('name')}
-              />
-              <FieldError errors={[errors.name]} />
-            </Field>
+            <FormField
+              autoComplete="off"
+              error={errors.name}
+              id={`edit-name-${user.id}`}
+              label="Name"
+              {...form.register('name')}
+            />
 
-            <Field data-invalid={Boolean(errors.email)}>
-              <FieldLabel htmlFor={`edit-email-${user.id}`}>Email</FieldLabel>
-              <Input
-                aria-invalid={Boolean(errors.email)}
-                autoComplete="off"
-                id={`edit-email-${user.id}`}
-                type="email"
-                {...form.register('email')}
-              />
-              <FieldError errors={[errors.email]} />
-            </Field>
+            <FormField
+              autoComplete="off"
+              error={errors.email}
+              id={`edit-email-${user.id}`}
+              label="Email"
+              type="email"
+              {...form.register('email')}
+            />
 
-            <Field data-invalid={Boolean(errors.password)}>
-              <FieldLabel htmlFor={`edit-password-${user.id}`}>New password</FieldLabel>
-              <Input
-                aria-describedby={`edit-password-hint-${user.id}`}
-                aria-invalid={Boolean(errors.password)}
-                // new-password: without it a password manager fills in the
-                // admin's own saved password, and the user is given it.
-                autoComplete="new-password"
-                id={`edit-password-${user.id}`}
-                type="password"
-                {...form.register('password')}
-              />
-              <FieldDescription id={`edit-password-hint-${user.id}`}>
-                Leave blank to keep the current password. At least {PASSWORD_MIN_LENGTH} characters.
-              </FieldDescription>
-              <FieldError errors={[errors.password]} />
-            </Field>
+            <FormField
+              // new-password: without it a password manager fills in the
+              // admin's own saved password, and the user is given it.
+              autoComplete="new-password"
+              description={`Leave blank to keep the current password. At least ${PASSWORD_MIN_LENGTH} characters.`}
+              error={errors.password}
+              id={`edit-password-${user.id}`}
+              label="New password"
+              type="password"
+              {...form.register('password')}
+            />
           </FieldGroup>
         </form>
 
@@ -278,8 +262,9 @@ function EditUserDialog({
           </DialogClose>
           {/* form=, because the footer sits outside the form it submits. */}
           <Button disabled={saveDetails.isPending} form={`edit-user-${user.id}`} type="submit">
-            {saveDetails.isPending && <ButtonSpinner />}
-            {saveDetails.isPending ? 'Saving…' : 'Save changes'}
+            <PendingLabel busy="Saving…" pending={saveDetails.isPending}>
+              Save changes
+            </PendingLabel>
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -330,8 +315,9 @@ function AccessControl({
           size="sm"
           variant="outline"
         >
-          {setAccess.isPending && <ButtonSpinner />}
-          {setAccess.isPending ? 'Reactivating…' : 'Reactivate'}
+          <PendingLabel busy="Reactivating…" pending={setAccess.isPending}>
+            Reactivate
+          </PendingLabel>
         </Button>
         {failure}
       </div>
@@ -370,8 +356,9 @@ function AccessControl({
               }}
               variant="destructive"
             >
-              {setAccess.isPending && <ButtonSpinner />}
-              {setAccess.isPending ? 'Deactivating…' : 'Deactivate'}
+              <PendingLabel busy="Deactivating…" pending={setAccess.isPending}>
+                Deactivate
+              </PendingLabel>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

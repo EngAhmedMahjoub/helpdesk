@@ -1,5 +1,5 @@
 import type { CurrentUser, LoginRequest } from '@helpdesk/shared'
-import { ApiError, apiRequest } from '@/lib/api'
+import { apiRequest, isApiError } from '@/lib/api'
 
 export type Credentials = LoginRequest
 
@@ -23,7 +23,7 @@ export async function fetchCurrentUser(): Promise<CurrentUser | null> {
   try {
     return await apiRequest<CurrentUser>('/auth/me')
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) return null
+    if (isApiError(error, 401)) return null
     throw error
   }
 }

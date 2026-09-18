@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router'
 import { cn } from 'cn'
-import { ButtonSpinner } from '@/components/page-spinner'
+import { PendingLabel } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
 import { useCurrentUser, useSignOut } from '@/hooks/use-auth'
 
@@ -62,8 +62,9 @@ export default function AppLayout() {
               size="sm"
               variant="outline"
             >
-              {signOut.isPending && <ButtonSpinner />}
-              {signOut.isPending ? 'Signing out…' : 'Sign out'}
+              <PendingLabel busy="Signing out…" pending={signOut.isPending}>
+                Sign out
+              </PendingLabel>
             </Button>
           </div>
         </div>

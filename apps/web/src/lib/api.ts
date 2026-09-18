@@ -18,6 +18,11 @@ export class ApiError extends Error {
   }
 }
 
+/** True when `error` is an {@link ApiError} with this status. */
+export function isApiError(error: unknown, status: number): error is ApiError {
+  return error instanceof ApiError && error.status === status
+}
+
 export const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api`,
   // The session lives in a cookie the API sets. Cross-origin requests omit
