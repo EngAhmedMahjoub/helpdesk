@@ -1,8 +1,6 @@
 import type { CurrentUser, LoginRequest } from '@helpdesk/shared'
 import { apiRequest, isApiError } from '@/lib/api'
 
-export type Credentials = LoginRequest
-
 /** The one query key the signed-in user is cached under. */
 export const currentUserQueryKey = ['currentUser']
 
@@ -10,7 +8,7 @@ export const currentUserQueryKey = ['currentUser']
  * Exchanges credentials for a session. The token itself arrives as an httpOnly
  * cookie the API sets, so there is nothing for the client to store.
  */
-export function login(credentials: Credentials): Promise<CurrentUser> {
+export function login(credentials: LoginRequest): Promise<CurrentUser> {
   // axios serialises the object and sets the JSON content type itself.
   return apiRequest<CurrentUser>('/auth/login', { method: 'POST', data: credentials })
 }

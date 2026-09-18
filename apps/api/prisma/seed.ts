@@ -8,8 +8,7 @@ import { hashPassword } from '../src/auth/password.ts'
 // without admin credentials it never uses.
 const seedEnvSchema = z.object({
   ADMIN_EMAIL: z.email(),
-  // The same floor as an agent's password, so the admin who creates agents
-  // cannot hold a weaker one than they do.
+  // No weaker than the agents this admin creates; see PASSWORD_MIN_LENGTH.
   ADMIN_PASSWORD: z.string().min(PASSWORD_MIN_LENGTH),
 })
 

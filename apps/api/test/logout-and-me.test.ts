@@ -10,14 +10,14 @@ const app = createApp()
 const password = TEST_PASSWORD
 
 /** Named and hashed alike whatever the role: the round trip signs in and reads the name back. */
-const createUser = (overrides: fixtures.NewUser = {}) =>
+const createSignInUser = (overrides: fixtures.NewUser = {}) =>
   fixtures.createUser({ email: 'agent@example.com', name: 'Agent', password, ...overrides })
 
 beforeEach(resetDatabase)
 
 describe('POST /api/auth/logout', () => {
   test('deletes the session row', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const token = await createSession(user.id)
     expect(await prisma.session.count()).toBe(1)
 
@@ -28,7 +28,7 @@ describe('POST /api/auth/logout', () => {
   })
 
   test('clears the cookie', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const token = await createSession(user.id)
 
     const res = await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
@@ -37,7 +37,7 @@ describe('POST /api/auth/logout', () => {
   })
 
   test('leaves the user account alone', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const token = await createSession(user.id)
 
     await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
@@ -47,7 +47,7 @@ describe('POST /api/auth/logout', () => {
   })
 
   test('ends only the session that was used', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const phone = await createSession(user.id)
     const laptop = await createSession(user.id)
 
@@ -62,7 +62,7 @@ describe('POST /api/auth/logout', () => {
   })
 
   test('the token stops working afterwards', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const token = await createSession(user.id)
 
     await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
@@ -86,7 +86,7 @@ describe('POST /api/auth/logout', () => {
   })
 
   test('is idempotent', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const token = await createSession(user.id)
 
     const first = await request(app).post('/api/auth/logout').set('Cookie', cookieHeader(token))
@@ -97,8 +97,8 @@ describe('POST /api/auth/logout', () => {
   })
 
   test('does not touch sessions belonging to other users', async () => {
-    const mine = await createUser({ email: 'mine@example.com' })
-    const theirs = await createUser({ email: 'theirs@example.com' })
+    const mine = await createSignInUser({ email: 'mine@example.com' })
+    const theirs = await createSignInUser({ email: 'theirs@example.com' })
     const myToken = await createSession(mine.id)
     await createSession(theirs.id)
 
@@ -110,7 +110,7 @@ describe('POST /api/auth/logout', () => {
 
 describe('GET /api/auth/me', () => {
   test('returns the current user', async () => {
-    const user = await createUser({ role: 'admin' })
+    const user = await createSignInUser({ role: 'admin' })
     const token = await createSession(user.id)
 
     const res = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(token))
@@ -120,7 +120,7 @@ describe('GET /api/auth/me', () => {
   })
 
   test('returns nothing beyond id, email, name and role', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const token = await createSession(user.id)
 
     const res = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(token))
@@ -137,7 +137,7 @@ describe('GET /api/auth/me', () => {
   })
 
   test('returns 401 for a deactivated user', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const token = await createSession(user.id)
     await prisma.user.update({ where: { id: user.id }, data: { isActive: false } })
 
@@ -149,7 +149,7 @@ describe('GET /api/auth/me', () => {
 
 describe('the login, me, logout round trip', () => {
   test('works end to end through the real app', async () => {
-    const user = await createUser({ role: 'admin' })
+    const user = await createSignInUser({ role: 'admin' })
 
     const login = await request(app).post('/api/auth/login').send({ email: user.email, password })
     const sessionCookie = sessionCookieFrom(login) ?? ''

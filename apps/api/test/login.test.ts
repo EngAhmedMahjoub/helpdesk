@@ -10,14 +10,14 @@ const app = createApp()
 const password = TEST_PASSWORD
 
 /** Every user here signs in, and login answers with their name. */
-const createUser = (overrides: fixtures.NewUser = {}) =>
+const createSignInUser = (overrides: fixtures.NewUser = {}) =>
   fixtures.createUser({ name: 'Agent', password, ...overrides })
 
 beforeEach(resetDatabase)
 
 describe('POST /api/auth/login with the correct password', () => {
   test('returns 200 and the user', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
 
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password })
 
@@ -28,7 +28,7 @@ describe('POST /api/auth/login with the correct password', () => {
   })
 
   test('sets a hardened session cookie', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
 
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password })
     const cookie = sessionCookieFrom(res)
@@ -43,7 +43,7 @@ describe('POST /api/auth/login with the correct password', () => {
   })
 
   test('stores only the hash of the token that went into the cookie', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
 
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password })
     const token = sessionCookieFrom(res)?.split(';')[0]?.split('=')[1] ?? ''
@@ -56,7 +56,7 @@ describe('POST /api/auth/login with the correct password', () => {
   })
 
   test('expires the session eight hours out', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
 
     await request(app).post('/api/auth/login').send({ email: user.email, password })
 
@@ -67,7 +67,7 @@ describe('POST /api/auth/login with the correct password', () => {
   })
 
   test('accepts the email in any case', async () => {
-    await createUser({ email: 'agent@example.com' })
+    await createSignInUser({ email: 'agent@example.com' })
 
     const res = await request(app)
       .post('/api/auth/login')
@@ -77,7 +77,7 @@ describe('POST /api/auth/login with the correct password', () => {
   })
 
   test('issues a distinct session for each login', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
 
     const first = await request(app).post('/api/auth/login').send({ email: user.email, password })
     const second = await request(app).post('/api/auth/login').send({ email: user.email, password })
@@ -89,7 +89,7 @@ describe('POST /api/auth/login with the correct password', () => {
 
 describe('POST /api/auth/login with bad credentials', () => {
   test('returns 401 for a wrong password and sets no cookie', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
 
     const res = await request(app)
       .post('/api/auth/login')
@@ -111,7 +111,7 @@ describe('POST /api/auth/login with bad credentials', () => {
   })
 
   test('returns 401 for a deactivated user', async () => {
-    const user = await createUser({ isActive: false })
+    const user = await createSignInUser({ isActive: false })
 
     const res = await request(app).post('/api/auth/login').send({ email: user.email, password })
 
@@ -121,7 +121,7 @@ describe('POST /api/auth/login with bad credentials', () => {
   })
 
   test('answers identically whether the account exists or not', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
 
     const wrongPassword = await request(app)
       .post('/api/auth/login')
@@ -129,7 +129,7 @@ describe('POST /api/auth/login with bad credentials', () => {
     const unknownEmail = await request(app)
       .post('/api/auth/login')
       .send({ email: 'nobody@example.com', password })
-    const deactivated = await createUser({ email: 'off@example.com', isActive: false })
+    const deactivated = await createSignInUser({ email: 'off@example.com', isActive: false })
     const inactive = await request(app)
       .post('/api/auth/login')
       .send({ email: deactivated.email, password })
@@ -142,7 +142,7 @@ describe('POST /api/auth/login with bad credentials', () => {
   })
 
   test('takes as long to refuse an unknown address as a real one', async () => {
-    const user = await createUser()
+    const user = await createSignInUser()
     const attempt = (email: string) =>
       request(app).post('/api/auth/login').send({ email, password: 'wrong password' })
 

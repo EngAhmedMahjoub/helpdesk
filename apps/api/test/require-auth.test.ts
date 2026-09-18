@@ -17,14 +17,14 @@ app.get('/guarded', requireAuth, (req, res) => {
 })
 
 /** The middleware attaches the name, so the tests pin it. */
-const createUser = (overrides: fixtures.NewUser = {}) =>
+const createNamedUser = (overrides: fixtures.NewUser = {}) =>
   fixtures.createUser({ name: 'Agent', ...overrides })
 
 beforeEach(resetDatabase)
 
 describe('requireAuth accepts a valid session', () => {
   test('attaches the user and calls the route', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
 
     const res = await request(app).get('/guarded').set('Cookie', cookieHeader(token))
@@ -34,7 +34,7 @@ describe('requireAuth accepts a valid session', () => {
   })
 
   test('attaches no password hash', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
 
     const res = await request(app).get('/guarded').set('Cookie', cookieHeader(token))
@@ -44,7 +44,7 @@ describe('requireAuth accepts a valid session', () => {
   })
 
   test('leaves the session row in place', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
 
     await request(app).get('/guarded').set('Cookie', cookieHeader(token))
@@ -85,7 +85,7 @@ describe('requireAuth rejects an unknown token', () => {
   })
 
   test('rejects the stored hash presented as though it were the token', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
     const { tokenHash } = await prisma.session.findFirstOrThrow({ where: { userId: user.id } })
 
@@ -100,7 +100,7 @@ describe('requireAuth rejects an unknown token', () => {
 
 describe('requireAuth rejects an expired session', () => {
   test('returns 401 and clears the cookie', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
     await prisma.session.updateMany({
       where: { userId: user.id },
@@ -114,7 +114,7 @@ describe('requireAuth rejects an expired session', () => {
   })
 
   test('deletes the expired row rather than leaving it to be replayed', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
     await prisma.session.updateMany({
       where: { userId: user.id },
@@ -127,7 +127,7 @@ describe('requireAuth rejects an expired session', () => {
   })
 
   test('accepts a session expiring one second from now', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
     await prisma.session.updateMany({
       where: { userId: user.id },
@@ -142,7 +142,7 @@ describe('requireAuth rejects an expired session', () => {
 
 describe('requireAuth rejects a deactivated user', () => {
   test('returns 401 for a session that was valid before deactivation', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
 
     // Session still live; only the user was switched off, as 2.3 will do.
@@ -155,7 +155,7 @@ describe('requireAuth rejects a deactivated user', () => {
   })
 
   test('accepts the same session again once the user is reactivated', async () => {
-    const user = await createUser()
+    const user = await createNamedUser()
     const token = await createSession(user.id)
 
     await prisma.user.update({ where: { id: user.id }, data: { isActive: false } })
@@ -175,7 +175,7 @@ describe('requireAuth gives the same answer for every rejection', () => {
       .get('/guarded')
       .set('Cookie', cookieHeader('b'.repeat(64)))
 
-    const expiredUser = await createUser()
+    const expiredUser = await createNamedUser()
     const expiredToken = await createSession(expiredUser.id)
     await prisma.session.updateMany({
       where: { userId: expiredUser.id },
