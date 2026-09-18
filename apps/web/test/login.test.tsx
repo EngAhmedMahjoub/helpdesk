@@ -26,9 +26,9 @@ test('posts the credentials and lands on the home page', async () => {
   await waitFor(() => expect(router.state.location.pathname).toBe('/'))
 
   const loginRequest = requests.find((request) => request.url.endsWith('/api/auth/login'))
-  expect(loginRequest?.init?.method).toBe('POST')
-  expect(loginRequest?.init?.credentials).toBe('include')
-  expect(loginRequest?.init?.body).toBe(
+  expect(loginRequest?.method).toBe('POST')
+  expect(loginRequest?.credentials).toBe('include')
+  expect(await loginRequest?.text()).toBe(
     JSON.stringify({ email: signedInUser.email, password: 'correct horse battery' }),
   )
 })

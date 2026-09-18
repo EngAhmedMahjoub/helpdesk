@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import type { HealthResponse } from '@helpdesk/shared'
 import { Button } from '@/components/ui/button'
-import { apiFetch } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
 
 export default function HomePage() {
   const health = useQuery({
     queryKey: ['health'],
-    queryFn: () => apiFetch<HealthResponse>('/health', { acceptStatus: [503] }),
+    queryFn: () => apiRequest<HealthResponse>('/health', { acceptStatus: [503] }),
   })
 
   return (

@@ -35,22 +35,23 @@ export const responds = {
   noContent: () => new Response(null, { status: 204 }),
 }
 
-export type RecordedRequest = { url: string; init: RequestInit | undefined }
-
 /**
  * Answers each `/api` path from `handlers` and records every call. An unmapped
  * path 404s loudly rather than silently returning something plausible.
+ *
+ * Records the `Request` axios built, not a url and an init: its fetch adapter
+ * passes one object, and method, credentials and body all hang off it. Nothing
+ * here reads the body, so a test still can — `await requests[0].text()`.
  */
-export function stubApi(handlers: Record<string, () => Response>): RecordedRequest[] {
-  const requests: RecordedRequest[] = []
+export function stubApi(handlers: Record<string, () => Response>): Request[] {
+  const requests: Request[] = []
 
-  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input)
-    requests.push({ url, init })
+  globalThis.fetch = ((input: Request) => {
+    requests.push(input)
 
-    const handler = handlers[url.replace(/^\/api/, '')]
+    const handler = handlers[new URL(input.url).pathname.replace(/^\/api/, '')]
     if (!handler) {
-      return Promise.resolve(Response.json({ error: `No stub for ${url}` }, { status: 404 }))
+      return Promise.resolve(Response.json({ error: `No stub for ${input.url}` }, { status: 404 }))
     }
     return Promise.resolve(handler())
   }) as unknown as typeof fetch
