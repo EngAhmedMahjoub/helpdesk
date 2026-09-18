@@ -92,6 +92,14 @@ Database sessions.
 | First admin | `bun run db:seed` upserts on email using `ADMIN_EMAIL` / `ADMIN_PASSWORD`; re-running never resets the password |
 | Agent creation | `POST /api/users`, admin only |
 
+## User Management
+
+| Concern | Choice |
+|---|---|
+| Routes | `apps/api/src/routes/users.ts`, mounted at `/api/users`. `requireAuth` and `requireAdmin` are applied to the router, not to each route, so a route added later cannot be left unguarded by omission |
+| List response | `GET /api/users` returns every user — active and deactivated — as `{ id, email, name, role, isActive, createdAt }`, oldest first with `id` breaking ties. The `UserSummary` type in `@helpdesk/shared` is the contract |
+| Field selection | An explicit Prisma `select`, never an `omit` of `passwordHash`: a column added to `User` later is then absent from the response until someone chooses to expose it |
+
 ## Tickets
 
 | Concern | Rule |
