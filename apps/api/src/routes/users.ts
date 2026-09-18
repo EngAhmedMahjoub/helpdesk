@@ -5,6 +5,7 @@ import { prisma } from '../db.ts'
 import { Prisma } from '../generated/prisma/client.ts'
 import { hashPassword } from '../auth/password.ts'
 import { requireAdmin, requireAuth } from '../auth/middleware.ts'
+import { userWriteRateLimit } from '../auth/rate-limit.ts'
 
 /** The columns a user list or a creation response may expose. Never the hash. */
 const summaryFields = {
@@ -66,7 +67,7 @@ usersRouter.get('/', async (_req, res) => {
   res.json(users.map(toSummary))
 })
 
-usersRouter.post('/', async (req, res) => {
+usersRouter.post('/', userWriteRateLimit, async (req, res) => {
   const body = createUserSchema.safeParse(req.body)
 
   if (!body.success) {
@@ -105,7 +106,7 @@ usersRouter.post('/', async (req, res) => {
   }
 })
 
-usersRouter.patch('/:id', async (req, res) => {
+usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
   const body = updateUserSchema.safeParse(req.body)
 
   if (!body.success) {
@@ -113,15 +114,17 @@ usersRouter.patch('/:id', async (req, res) => {
     return
   }
 
-  const id = req.params.id
-
   // A malformed id answers the same 404 as a well-formed one with no row: it
   // cannot name a user either way. Checked here only to answer early — User.id
-  // is TEXT, so a malformed id would reach Postgres and simply miss.
-  if (!z.uuid().safeParse(id).success) {
+  // is TEXT, so a malformed id would reach Postgres and simply miss. The parsed
+  // value is used from here on: with a middleware ahead of this handler, Express
+  // no longer infers the route's params and types req.params.id as string[] too.
+  const parsedId = z.uuid().safeParse(req.params.id)
+  if (!parsedId.success) {
     res.status(404).json({ error: 'User not found' })
     return
   }
+  const id = parsedId.data
 
   // An admin deactivating themselves is refused: it deletes the session making
   // the request, and with one admin there is then nobody left who can undo it.

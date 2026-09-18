@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import express from 'express'
 import request from 'supertest'
-import { createLoginRateLimit } from '../src/auth/rate-limit.ts'
+import { createLoginRateLimit, createUserWriteRateLimit } from '../src/auth/rate-limit.ts'
 
 /**
  * A stand-in for the login route, carrying a limiter that actually enforces.
@@ -121,5 +121,95 @@ describe('which environments enforce it', () => {
   test('does not enforce in test', async () => {
     // A live limiter here would fail unrelated assertions by ordering.
     expect(await enforcesUnder('test')).toBe(false)
+  })
+})
+
+describe('user-management write limit', () => {
+  /**
+   * A stand-in for POST /api/users behind an enforcing limiter. The caller is
+   * named by a header here, standing in for the requireAuth that sets req.user
+   * in the real route.
+   */
+  function appWithUserLimiter() {
+    const app = express()
+    app.use((req, _res, next) => {
+      req.user = { id: String(req.headers['x-admin']), email: '', name: '', role: 'admin' }
+      next()
+    })
+    app.post('/api/users', createUserWriteRateLimit(), (_req, res) => {
+      res.status(201).end()
+    })
+    return app
+  }
+
+  const create = (app: ReturnType<typeof appWithUserLimiter>, admin: string) =>
+    request(app).post('/api/users').set('x-admin', admin)
+
+  test('refuses an admin further writes once their budget is spent', async () => {
+    const app = appWithUserLimiter()
+    for (let i = 0; i < 60; i += 1) {
+      expect((await create(app, 'admin-1')).status).toBe(201)
+    }
+
+    const blocked = await create(app, 'admin-1')
+
+    expect(blocked.status).toBe(429)
+    expect(blocked.body).toEqual({ error: 'Too many changes to users, please try again later' })
+  })
+
+  test('budgets each admin separately', async () => {
+    const app = appWithUserLimiter()
+    for (let i = 0; i < 61; i += 1) await create(app, 'admin-1')
+
+    // Keyed by who is asking, not where from: another admin is unaffected.
+    expect((await create(app, 'admin-2')).status).toBe(201)
+  })
+})
+
+describe('which environments enforce the user-management write limit', () => {
+  /** As enforcesUnder above, for the users limiter: is a 61st write refused? */
+  async function userWritesEnforcedUnder(nodeEnv: string) {
+    const source = `
+      const { userWriteRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
+      const express = (await import('express')).default
+      const app = express()
+      app.use((req, _res, next) => { req.user = { id: 'admin-1' }; next() })
+      app.post('/users', userWriteRateLimit, (_req, res) => res.status(201).end())
+      const server = app.listen(0)
+      const { port } = server.address()
+      let last = 0
+      for (let i = 0; i < 61; i += 1) {
+        last = (await fetch(\`http://localhost:\${port}/users\`, { method: 'POST' })).status
+      }
+      server.close()
+      console.log(String(last))
+    `
+
+    const proc = Bun.spawn(['bun', '-e', source], {
+      cwd: `${import.meta.dir}/..`,
+      env: {
+        PATH: process.env.PATH ?? '',
+        NODE_ENV: nodeEnv,
+        DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
+        WEB_ORIGIN: 'https://app.example.com',
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+
+    const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
+    return stdout.trim().endsWith('429')
+  }
+
+  test('enforces in production', async () => {
+    expect(await userWritesEnforcedUnder('production')).toBe(true)
+  })
+
+  test('does not enforce in test, where the end-to-end suite creates users all day', async () => {
+    expect(await userWritesEnforcedUnder('test')).toBe(false)
+  })
+
+  test('does not enforce in development', async () => {
+    expect(await userWritesEnforcedUnder('development')).toBe(false)
   })
 })
