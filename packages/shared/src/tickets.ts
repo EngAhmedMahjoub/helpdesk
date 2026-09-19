@@ -22,6 +22,21 @@ export type TicketSummary = {
   updatedAt: string
 }
 
+/** Postgres's largest INTEGER, the type of every ticket id. */
+const MAX_TICKET_ID = 2_147_483_647
+
+/**
+ * A ticket id as it arrives in a URL. Digits only, so "1e2", " 5" and "0x10" —
+ * all of which Number() would accept — are not ids; and no larger than the
+ * column holds, so an oversized one is simply no ticket rather than a
+ * database error.
+ */
+export const ticketIdSchema = z
+  .string()
+  .regex(/^[1-9]\d*$/)
+  .transform(Number)
+  .refine((id) => id <= MAX_TICKET_ID)
+
 export const TICKET_PAGE_SIZE_MAX = 100
 
 /**
@@ -48,4 +63,28 @@ export type TicketListResponse = {
   pageSize: number
   /** Tickets matching the filters across every page, for the page count. */
   total: number
+}
+
+export const MESSAGE_DIRECTIONS = ['inbound', 'outbound'] as const
+export const MESSAGE_AUTHORS = ['student', 'ai', 'agent'] as const
+
+export type MessageDirection = (typeof MESSAGE_DIRECTIONS)[number]
+export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number]
+
+/** One message in a ticket's thread. */
+export type TicketMessage = {
+  id: number
+  direction: MessageDirection
+  author: MessageAuthor
+  /** Who wrote an agent reply; null for student and AI messages. */
+  agent: { id: string; name: string } | null
+  body: string
+  createdAt: string
+}
+
+/** The body of `GET /api/tickets/:id`: the ticket and its thread, oldest message first. */
+export type TicketDetail = TicketSummary & {
+  summary: string | null
+  autoCloseAt: string | null
+  messages: TicketMessage[]
 }

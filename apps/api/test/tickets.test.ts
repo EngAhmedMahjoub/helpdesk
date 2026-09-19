@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
-import type { TicketListResponse } from '@helpdesk/shared'
+import type { TicketDetail, TicketListResponse } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
-import { resetDatabase } from './db.ts'
+import { prisma, resetDatabase } from './db.ts'
 import { createTicket, createUser, sessionCookieFor } from './fixtures.ts'
 
 const app = createApp()
@@ -197,6 +197,179 @@ describe('GET /api/tickets with an invalid query', () => {
 
       expect(res.status).toBe(400)
       expect(res.body).toEqual({ error: 'Invalid query' })
+    })
+  }
+})
+
+describe('GET /api/tickets/:id', () => {
+  const detail = (id: number | string) =>
+    request(app)
+      .get(`/api/tickets/${String(id)}`)
+      .set('Cookie', agentCookie)
+
+  test('returns the ticket with its thread, oldest message first', async () => {
+    const replier = await createUser({ email: 'gil@example.com', name: 'Gil Agent' })
+    const ticket = await createTicket({
+      subject: 'Quiz shows zero',
+      studentName: 'Sam Wright',
+      status: 'resolved',
+      category: 'technical',
+      summary: 'Quiz 3 scored 0 after submitting',
+      autoCloseAt: day(20),
+      createdAt: day(1),
+      updatedAt: day(6),
+    })
+    // Created out of order, so the response's order is the query's, not insertion's.
+    const reply = await prisma.message.create({
+      data: {
+        ticketId: ticket.id,
+        direction: 'outbound',
+        author: 'agent',
+        agentId: replier.id,
+        body: 'Checking the grading log now.',
+        createdAt: day(3),
+      },
+    })
+    const question = await prisma.message.create({
+      data: {
+        ticketId: ticket.id,
+        direction: 'inbound',
+        author: 'student',
+        body: 'My quiz says 0 out of 10.',
+        emailMessageId: '<q@student.example>',
+        createdAt: day(1),
+      },
+    })
+    const answer = await prisma.message.create({
+      data: {
+        ticketId: ticket.id,
+        direction: 'outbound',
+        author: 'ai',
+        body: 'Scores can take an hour to appear.',
+        emailMessageId: '<a@helpdesk.example>',
+        createdAt: day(2),
+      },
+    })
+
+    const res = await detail(ticket.id)
+
+    expect(res.status).toBe(200)
+    expect(res.body as TicketDetail).toEqual({
+      id: ticket.id,
+      subject: 'Quiz shows zero',
+      studentEmail: 'student@example.com',
+      studentName: 'Sam Wright',
+      status: 'resolved',
+      category: 'technical',
+      needsAgent: false,
+      escalationReason: null,
+      summary: 'Quiz 3 scored 0 after submitting',
+      autoCloseAt: day(20).toISOString(),
+      createdAt: day(1).toISOString(),
+      updatedAt: day(6).toISOString(),
+      messages: [
+        {
+          id: question.id,
+          direction: 'inbound',
+          author: 'student',
+          agent: null,
+          body: 'My quiz says 0 out of 10.',
+          createdAt: day(1).toISOString(),
+        },
+        {
+          id: answer.id,
+          direction: 'outbound',
+          author: 'ai',
+          agent: null,
+          body: 'Scores can take an hour to appear.',
+          createdAt: day(2).toISOString(),
+        },
+        {
+          id: reply.id,
+          direction: 'outbound',
+          author: 'agent',
+          agent: { id: replier.id, name: 'Gil Agent' },
+          body: 'Checking the grading log now.',
+          createdAt: day(3).toISOString(),
+        },
+      ],
+    })
+    // The agent is named, never serialised whole.
+    expect(res.text).not.toContain('passwordHash')
+    expect(res.text).not.toContain('gil@example.com')
+  })
+
+  test('returns an empty thread for a ticket with no messages', async () => {
+    const ticket = await createTicket()
+
+    const res = await detail(ticket.id)
+
+    expect(res.status).toBe(200)
+    expect((res.body as TicketDetail).messages).toEqual([])
+  })
+
+  test("returns only its own ticket's messages", async () => {
+    const mine = await createTicket({ subject: 'Mine' })
+    const other = await createTicket({ subject: 'Other' })
+    for (const ticketId of [mine.id, other.id]) {
+      await prisma.message.create({
+        data: {
+          ticketId,
+          direction: 'inbound',
+          author: 'student',
+          body: `For ${String(ticketId)}`,
+        },
+      })
+    }
+
+    const res = await detail(mine.id)
+
+    expect((res.body as TicketDetail).messages.map((m) => m.body)).toEqual([
+      `For ${String(mine.id)}`,
+    ])
+  })
+
+  test('gives an unauthenticated caller 401', async () => {
+    const ticket = await createTicket()
+
+    const res = await request(app).get(`/api/tickets/${String(ticket.id)}`)
+
+    expect(res.status).toBe(401)
+    expect(res.text).not.toContain('student@example.com')
+  })
+
+  test('answers 404 for an id with no ticket', async () => {
+    const ticket = await createTicket()
+
+    const res = await detail(ticket.id + 1)
+
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Ticket not found' })
+  })
+
+  test("does not accept another spelling of a real ticket's id", async () => {
+    const ticket = await createTicket()
+    const n = String(ticket.id)
+
+    // Number() reads each of these as the ticket's id; only the digits name it.
+    for (const alias of [`+${n}`, `${n}.0`, `0${n}`, `%20${n}`]) {
+      const res = await detail(alias)
+      expect(res.status).toBe(404)
+    }
+    expect((await detail(n)).status).toBe(200)
+  })
+
+  // Each would reach Postgres as something other than a ticket id, or not at
+  // all: "1e2" and " 1" because Number() accepts them, the last because it
+  // overflows the INTEGER column.
+  for (const id of ['abc', '0', '-1', '1.5', '1e2', '%201', '0x10', '2147483648']) {
+    test(`answers 404 for the malformed id "${id}"`, async () => {
+      await createTicket()
+
+      const res = await detail(id)
+
+      expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Ticket not found' })
     })
   }
 })
