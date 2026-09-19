@@ -11,6 +11,7 @@ import { isPrismaError, prisma } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
 import { parseBody, parseQuery } from '../http.ts'
+import { statusChange } from '../tickets/status.ts'
 
 /** The columns the list exposes. Explicit, so a column added later stays out until chosen. */
 const summaryFields = {
@@ -142,7 +143,9 @@ ticketsRouter.patch('/:id', async (req, res) => {
     const ticket = await prisma.ticket.update({
       where: { id: id.data },
       data: {
-        status: body.status,
+        // autoCloseAt moves only with a status in the request: a category
+        // change alone must not start or stop a Resolved ticket's timer.
+        ...(body.status && statusChange(body.status)),
         category: body.category,
         // The reason only explains a set flag, so clearing the flag clears it:
         // a ticket no longer waiting for an agent has nothing to be escalated for.

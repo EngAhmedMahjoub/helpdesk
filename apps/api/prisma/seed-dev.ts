@@ -1,5 +1,6 @@
 import { prisma } from '../src/db.ts'
 import { env } from '../src/env.ts'
+import { statusChange } from '../src/tickets/status.ts'
 import type {
   EscalationReason,
   MessageAuthor,
@@ -28,8 +29,6 @@ if (!admin) {
   process.exit(1)
 }
 
-const DAY = 24 * 60 * 60 * 1000
-const AUTO_CLOSE_AFTER = 14 * DAY
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000)
 
 type SampleMessage = { author: MessageAuthor; hoursAgo: number; body: string }
@@ -239,15 +238,12 @@ const created = await prisma.$transaction(async (tx) => {
         subject: sample.subject,
         studentEmail,
         studentName: sample.studentName,
-        status: sample.status,
+        // Resolved as of the latest message, so the timer runs from there.
+        ...statusChange(sample.status, updatedAt),
         category: sample.category,
         summary: sample.summary,
         needsAgent: sample.escalationReason !== null,
         escalationReason: sample.escalationReason,
-        // As the 3.6a rule will set it: 14 days after the ticket was last
-        // resolved, which here is its latest message.
-        autoCloseAt:
-          sample.status === 'resolved' ? new Date(updatedAt.getTime() + AUTO_CLOSE_AFTER) : null,
         createdAt,
         updatedAt,
         messages: {
