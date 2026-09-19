@@ -29,6 +29,7 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     Session[]
+  messages     Message[]
 }
 
 model Session {
@@ -77,4 +78,36 @@ model Ticket {
   autoCloseAt      DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  messages         Message[]
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum MessageAuthor {
+  student
+  ai
+  agent
+}
+
+model Message {
+  id             Int              @id @default(autoincrement())
+  ticketId       Int
+  ticket         Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  direction      MessageDirection
+  author         MessageAuthor
+  // The agent who wrote it; null for student and AI messages. Restrict, so a
+  // user row cannot be deleted out from under the replies they sent.
+  agentId        String?
+  agent          User?            @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  body           String
+  // The email's Message-ID. Null until the message has been emailed: agent
+  // replies are only saved until Phase 4 sends them. Unique, so the same
+  // inbound email delivered twice cannot become two messages.
+  emailMessageId String?          @unique
+  createdAt      DateTime         @default(now())
+
+  @@index([ticketId])
 }

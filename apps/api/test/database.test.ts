@@ -77,3 +77,77 @@ describe('Ticket', () => {
     }
   })
 })
+
+describe('Message', () => {
+  const newTicket = () =>
+    prisma.ticket.create({
+      data: { subject: 'Cannot log in', studentEmail: 'student@example.com' },
+    })
+
+  test('belongs to a ticket and is deleted with it', async () => {
+    const ticket = await newTicket()
+    await prisma.message.create({
+      data: { ticketId: ticket.id, direction: 'inbound', author: 'student', body: 'Help' },
+    })
+
+    await prisma.ticket.delete({ where: { id: ticket.id } })
+
+    expect(await prisma.message.count()).toBe(0)
+  })
+
+  test('refuses a second message with the same email Message-ID, but not two without one', async () => {
+    const ticket = await newTicket()
+    const message = (emailMessageId: string | null) =>
+      prisma.message.create({
+        data: {
+          ticketId: ticket.id,
+          direction: 'inbound',
+          author: 'student',
+          body: 'Help',
+          emailMessageId,
+        },
+      })
+
+    await message('<abc@mail.example.com>')
+    await message(null)
+    await message(null)
+
+    await expect((async () => message('<abc@mail.example.com>'))()).rejects.toThrow()
+    expect(await prisma.message.count()).toBe(3)
+  })
+
+  test('keeps the agent who wrote a reply: their user row cannot be deleted', async () => {
+    const ticket = await newTicket()
+    const agent = await prisma.user.create({
+      data: { email: 'agent@example.com', name: 'Agent', passwordHash: 'x' },
+    })
+    await prisma.message.create({
+      data: {
+        ticketId: ticket.id,
+        direction: 'outbound',
+        author: 'agent',
+        agentId: agent.id,
+        body: 'Try resetting your password.',
+      },
+    })
+
+    await expect((async () => prisma.user.delete({ where: { id: agent.id } }))()).rejects.toThrow()
+  })
+
+  test('refuses a direction or author outside its enum', async () => {
+    const ticket = await newTicket()
+
+    // Raw SQL for the same reason as the Ticket enums: the client would not compile these.
+    const insert = async (direction: string, author: string) =>
+      prisma.$executeRaw`
+        INSERT INTO "Message" ("ticketId", body, direction, author)
+        VALUES (${ticket.id}, 'Help', ${direction}::"MessageDirection", ${author}::"MessageAuthor")`
+
+    await expect(insert('sideways', 'student')).rejects.toThrow()
+    await expect(insert('inbound', 'system')).rejects.toThrow()
+    // The same insert with valid values goes through, so the two above failed on
+    // the enum and not on something else in the statement.
+    await insert('inbound', 'student')
+    expect(await prisma.message.count()).toBe(1)
+  })
+})
