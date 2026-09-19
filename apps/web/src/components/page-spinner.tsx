@@ -15,6 +15,29 @@ export default function PageSpinner({ label = 'Loading' }: { label?: string }) {
  * own: the button's text already changes to say what is happening, and a second
  * announcement would only talk over it.
  */
-export function ButtonSpinner() {
+function ButtonSpinner() {
   return <LoaderCircle aria-hidden className="size-4 animate-spin" />
+}
+
+/**
+ * A button's label that swaps to `busy`, with a spinner, while its action is in
+ * flight.
+ */
+export function PendingLabel({
+  pending,
+  busy,
+  children,
+}: {
+  pending: boolean
+  busy: string
+  children: React.ReactNode
+}) {
+  return pending ? (
+    <>
+      <ButtonSpinner />
+      {busy}
+    </>
+  ) : (
+    children
+  )
 }

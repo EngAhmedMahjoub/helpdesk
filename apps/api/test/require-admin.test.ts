@@ -4,8 +4,8 @@ import express from 'express'
 import request from 'supertest'
 import type { Role } from '@helpdesk/shared'
 import { requireAdmin, requireAuth } from '../src/auth/middleware.ts'
-import { SESSION_COOKIE, createSession } from '../src/auth/session.ts'
 import { prisma, resetDatabase } from './db.ts'
+import { createUser, sessionCookieFor } from './fixtures.ts'
 
 // The first real admin route is 2.1 (GET /api/users), so requireAdmin is
 // mounted here on a stub behind the same requireAuth it will sit behind there.
@@ -16,15 +16,8 @@ app.get('/admin-only', requireAuth, requireAdmin, (req, res) => {
 })
 
 async function signIn(role: Role) {
-  const user = await prisma.user.create({
-    data: {
-      email: `${role}@example.com`,
-      name: role,
-      passwordHash: 'not-used-here',
-      role,
-    },
-  })
-  return `${SESSION_COOKIE}=${await createSession(user.id)}`
+  const user = await createUser({ role })
+  return sessionCookieFor(user.id)
 }
 
 beforeEach(resetDatabase)

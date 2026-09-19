@@ -2,8 +2,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
-import { z } from 'zod'
-import { ButtonSpinner } from '@/components/page-spinner'
+import { type LoginRequest, loginSchema } from '@helpdesk/shared'
+import { FormAlert, FormField } from '@/components/form-field'
+import { PendingLabel } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -13,27 +14,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { FieldGroup } from '@/components/ui/field'
 import { currentUserQueryKey, login } from '@/lib/auth'
-
-/**
- * Only what the client can know. The API remains the real validator: it answers
- * one 401 with the same message for an unknown email, a wrong password and a
- * deactivated account, and nothing here should imply otherwise.
- */
-const loginSchema = z.object({
-  email: z.email('Enter a valid email address'),
-  password: z.string().min(1, 'Enter your password'),
-})
-
-type LoginValues = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const form = useForm<LoginValues>({
+  const form = useForm<LoginRequest>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   })
@@ -71,43 +59,34 @@ export default function LoginPage() {
             reads are ours rather than the browser's own bubbles. */}
         <form noValidate onSubmit={form.handleSubmit((values) => signIn.mutate(values))}>
           <CardContent>
-            {signIn.isError && (
-              <p className="mb-4 text-sm text-destructive" role="alert">
-                {signIn.error.message}
-              </p>
-            )}
+            {signIn.isError && <FormAlert>{signIn.error.message}</FormAlert>}
 
             <FieldGroup>
-              <Field data-invalid={Boolean(errors.email)}>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input
-                  aria-invalid={Boolean(errors.email)}
-                  autoComplete="username"
-                  id="email"
-                  type="email"
-                  {...form.register('email')}
-                />
-                <FieldError errors={[errors.email]} />
-              </Field>
+              <FormField
+                autoComplete="username"
+                error={errors.email}
+                id="email"
+                label="Email"
+                type="email"
+                {...form.register('email')}
+              />
 
-              <Field data-invalid={Boolean(errors.password)}>
-                <FieldLabel htmlFor="password">Password</FieldLabel>
-                <Input
-                  aria-invalid={Boolean(errors.password)}
-                  autoComplete="current-password"
-                  id="password"
-                  type="password"
-                  {...form.register('password')}
-                />
-                <FieldError errors={[errors.password]} />
-              </Field>
+              <FormField
+                autoComplete="current-password"
+                error={errors.password}
+                id="password"
+                label="Password"
+                type="password"
+                {...form.register('password')}
+              />
             </FieldGroup>
           </CardContent>
 
           <CardFooter className="mt-6">
             <Button className="w-full" disabled={signIn.isPending} type="submit">
-              {signIn.isPending && <ButtonSpinner />}
-              {signIn.isPending ? 'Signing in…' : 'Sign in'}
+              <PendingLabel busy="Signing in…" pending={signIn.isPending}>
+                Sign in
+              </PendingLabel>
             </Button>
           </CardFooter>
         </form>

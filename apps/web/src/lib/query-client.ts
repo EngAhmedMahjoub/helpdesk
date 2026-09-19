@@ -1,5 +1,5 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
-import { ApiError } from '@/lib/api'
+import { ApiError, isApiError } from '@/lib/api'
 import { currentUserQueryKey } from '@/lib/auth'
 
 /**
@@ -15,7 +15,7 @@ import { currentUserQueryKey } from '@/lib/auth'
  * ended, and the next person to sign in at this browser should not see it.
  */
 function endSession(client: QueryClient, error: unknown): void {
-  if (!(error instanceof ApiError) || error.status !== 401) return
+  if (!isApiError(error, 401)) return
 
   client.setQueryData(currentUserQueryKey, null)
   client.removeQueries({ predicate: (query) => query.queryKey[0] !== currentUserQueryKey[0] })

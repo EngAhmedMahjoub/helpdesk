@@ -1,6 +1,8 @@
 import type { Page } from '@playwright/test'
 import { countUsersWithEmail } from '../database.ts'
 import { expect, test } from '../fixtures.ts'
+import { submitLoginForm } from '../login-form.ts'
+import { announcement, userRow } from '../users-page.ts'
 
 type AgentDetails = { name: string; email: string; password: string }
 
@@ -33,11 +35,11 @@ test('an agent an admin adds can sign in with the initial password', async ({
     await addAgent(adminPage, agent)
 
     await expect(adminPage.getByRole('dialog', { name: 'Add agent' })).toBeHidden()
-    // Filtered: the table skeleton is a status region too, while a list loads.
-    const announcement = adminPage.getByRole('status').filter({ hasText: agent.name })
-    await expect(announcement).toHaveText(`${agent.name} was added and can sign in now.`)
+    await expect(announcement(adminPage, agent.name)).toHaveText(
+      `${agent.name} was added and can sign in now.`,
+    )
 
-    const row = adminPage.getByRole('row').filter({ hasText: agent.email })
+    const row = userRow(adminPage, agent.email)
     await expect(row.getByRole('cell', { name: agent.name, exact: true })).toBeVisible()
     await expect(row.getByRole('cell', { name: 'agent', exact: true })).toBeVisible()
     await expect(row.getByRole('cell', { name: 'Active', exact: true })).toBeVisible()
@@ -51,9 +53,7 @@ test('an agent an admin adds can sign in with the initial password', async ({
     try {
       const agentPage = await agentContext.newPage()
       await agentPage.goto('/login')
-      await agentPage.getByLabel('Email').fill(agent.email)
-      await agentPage.getByLabel('Password').fill(agent.password)
-      await agentPage.getByRole('button', { name: 'Sign in' }).click()
+      await submitLoginForm(agentPage, agent)
 
       await expect(agentPage).toHaveURL('/')
       await expect(agentPage.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()

@@ -1,6 +1,5 @@
 import type { Browser, BrowserContext, Locator, Page } from '@playwright/test'
-import { API_URL } from './config.ts'
-import { expect, sessionCookie, type Credentials } from './fixtures.ts'
+import { expect, loginViaApi, sessionCookie, type Credentials } from './fixtures.ts'
 
 export type SignedInElsewhere = { context: BrowserContext; page: Page; token: string }
 
@@ -17,8 +16,7 @@ export async function signInElsewhere(
   const context = await browser.newContext()
   const page = await context.newPage()
 
-  const response = await page.request.post(`${API_URL}/api/auth/login`, { data: user })
-  await expect(response).toBeOK()
+  await loginViaApi(page.request, user)
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()

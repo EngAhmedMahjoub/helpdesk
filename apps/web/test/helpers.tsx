@@ -1,6 +1,6 @@
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render } from '@testing-library/react'
-import type { CurrentUser, HealthResponse } from '@helpdesk/shared'
+import { render, screen, within } from '@testing-library/react'
+import type { CurrentUser, HealthResponse, UserSummary } from '@helpdesk/shared'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { createQueryClient } from '../src/lib/query-client.ts'
@@ -20,6 +20,18 @@ export const agentUser: CurrentUser = {
   role: 'agent',
 }
 
+/** A row of the users list: an active agent unless told otherwise. */
+export const userSummary = (
+  overrides: Partial<UserSummary> & Pick<UserSummary, 'id' | 'name'>,
+): UserSummary => ({
+  email: `${overrides.id}@helpdesk.io`,
+  role: 'agent',
+  isActive: true,
+  isProtected: false,
+  createdAt: '2026-02-01T09:00:00.000Z',
+  ...overrides,
+})
+
 const health: HealthResponse = {
   status: 'ok',
   database: 'up',
@@ -30,9 +42,19 @@ const health: HealthResponse = {
 export const responds = {
   currentUser: () => Response.json(signedInUser),
   currentAgent: () => Response.json(agentUser),
-  noSession: () => Response.json({ error: 'Unauthorized' }, { status: 401 }),
+  noSession: () => responds.error(401, 'Unauthorized'),
   health: () => Response.json(health),
   noContent: () => new Response(null, { status: 204 }),
+  /** A failure in the API's own shape: a status and an `error` message. */
+  error: (status: number, message: string) => Response.json({ error: message }, { status }),
+}
+
+/** The table row a user occupies, found by the name in its first cell. */
+export async function rowFor(name: string) {
+  const cell = await screen.findByRole('cell', { name })
+  const row = cell.closest('tr')
+  if (!row) throw new Error(`No row for ${name}`)
+  return within(row)
 }
 
 /**

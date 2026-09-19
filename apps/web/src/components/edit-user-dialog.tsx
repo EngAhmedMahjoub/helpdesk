@@ -4,24 +4,18 @@ import { Pencil } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import {
-  type Change,
-  type Party,
   type UpdateUserRequest,
   type UserSummary,
-  authorise,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_TOO_LONG,
+  PASSWORD_TOO_SHORT,
+  emailField,
+  nameField,
 } from '@helpdesk/shared'
-import { ButtonSpinner } from '@/components/page-spinner'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+import { FormAlert, FormField } from '@/components/form-field'
+import { PendingLabel } from '@/components/page-spinner'
+import UserAccessControl from '@/components/user-access-control'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,62 +27,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { FieldGroup } from '@/components/ui/field'
 import { Separator } from '@/components/ui/separator'
 import { useUpdateUser } from '@/hooks/use-users'
-import { ApiError } from '@/lib/api'
-
-type Props = {
-  user: UserSummary
-  /** The signed-in admin, as the list reports them; undefined until it loads. */
-  viewer: Party | undefined
-  onChanged: (message: string) => void
-}
-
-/**
- * The Actions cell: a pencil where the viewer may change this user, a reason
- * where they may not. Decided by the same authorise() the API enforces, so the
- * page never offers what the API would refuse.
- */
-export default function UserActions({ user, viewer, onChanged }: Props) {
-  const may = (change: Change) => viewer !== undefined && authorise(viewer, user, change).allowed
-
-  const canEdit = may({ editsDetails: true })
-  const canSetActive = may({ editsDetails: false, isActive: !user.isActive })
-
-  if (!canEdit) {
-    return (
-      <span className="text-sm text-muted-foreground">
-        {user.isProtected ? 'Protected' : '—'}
-        <span className="sr-only">: only the seeded admin can change this account</span>
-      </span>
-    )
-  }
-
-  return (
-    <EditUserDialog
-      canSetActive={canSetActive}
-      isSelf={viewer?.id === user.id}
-      onChanged={onChanged}
-      user={user}
-    />
-  )
-}
+import { isApiError } from '@/lib/api'
 
 const detailsSchema = z.object({
-  name: z.string().trim().min(1, 'Enter a name').max(100, 'Keep the name under 100 characters'),
-  email: z.email('Enter a valid email address').max(254, 'Use at most 254 characters'),
-  // Blank keeps the current password; anything else meets the API's limits.
+  name: nameField,
+  email: emailField,
+  // Blank keeps the current password; anything else meets the API's limits. Not
+  // passwordField.or(''): a union reports its own message, not the minimum's.
   password: z
     .string()
-    .max(200, 'Keep the password under 200 characters')
-    .refine((value) => value === '' || value.length >= 12, 'Use at least 12 characters'),
+    .max(PASSWORD_MAX_LENGTH, PASSWORD_TOO_LONG)
+    .refine((value) => value === '' || value.length >= PASSWORD_MIN_LENGTH, PASSWORD_TOO_SHORT),
 })
 
 type DetailsValues = z.infer<typeof detailsSchema>
 
-function EditUserDialog({
+/** The pencil and the dialog it opens: the user's details, and their access. */
+export default function EditUserDialog({
   user,
   isSelf,
   canSetActive,
@@ -149,7 +107,7 @@ function EditUserDialog({
           onChanged(`${updated.name} was updated.${signedOut}`)
         },
         onError: (error) => {
-          if (error instanceof ApiError && error.status === 409) {
+          if (isApiError(error, 409)) {
             form.setError('email', { message: error.message }, { shouldFocus: true })
           }
         },
@@ -173,7 +131,7 @@ function EditUserDialog({
     )
   }
 
-  const conflict = saveDetails.error instanceof ApiError && saveDetails.error.status === 409
+  const conflict = isApiError(saveDetails.error, 409)
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
@@ -194,53 +152,37 @@ function EditUserDialog({
         </DialogHeader>
 
         <form id={`edit-user-${user.id}`} noValidate onSubmit={form.handleSubmit(save)}>
-          {saveDetails.isError && !conflict && (
-            <p className="mb-4 text-sm text-destructive" role="alert">
-              {saveDetails.error.message}
-            </p>
-          )}
+          {saveDetails.isError && !conflict && <FormAlert>{saveDetails.error.message}</FormAlert>}
 
           <FieldGroup>
-            <Field data-invalid={Boolean(errors.name)}>
-              <FieldLabel htmlFor={`edit-name-${user.id}`}>Name</FieldLabel>
-              <Input
-                aria-invalid={Boolean(errors.name)}
-                autoComplete="off"
-                id={`edit-name-${user.id}`}
-                {...form.register('name')}
-              />
-              <FieldError errors={[errors.name]} />
-            </Field>
+            <FormField
+              autoComplete="off"
+              error={errors.name}
+              id={`edit-name-${user.id}`}
+              label="Name"
+              {...form.register('name')}
+            />
 
-            <Field data-invalid={Boolean(errors.email)}>
-              <FieldLabel htmlFor={`edit-email-${user.id}`}>Email</FieldLabel>
-              <Input
-                aria-invalid={Boolean(errors.email)}
-                autoComplete="off"
-                id={`edit-email-${user.id}`}
-                type="email"
-                {...form.register('email')}
-              />
-              <FieldError errors={[errors.email]} />
-            </Field>
+            <FormField
+              autoComplete="off"
+              error={errors.email}
+              id={`edit-email-${user.id}`}
+              label="Email"
+              type="email"
+              {...form.register('email')}
+            />
 
-            <Field data-invalid={Boolean(errors.password)}>
-              <FieldLabel htmlFor={`edit-password-${user.id}`}>New password</FieldLabel>
-              <Input
-                aria-describedby={`edit-password-hint-${user.id}`}
-                aria-invalid={Boolean(errors.password)}
-                // new-password: without it a password manager fills in the
-                // admin's own saved password, and the user is given it.
-                autoComplete="new-password"
-                id={`edit-password-${user.id}`}
-                type="password"
-                {...form.register('password')}
-              />
-              <FieldDescription id={`edit-password-hint-${user.id}`}>
-                Leave blank to keep the current password. At least 12 characters.
-              </FieldDescription>
-              <FieldError errors={[errors.password]} />
-            </Field>
+            <FormField
+              // new-password: without it a password manager fills in the
+              // admin's own saved password, and the user is given it.
+              autoComplete="new-password"
+              description={`Leave blank to keep the current password. At least ${PASSWORD_MIN_LENGTH} characters.`}
+              error={errors.password}
+              id={`edit-password-${user.id}`}
+              label="New password"
+              type="password"
+              {...form.register('password')}
+            />
           </FieldGroup>
         </form>
 
@@ -253,7 +195,7 @@ function EditUserDialog({
           <h3 className="text-sm font-medium" id={`access-${user.id}`}>
             Access
           </h3>
-          <AccessControl
+          <UserAccessControl
             canSetActive={canSetActive}
             isSelf={isSelf}
             onChange={changeAccess}
@@ -270,104 +212,12 @@ function EditUserDialog({
           </DialogClose>
           {/* form=, because the footer sits outside the form it submits. */}
           <Button disabled={saveDetails.isPending} form={`edit-user-${user.id}`} type="submit">
-            {saveDetails.isPending && <ButtonSpinner />}
-            {saveDetails.isPending ? 'Saving…' : 'Save changes'}
+            <PendingLabel busy="Saving…" pending={saveDetails.isPending}>
+              Save changes
+            </PendingLabel>
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-/**
- * Deactivation keeps its confirmation, because it cannot be quietly undone:
- * reactivating restores the account, but the sessions it ended stay ended.
- * Reactivation only gives back access and asks nothing.
- */
-function AccessControl({
-  user,
-  isSelf,
-  canSetActive,
-  onChange,
-  setAccess,
-}: {
-  user: UserSummary
-  isSelf: boolean
-  canSetActive: boolean
-  onChange: (isActive: boolean) => void
-  setAccess: ReturnType<typeof useUpdateUser>
-}) {
-  const failure = setAccess.isError && (
-    <p className="text-sm text-destructive" role="alert">
-      {setAccess.error.message}
-    </p>
-  )
-
-  if (!canSetActive) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        {isSelf ? 'You cannot deactivate your own account.' : 'This account cannot be deactivated.'}
-      </p>
-    )
-  }
-
-  if (!user.isActive) {
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <p className="text-sm text-muted-foreground">Deactivated. They cannot sign in.</p>
-        <Button
-          aria-label={`Reactivate ${user.name}`}
-          disabled={setAccess.isPending}
-          onClick={() => onChange(true)}
-          size="sm"
-          variant="outline"
-        >
-          {setAccess.isPending && <ButtonSpinner />}
-          {setAccess.isPending ? 'Reactivating…' : 'Reactivate'}
-        </Button>
-        {failure}
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col items-start gap-2">
-      <p className="text-sm text-muted-foreground">Active. They can sign in.</p>
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button aria-label={`Deactivate ${user.name}`} size="sm" variant="outline">
-            Deactivate
-          </Button>
-        </AlertDialogTrigger>
-
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate {user.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              They are signed out everywhere at once and cannot sign in until you reactivate them.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {failure}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={setAccess.isPending}
-              onClick={(event) => {
-                // Held open until the API answers, so a failure is shown here,
-                // beside the button that caused it, rather than lost on close.
-                event.preventDefault()
-                onChange(false)
-              }}
-              variant="destructive"
-            >
-              {setAccess.isPending && <ButtonSpinner />}
-              {setAccess.isPending ? 'Deactivating…' : 'Deactivate'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
   )
 }

@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { type UserSummary, authorise } from '@helpdesk/shared'
-import { prisma } from '../db.ts'
-import { Prisma } from '../generated/prisma/client.ts'
+import { type UserSummary, authorise, createUserSchema, updateUserSchema } from '@helpdesk/shared'
+import { isPrismaError, prisma } from '../db.ts'
+import type { Prisma } from '../generated/prisma/client.ts'
 import { hashPassword } from '../auth/password.ts'
 import { requireAdmin, requireAuth } from '../auth/middleware.ts'
 import { userWriteRateLimit } from '../auth/rate-limit.ts'
-import { SESSION_COOKIE, hashToken } from '../auth/session.ts'
+import { hashToken, readSessionToken } from '../auth/session.ts'
+import { parseBody } from '../http.ts'
 
 /** The columns a user list or a creation response may expose. Never the hash. */
 const summaryFields = {
@@ -19,48 +20,12 @@ const summaryFields = {
   createdAt: true,
 } as const
 
-function toSummary(user: {
-  id: string
-  email: string
-  name: string
-  role: UserSummary['role']
-  isActive: boolean
-  isProtected: boolean
-  createdAt: Date
-}): UserSummary {
+function toSummary(user: Prisma.UserGetPayload<{ select: typeof summaryFields }>): UserSummary {
   return { ...user, createdAt: user.createdAt.toISOString() }
 }
 
-// One definition per field, shared by create and edit so their limits cannot
-// drift apart.
-//
-// 254 is the longest address SMTP can deliver to. Without a cap, a few KB
-// overflowed the unique index's 2704-byte row limit: Postgres refused the insert
-// and the admin got a 500, after argon2 had already been paid for.
-const emailField = z.email().max(254)
-const nameField = z.string().trim().min(1).max(100)
-// 12 to match ADMIN_PASSWORD in the seed script, so the admin an agent is
-// created by cannot hold a weaker password than the agent. The cap keeps a
-// 100KB body — what express.json() allows — out of argon2.
-const passwordField = z.string().min(12).max(200)
-
-const createUserSchema = z.object({
-  email: emailField,
-  name: nameField,
-  password: passwordField,
-})
-
-// Every field optional, at least one required. Anything else in the body —
-// role, isProtected — is stripped by zod, so an empty change is a 400 rather
-// than a silent no-op that looks like it did something.
-const updateUserSchema = z
-  .object({
-    name: nameField.optional(),
-    email: emailField.optional(),
-    password: passwordField.optional(),
-    isActive: z.boolean().optional(),
-  })
-  .refine((body) => Object.values(body).some((value) => value !== undefined))
+const EMAIL_TAKEN = 'A user with that email already exists'
+const USER_NOT_FOUND = 'User not found'
 
 export const usersRouter = Router()
 
@@ -84,23 +49,19 @@ usersRouter.get('/', async (_req, res) => {
 })
 
 usersRouter.post('/', userWriteRateLimit, async (req, res) => {
-  const body = createUserSchema.safeParse(req.body)
-
-  if (!body.success) {
-    res.status(400).json({ error: 'Invalid request body' })
-    return
-  }
+  const body = parseBody(createUserSchema, req, res)
+  if (!body) return
 
   // Lowercased on the way in because login looks the address up lowercased. A
   // row stored with capitals would be unreachable: the agent could never sign in.
-  const email = body.data.email.toLowerCase()
+  const email = body.email.toLowerCase()
 
   try {
     const user = await prisma.user.create({
       data: {
         email,
-        name: body.data.name,
-        passwordHash: await hashPassword(body.data.password),
+        name: body.name,
+        passwordHash: await hashPassword(body.password),
         // Fixed, never read from the body. This endpoint creates agents; taking
         // the role from the request would turn one stolen admin session into a
         // permanent second admin account.
@@ -114,8 +75,8 @@ usersRouter.post('/', userWriteRateLimit, async (req, res) => {
     // The unique index decides, not a findUnique beforehand: two admins posting
     // the same address at once would both pass a check-then-insert and one
     // would get a 500.
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      res.status(409).json({ error: 'A user with that email already exists' })
+    if (isPrismaError(err, 'P2002')) {
+      res.status(409).json({ error: EMAIL_TAKEN })
       return
     }
     throw err
@@ -123,12 +84,8 @@ usersRouter.post('/', userWriteRateLimit, async (req, res) => {
 })
 
 usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
-  const body = updateUserSchema.safeParse(req.body)
-
-  if (!body.success) {
-    res.status(400).json({ error: 'Invalid request body' })
-    return
-  }
+  const body = parseBody(updateUserSchema, req, res)
+  if (!body) return
 
   // A malformed id answers the same 404 as a well-formed one with no row: it
   // cannot name a user either way. Checked here only to answer early — User.id
@@ -137,7 +94,7 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
   // no longer infers the route's params and types req.params.id as string[] too.
   const parsedId = z.uuid().safeParse(req.params.id)
   if (!parsedId.success) {
-    res.status(404).json({ error: 'User not found' })
+    res.status(404).json({ error: USER_NOT_FOUND })
     return
   }
   const id = parsedId.data
@@ -153,11 +110,11 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
   const actor = parties.find((party) => party.id === actorId)
 
   if (!target || !actor) {
-    res.status(404).json({ error: 'User not found' })
+    res.status(404).json({ error: USER_NOT_FOUND })
     return
   }
 
-  const { name, email, password, isActive } = body.data
+  const { name, email, password, isActive } = body
   const verdict = authorise(actor, target, {
     editsDetails: name !== undefined || email !== undefined || password !== undefined,
     isActive,
@@ -202,8 +159,8 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
         // A password is usually reset because it leaked or was forgotten, so
         // whoever is signed in with the old one is signed out. An admin changing
         // their own keeps the session they are changing it from.
-        const token: unknown = req.cookies?.[SESSION_COOKIE]
-        const current = id === actorId && typeof token === 'string' ? hashToken(token) : undefined
+        const token = readSessionToken(req)
+        const current = id === actorId && token ? hashToken(token) : undefined
         await tx.session.deleteMany({
           where: { userId: id, ...(current && { tokenHash: { not: current } }) },
         })
@@ -214,15 +171,13 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
 
     res.json(toSummary(user))
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError) {
-      if (err.code === 'P2002') {
-        res.status(409).json({ error: 'A user with that email already exists' })
-        return
-      }
-      if (err.code === 'P2025') {
-        res.status(404).json({ error: 'User not found' })
-        return
-      }
+    if (isPrismaError(err, 'P2002')) {
+      res.status(409).json({ error: EMAIL_TAKEN })
+      return
+    }
+    if (isPrismaError(err, 'P2025')) {
+      res.status(404).json({ error: USER_NOT_FOUND })
+      return
     }
     throw err
   }

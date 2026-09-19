@@ -1,13 +1,7 @@
-import { afterEach, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { screen, waitFor, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { agentUser, renderRoute, responds, signedInUser, stubApi } from './helpers.tsx'
-
-const originalFetch = globalThis.fetch
-
-afterEach(() => {
-  globalThis.fetch = originalFetch
-})
 
 /** The nav, addressed by its label so the assertions ignore the rest of the page. */
 function nav() {

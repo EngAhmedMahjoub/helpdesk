@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { z } from 'zod'
-import type { UserSummary } from '@helpdesk/shared'
-import { ButtonSpinner } from '@/components/page-spinner'
+import {
+  type CreateUserRequest,
+  type UserSummary,
+  PASSWORD_MIN_LENGTH,
+  createUserSchema,
+} from '@helpdesk/shared'
+import { FormAlert, FormField } from '@/components/form-field'
+import { PendingLabel } from '@/components/page-spinner'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,28 +20,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { FieldGroup } from '@/components/ui/field'
 import { useCreateUser } from '@/hooks/use-users'
-import { ApiError } from '@/lib/api'
+import { isApiError } from '@/lib/api'
 
-/**
- * The same limits as the API's createUserSchema, so an admin hears about a short
- * password before the request rather than as a bare 400 after it. The API stays
- * the real validator; this only moves the message earlier.
- */
-const createAgentSchema = z.object({
-  name: z.string().trim().min(1, 'Enter a name').max(100, 'Keep the name under 100 characters'),
-  email: z.email('Enter a valid email address').max(254, 'Use at most 254 characters'),
-  password: z
-    .string()
-    .min(12, 'Use at least 12 characters')
-    .max(200, 'Keep the password under 200 characters'),
-})
-
-type CreateAgentValues = z.infer<typeof createAgentSchema>
-
-const emptyValues: CreateAgentValues = { name: '', email: '', password: '' }
+const emptyValues: CreateUserRequest = { name: '', email: '', password: '' }
 
 export default function CreateAgentDialog({
   onCreated,
@@ -46,8 +34,11 @@ export default function CreateAgentDialog({
   const [open, setOpen] = useState(false)
   const createUser = useCreateUser()
 
-  const form = useForm<CreateAgentValues>({
-    resolver: zodResolver(createAgentSchema),
+  const form = useForm<CreateUserRequest>({
+    // The API's own schema, so an admin hears about a short password before the
+    // request rather than as a bare 400 after it. The API stays the real
+    // validator; this only moves the message earlier.
+    resolver: zodResolver(createUserSchema),
     defaultValues: emptyValues,
   })
 
@@ -64,7 +55,7 @@ export default function CreateAgentDialog({
     }
   }
 
-  function submit(values: CreateAgentValues) {
+  function submit(values: CreateUserRequest) {
     createUser.mutate(values, {
       onSuccess: (user) => {
         handleOpenChange(false)
@@ -73,14 +64,14 @@ export default function CreateAgentDialog({
       onError: (error) => {
         // Unlike login, naming the field is right here: the admin has to know
         // which value to change, and the API has already said it is the email.
-        if (error instanceof ApiError && error.status === 409) {
+        if (isApiError(error, 409)) {
           form.setError('email', { message: error.message }, { shouldFocus: true })
         }
       },
     })
   }
 
-  const conflict = createUser.error instanceof ApiError && createUser.error.status === 409
+  const conflict = isApiError(createUser.error, 409)
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
@@ -102,52 +93,38 @@ export default function CreateAgentDialog({
         <form noValidate onSubmit={form.handleSubmit(submit)}>
           {/* A conflict is shown on the email field instead; anything else has
               no field to hang on. */}
-          {createUser.isError && !conflict && (
-            <p className="mb-4 text-sm text-destructive" role="alert">
-              {createUser.error.message}
-            </p>
-          )}
+          {createUser.isError && !conflict && <FormAlert>{createUser.error.message}</FormAlert>}
 
           <FieldGroup>
-            <Field data-invalid={Boolean(errors.name)}>
-              <FieldLabel htmlFor="agent-name">Name</FieldLabel>
-              <Input
-                aria-invalid={Boolean(errors.name)}
-                autoComplete="off"
-                id="agent-name"
-                {...form.register('name')}
-              />
-              <FieldError errors={[errors.name]} />
-            </Field>
+            <FormField
+              autoComplete="off"
+              error={errors.name}
+              id="agent-name"
+              label="Name"
+              {...form.register('name')}
+            />
 
-            <Field data-invalid={Boolean(errors.email)}>
-              <FieldLabel htmlFor="agent-email">Email</FieldLabel>
-              <Input
-                aria-invalid={Boolean(errors.email)}
-                // off, so the browser does not offer the admin's own address.
-                autoComplete="off"
-                id="agent-email"
-                type="email"
-                {...form.register('email')}
-              />
-              <FieldError errors={[errors.email]} />
-            </Field>
+            <FormField
+              // off, so the browser does not offer the admin's own address.
+              autoComplete="off"
+              error={errors.email}
+              id="agent-email"
+              label="Email"
+              type="email"
+              {...form.register('email')}
+            />
 
-            <Field data-invalid={Boolean(errors.password)}>
-              <FieldLabel htmlFor="agent-password">Initial password</FieldLabel>
-              <Input
-                aria-describedby="agent-password-hint"
-                aria-invalid={Boolean(errors.password)}
-                // new-password: without it a password manager fills in the
-                // admin's own saved password, and the agent is created with it.
-                autoComplete="new-password"
-                id="agent-password"
-                type="password"
-                {...form.register('password')}
-              />
-              <FieldDescription id="agent-password-hint">At least 12 characters.</FieldDescription>
-              <FieldError errors={[errors.password]} />
-            </Field>
+            <FormField
+              // new-password: without it a password manager fills in the
+              // admin's own saved password, and the agent is created with it.
+              autoComplete="new-password"
+              description={`At least ${PASSWORD_MIN_LENGTH} characters.`}
+              error={errors.password}
+              id="agent-password"
+              label="Initial password"
+              type="password"
+              {...form.register('password')}
+            />
           </FieldGroup>
 
           <DialogFooter className="mt-6">
@@ -157,8 +134,9 @@ export default function CreateAgentDialog({
               </Button>
             </DialogClose>
             <Button disabled={createUser.isPending} type="submit">
-              {createUser.isPending && <ButtonSpinner />}
-              {createUser.isPending ? 'Adding…' : 'Add agent'}
+              <PendingLabel busy="Adding…" pending={createUser.isPending}>
+                Add agent
+              </PendingLabel>
             </Button>
           </DialogFooter>
         </form>

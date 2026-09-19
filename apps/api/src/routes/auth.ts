@@ -1,34 +1,26 @@
 import { Router } from 'express'
-import { z } from 'zod'
+import { loginSchema } from '@helpdesk/shared'
 import { prisma } from '../db.ts'
 import { verifyAgainstDummyHash, verifyPassword } from '../auth/password.ts'
-import { requireAuth } from '../auth/middleware.ts'
+import { requireAuth, toCurrentUser } from '../auth/middleware.ts'
 import { loginRateLimit } from '../auth/rate-limit.ts'
 import {
-  SESSION_COOKIE,
   clearSessionCookie,
   createSession,
   deleteSession,
+  readSessionToken,
   setSessionCookie,
 } from '../auth/session.ts'
-
-const loginSchema = z.object({
-  email: z.email(),
-  password: z.string().min(1),
-})
+import { parseBody } from '../http.ts'
 
 export const authRouter = Router()
 
 authRouter.post('/login', loginRateLimit, async (req, res) => {
-  const body = loginSchema.safeParse(req.body)
-
-  if (!body.success) {
-    res.status(400).json({ error: 'Invalid request body' })
-    return
-  }
+  const body = parseBody(loginSchema, req, res)
+  if (!body) return
 
   const user = await prisma.user.findUnique({
-    where: { email: body.data.email.toLowerCase() },
+    where: { email: body.email.toLowerCase() },
   })
 
   // Always one argon2 verification, even with no account to check against, so
@@ -36,8 +28,8 @@ authRouter.post('/login', loginRateLimit, async (req, res) => {
   // would answer an unknown address in about 2ms and a real one in about 110ms,
   // which tells an attacker which addresses exist however uniform the body is.
   const passwordMatches = user
-    ? await verifyPassword(body.data.password, user.passwordHash)
-    : await verifyAgainstDummyHash(body.data.password)
+    ? await verifyPassword(body.password, user.passwordHash)
+    : await verifyAgainstDummyHash(body.password)
 
   // One response for an unknown email, a wrong password, and a deactivated
   // account, so the endpoint never reveals which addresses have accounts.
@@ -47,7 +39,7 @@ authRouter.post('/login', loginRateLimit, async (req, res) => {
   }
 
   setSessionCookie(res, await createSession(user.id))
-  res.json({ id: user.id, email: user.email, name: user.name, role: user.role })
+  res.json(toCurrentUser(user))
 })
 
 /**
@@ -56,11 +48,8 @@ authRouter.post('/login', loginRateLimit, async (req, res) => {
  * The response is the same either way, so it reveals nothing about the token.
  */
 authRouter.post('/logout', async (req, res) => {
-  const token: unknown = req.cookies?.[SESSION_COOKIE]
-
-  if (typeof token === 'string' && token.length > 0) {
-    await deleteSession(token)
-  }
+  const token = readSessionToken(req)
+  if (token) await deleteSession(token)
 
   clearSessionCookie(res)
   res.status(204).end()

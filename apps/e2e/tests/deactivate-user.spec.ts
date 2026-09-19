@@ -1,6 +1,7 @@
 import { API_URL } from '../config.ts'
 import { countSessionsFor, findSessionByToken } from '../database.ts'
 import { expect, sessionCookie, test } from '../fixtures.ts'
+import { submitLoginForm } from '../login-form.ts'
 import { announcement, openEditDialog, signInElsewhere, userRow } from '../users-page.ts'
 
 test('an agent the admin deactivates is signed out on their next page load', async ({
@@ -97,9 +98,7 @@ test('a reactivated agent must sign in again through the form', async ({
 
     await test.step('the agent signs in with their password', async () => {
       const { page } = signedIn
-      await page.getByLabel('Email').fill(agent.email)
-      await page.getByLabel('Password').fill(agent.password)
-      await page.getByRole('button', { name: 'Sign in' }).click()
+      await submitLoginForm(page, agent)
 
       await expect(page).toHaveURL('/')
       await expect(page.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()

@@ -62,6 +62,29 @@ describe('login rate limit', () => {
   })
 })
 
+/**
+ * Runs `source` in a fresh Bun process under `nodeEnv` and reports whether the
+ * last status it printed was 429.
+ */
+async function lastStatusIs429(source: string, nodeEnv: string): Promise<boolean> {
+  const proc = Bun.spawn(['bun', '-e', source], {
+    // Inside apps/api so express resolves. Bun auto-loads the .env here, but
+    // an explicit variable beats it, so the values below are what take effect.
+    cwd: `${import.meta.dir}/..`,
+    env: {
+      PATH: process.env.PATH ?? '',
+      NODE_ENV: nodeEnv,
+      DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
+      WEB_ORIGIN: 'https://app.example.com',
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+
+  const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
+  return stdout.trim().endsWith('429')
+}
+
 describe('which environments enforce it', () => {
   /**
    * Loads the module fresh under a chosen NODE_ENV and reports whether an
@@ -91,22 +114,7 @@ describe('which environments enforce it', () => {
       console.log(String(last))
     `
 
-    const proc = Bun.spawn(['bun', '-e', source], {
-      // Inside apps/api so express resolves. Bun auto-loads the .env here, but
-      // an explicit variable beats it, so the values below are what take effect.
-      cwd: `${import.meta.dir}/..`,
-      env: {
-        PATH: process.env.PATH ?? '',
-        NODE_ENV: nodeEnv,
-        DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
-        WEB_ORIGIN: 'https://app.example.com',
-      },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-
-    const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
-    return stdout.trim().endsWith('429')
+    return lastStatusIs429(source, nodeEnv)
   }
 
   test('enforces in production', async () => {
@@ -185,20 +193,7 @@ describe('which environments enforce the user-management write limit', () => {
       console.log(String(last))
     `
 
-    const proc = Bun.spawn(['bun', '-e', source], {
-      cwd: `${import.meta.dir}/..`,
-      env: {
-        PATH: process.env.PATH ?? '',
-        NODE_ENV: nodeEnv,
-        DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
-        WEB_ORIGIN: 'https://app.example.com',
-      },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-
-    const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
-    return stdout.trim().endsWith('429')
+    return lastStatusIs429(source, nodeEnv)
   }
 
   test('enforces in production', async () => {
