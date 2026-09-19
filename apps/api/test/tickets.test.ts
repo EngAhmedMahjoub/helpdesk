@@ -507,6 +507,49 @@ describe('PATCH /api/tickets/:id', () => {
     expect(await stored(ticket.id)).toMatchObject({ status: 'open', category: 'general' })
   })
 
+  describe('status transitions', () => {
+    const DAY = 24 * 60 * 60 * 1000
+    // A running timer from an earlier resolution, so every transition shows
+    // whether it restarts, clears or leaves it.
+    const earlierTimer = new Date(Date.now() + 3 * DAY)
+    const statuses = ['open', 'resolved', 'closed'] as const
+
+    for (const from of statuses) {
+      for (const to of statuses) {
+        test(`${from} to ${to} ${to === 'resolved' ? 'starts a fresh 14-day timer' : 'leaves no timer'}`, async () => {
+          const ticket = await createTicket({
+            status: from,
+            autoCloseAt: from === 'resolved' ? earlierTimer : null,
+          })
+
+          const before = Date.now()
+          const res = await patch(ticket.id, { status: to })
+          const after = Date.now()
+
+          expect(res.status).toBe(200)
+          const { status, autoCloseAt } = await stored(ticket.id)
+          expect(status).toBe(to)
+          if (to === 'resolved') {
+            expect(autoCloseAt?.getTime()).toBeGreaterThanOrEqual(before + 14 * DAY)
+            expect(autoCloseAt?.getTime()).toBeLessThanOrEqual(after + 14 * DAY)
+            expect((res.body as TicketDetail).autoCloseAt).toBe(autoCloseAt?.toISOString() ?? '')
+          } else {
+            expect(autoCloseAt).toBeNull()
+            expect((res.body as TicketDetail).autoCloseAt).toBeNull()
+          }
+        })
+      }
+    }
+
+    test('a change without a status leaves a running timer alone', async () => {
+      const ticket = await createTicket({ status: 'resolved', autoCloseAt: earlierTimer })
+
+      await patch(ticket.id, { category: 'technical', needsAgent: false })
+
+      expect((await stored(ticket.id)).autoCloseAt).toEqual(earlierTimer)
+    })
+  })
+
   test('ignores a field it does not accept beside one it does', async () => {
     const ticket = await createTicket({ subject: 'Original' })
 
