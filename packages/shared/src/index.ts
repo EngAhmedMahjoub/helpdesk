@@ -26,5 +26,6 @@ export type UserSummary = {
   createdAt: string
 }
 
+export * from './tickets.ts'
 export * from './user-fields.ts'
 export { authorise, type Change, type Party } from './user-permissions.ts'
