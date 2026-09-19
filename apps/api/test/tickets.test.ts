@@ -373,3 +373,146 @@ describe('GET /api/tickets/:id', () => {
     })
   }
 })
+
+describe('PATCH /api/tickets/:id', () => {
+  const patch = (id: number | string, body: object, cookie = agentCookie) =>
+    request(app)
+      .patch(`/api/tickets/${String(id)}`)
+      .set('Cookie', cookie)
+      .send(body)
+
+  const stored = (id: number) => prisma.ticket.findUniqueOrThrow({ where: { id } })
+
+  test('changes the status and answers with the ticket and its thread', async () => {
+    const ticket = await createTicket({ status: 'open' })
+    await prisma.message.create({
+      data: { ticketId: ticket.id, direction: 'inbound', author: 'student', body: 'Help' },
+    })
+
+    const res = await patch(ticket.id, { status: 'closed' })
+
+    expect(res.status).toBe(200)
+    const body = res.body as TicketDetail
+    expect(body).toMatchObject({ id: ticket.id, status: 'closed' })
+    expect(body.messages.map((m) => m.body)).toEqual(['Help'])
+    expect((await stored(ticket.id)).status).toBe('closed')
+  })
+
+  test('changes the category', async () => {
+    const ticket = await createTicket({ category: null })
+
+    const res = await patch(ticket.id, { category: 'refund' })
+
+    expect(res.status).toBe(200)
+    expect((await stored(ticket.id)).category).toBe('refund')
+  })
+
+  test('clears needsAgent, and the escalation reason with it', async () => {
+    const ticket = await createTicket({ needsAgent: true, escalationReason: 'refund_approval' })
+
+    const res = await patch(ticket.id, { needsAgent: false })
+
+    expect(res.status).toBe(200)
+    expect(res.body as TicketDetail).toMatchObject({ needsAgent: false, escalationReason: null })
+    expect(await stored(ticket.id)).toMatchObject({ needsAgent: false, escalationReason: null })
+  })
+
+  test('changes several fields at once and leaves the rest alone', async () => {
+    const ticket = await createTicket({
+      status: 'open',
+      category: 'general',
+      needsAgent: true,
+      escalationReason: 'ai_failed',
+      summary: 'Kept',
+    })
+
+    await patch(ticket.id, { status: 'resolved', category: 'technical' })
+
+    expect(await stored(ticket.id)).toMatchObject({
+      status: 'resolved',
+      category: 'technical',
+      // Not in the request, so not touched.
+      needsAgent: true,
+      escalationReason: 'ai_failed',
+      summary: 'Kept',
+      subject: 'Cannot log in',
+    })
+  })
+
+  test('is open to admins as well as agents', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const ticket = await createTicket()
+
+    const res = await patch(ticket.id, { status: 'closed' }, await sessionCookieFor(admin.id))
+
+    expect(res.status).toBe(200)
+  })
+
+  test('gives an unauthenticated caller 401 and changes nothing', async () => {
+    const ticket = await createTicket({ status: 'open' })
+
+    const res = await request(app)
+      .patch(`/api/tickets/${String(ticket.id)}`)
+      .send({ status: 'closed' })
+
+    expect(res.status).toBe(401)
+    expect((await stored(ticket.id)).status).toBe('open')
+  })
+
+  test('answers 404 for an id with no ticket, and for a malformed one', async () => {
+    const ticket = await createTicket()
+
+    for (const id of [String(ticket.id + 1), 'abc', '1e2', '2147483648']) {
+      const res = await patch(id, { status: 'closed' })
+      expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Ticket not found' })
+    }
+  })
+
+  const invalid: [string, object][] = [
+    ['an empty body', {}],
+    ['an unknown status', { status: 'pending' }],
+    ['an unknown category', { category: 'billing' }],
+    ['a null category', { category: null }],
+    ['setting needsAgent', { needsAgent: true }],
+    ['needsAgent as a string', { needsAgent: 'false' }],
+    // Stripped, leaving nothing to change: a 400 rather than a silent no-op.
+    ['only fields it does not accept', { subject: 'Hijacked', escalationReason: null }],
+  ]
+
+  for (const [label, payload] of invalid) {
+    test(`rejects ${label} and changes nothing`, async () => {
+      const ticket = await createTicket({
+        status: 'open',
+        category: 'general',
+        needsAgent: true,
+        escalationReason: 'ai_failed',
+      })
+      const before = await stored(ticket.id)
+
+      const res = await patch(ticket.id, payload)
+
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'Invalid request body' })
+      expect(await stored(ticket.id)).toEqual(before)
+    })
+  }
+
+  test('rejects a bad value even beside a valid one, and changes nothing', async () => {
+    const ticket = await createTicket({ status: 'open', category: 'general' })
+
+    const res = await patch(ticket.id, { status: 'closed', category: 'billing' })
+
+    expect(res.status).toBe(400)
+    expect(await stored(ticket.id)).toMatchObject({ status: 'open', category: 'general' })
+  })
+
+  test('ignores a field it does not accept beside one it does', async () => {
+    const ticket = await createTicket({ subject: 'Original' })
+
+    const res = await patch(ticket.id, { status: 'closed', subject: 'Hijacked' })
+
+    expect(res.status).toBe(200)
+    expect(await stored(ticket.id)).toMatchObject({ status: 'closed', subject: 'Original' })
+  })
+})

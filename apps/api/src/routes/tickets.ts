@@ -5,11 +5,12 @@ import {
   type TicketSummary,
   listTicketsQuerySchema,
   ticketIdSchema,
+  updateTicketSchema,
 } from '@helpdesk/shared'
-import { prisma } from '../db.ts'
+import { isPrismaError, prisma } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
-import { parseQuery } from '../http.ts'
+import { parseBody, parseQuery } from '../http.ts'
 
 /** The columns the list exposes. Explicit, so a column added later stays out until chosen. */
 const summaryFields = {
@@ -32,6 +33,40 @@ function toSummary(
     ...ticket,
     createdAt: ticket.createdAt.toISOString(),
     updatedAt: ticket.updatedAt.toISOString(),
+  }
+}
+
+/** A ticket with its thread, for the detail view and as the answer to a change. */
+const detailFields = {
+  ...summaryFields,
+  summary: true,
+  autoCloseAt: true,
+  messages: {
+    // Explicit here too: emailMessageId is plumbing for threading, and an
+    // agent is named by id and name only, never the rest of their row.
+    select: {
+      id: true,
+      direction: true,
+      author: true,
+      agent: { select: { id: true, name: true } },
+      body: true,
+      createdAt: true,
+    },
+    // Oldest first, as a thread reads; id breaks ties as on the list.
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  },
+} satisfies Prisma.TicketSelect
+
+function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields }>): TicketDetail {
+  const { summary, autoCloseAt, messages, ...rest } = ticket
+  return {
+    ...toSummary(rest),
+    summary,
+    autoCloseAt: autoCloseAt?.toISOString() ?? null,
+    messages: messages.map((message) => ({
+      ...message,
+      createdAt: message.createdAt.toISOString(),
+    })),
   }
 }
 
@@ -81,43 +116,46 @@ ticketsRouter.get('/:id', async (req, res) => {
     return
   }
 
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: id.data },
-    select: {
-      ...summaryFields,
-      summary: true,
-      autoCloseAt: true,
-      messages: {
-        // Explicit here too: emailMessageId is plumbing for threading, and an
-        // agent is named by id and name only, never the rest of their row.
-        select: {
-          id: true,
-          direction: true,
-          author: true,
-          agent: { select: { id: true, name: true } },
-          body: true,
-          createdAt: true,
-        },
-        // Oldest first, as a thread reads; id breaks ties as on the list.
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      },
-    },
-  })
+  const ticket = await prisma.ticket.findUnique({ where: { id: id.data }, select: detailFields })
 
   if (!ticket) {
     res.status(404).json({ error: TICKET_NOT_FOUND })
     return
   }
 
-  const { summary, autoCloseAt, messages, ...rest } = ticket
-  const body: TicketDetail = {
-    ...toSummary(rest),
-    summary,
-    autoCloseAt: autoCloseAt?.toISOString() ?? null,
-    messages: messages.map((message) => ({
-      ...message,
-      createdAt: message.createdAt.toISOString(),
-    })),
+  res.json(toDetail(ticket))
+})
+
+ticketsRouter.patch('/:id', async (req, res) => {
+  // Body first, as on PATCH /api/users/:id: a malformed body is a 400 whatever
+  // the id names.
+  const body = parseBody(updateTicketSchema, req, res)
+  if (!body) return
+
+  const id = ticketIdSchema.safeParse(req.params.id)
+  if (!id.success) {
+    res.status(404).json({ error: TICKET_NOT_FOUND })
+    return
   }
-  res.json(body)
+
+  try {
+    const ticket = await prisma.ticket.update({
+      where: { id: id.data },
+      data: {
+        status: body.status,
+        category: body.category,
+        // The reason only explains a set flag, so clearing the flag clears it:
+        // a ticket no longer waiting for an agent has nothing to be escalated for.
+        ...(body.needsAgent === false && { needsAgent: false, escalationReason: null }),
+      },
+      select: detailFields,
+    })
+    res.json(toDetail(ticket))
+  } catch (err) {
+    if (isPrismaError(err, 'P2025')) {
+      res.status(404).json({ error: TICKET_NOT_FOUND })
+      return
+    }
+    throw err
+  }
 })
