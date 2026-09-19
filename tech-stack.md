@@ -127,6 +127,7 @@ Database sessions.
 | Timer reset | A student message on a Resolved ticket restarts the 14-day timer. |
 | Student reply to Resolved or Closed | Status does not change. AI processes the new message: replies and updates category and summary. |
 | Escalation | Ticket flagged `needsAgent` with reason `refund_approval` or `ai_failed` |
+| Sample data | `bun --filter '@helpdesk/api' db:seed:dev` writes eight tickets covering every status, category and escalation reason, with student, AI and agent messages. A separate script from `db:seed`, which also runs in production, and it refuses any `NODE_ENV` but `development`. Sample students are on `student.example` (reserved, undeliverable); a re-run replaces those tickets and touches no others. Agent replies are authored by the seeded admin, so run `db:seed` first |
 
 ## Email
 
