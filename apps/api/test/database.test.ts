@@ -41,3 +41,39 @@ describe('test database', () => {
     expect(await prisma.session.count()).toBe(0)
   })
 })
+
+describe('Ticket', () => {
+  test('starts Open, unclassified and not escalated', async () => {
+    const ticket = await prisma.ticket.create({
+      data: { subject: 'Cannot log in', studentEmail: 'student@example.com' },
+    })
+
+    expect(ticket).toMatchObject({
+      status: 'open',
+      studentName: null,
+      category: null,
+      summary: null,
+      needsAgent: false,
+      escalationReason: null,
+      autoCloseAt: null,
+    })
+  })
+
+  test('refuses a status, category or escalation reason outside its enum', async () => {
+    // Raw SQL, because Prisma's own types would not let the bad values compile:
+    // this checks the database refuses them, not the client.
+    for (const [column, value] of [
+      ['status', 'pending'],
+      ['category', 'billing'],
+      ['escalationReason', 'angry_student'],
+    ]) {
+      const insert = async () =>
+        prisma.$executeRawUnsafe(
+          `INSERT INTO "Ticket" (subject, "studentEmail", "updatedAt", "${column}")
+           VALUES ('S', 's@example.com', now(), $1)`,
+          value,
+        )
+      await expect(insert()).rejects.toThrow()
+    }
+  })
+})
