@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
-import type { TicketDetail, TicketListResponse } from '@helpdesk/shared'
+import type { TicketDetail, TicketListResponse, TicketMessage } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
 import { prisma, resetDatabase } from './db.ts'
 import { createTicket, createUser, sessionCookieFor } from './fixtures.ts'
@@ -557,5 +557,169 @@ describe('PATCH /api/tickets/:id', () => {
 
     expect(res.status).toBe(200)
     expect(await stored(ticket.id)).toMatchObject({ status: 'closed', subject: 'Original' })
+  })
+})
+
+describe('POST /api/tickets/:id/replies', () => {
+  const reply = (id: number | string, body: object, cookie = agentCookie) =>
+    request(app)
+      .post(`/api/tickets/${String(id)}/replies`)
+      .set('Cookie', cookie)
+      .send(body)
+
+  test('saves an outbound agent message from the signed-in user', async () => {
+    const gil = await createUser({ email: 'gil@example.com', name: 'Gil Agent' })
+    const ticket = await createTicket()
+
+    const res = await reply(
+      ticket.id,
+      { body: 'Try clearing your cookies.' },
+      await sessionCookieFor(gil.id),
+    )
+
+    expect(res.status).toBe(201)
+    const message = res.body as TicketMessage
+    expect(message).toEqual({
+      id: expect.any(Number) as number,
+      direction: 'outbound',
+      author: 'agent',
+      agent: { id: gil.id, name: 'Gil Agent' },
+      body: 'Try clearing your cookies.',
+      createdAt: expect.any(String) as string,
+    })
+    expect(await prisma.message.findUniqueOrThrow({ where: { id: message.id } })).toMatchObject({
+      ticketId: ticket.id,
+      direction: 'outbound',
+      author: 'agent',
+      agentId: gil.id,
+      // Not emailed until Phase 4.
+      emailMessageId: null,
+    })
+  })
+
+  test("appears at the end of the ticket's thread", async () => {
+    const ticket = await createTicket()
+    await prisma.message.create({
+      data: {
+        ticketId: ticket.id,
+        direction: 'inbound',
+        author: 'student',
+        body: 'Help',
+        createdAt: day(1),
+      },
+    })
+
+    await reply(ticket.id, { body: 'On it.' })
+
+    const thread = (
+      (
+        await request(app)
+          .get(`/api/tickets/${String(ticket.id)}`)
+          .set('Cookie', agentCookie)
+      ).body as TicketDetail
+    ).messages
+    expect(thread.map((m) => [m.author, m.body])).toEqual([
+      ['student', 'Help'],
+      ['agent', 'On it.'],
+    ])
+  })
+
+  test("moves the ticket's updatedAt forward and leaves its status alone", async () => {
+    const ticket = await createTicket({ status: 'open', updatedAt: day(1) })
+
+    const before = Date.now()
+    await reply(ticket.id, { body: 'On it.' })
+
+    const after = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })
+    expect(after.updatedAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(after.status).toBe('open')
+  })
+
+  test('trims the reply', async () => {
+    const ticket = await createTicket()
+
+    const res = await reply(ticket.id, { body: '  On it.\n\n' })
+
+    expect((res.body as TicketMessage).body).toBe('On it.')
+  })
+
+  test('ignores an author, agent or direction in the body', async () => {
+    const other = await createUser({ email: 'other@example.com', name: 'Someone Else' })
+    const ticket = await createTicket()
+
+    const res = await reply(ticket.id, {
+      body: 'On it.',
+      author: 'ai',
+      direction: 'inbound',
+      agentId: other.id,
+      emailMessageId: '<forged@example.com>',
+    })
+
+    expect(res.status).toBe(201)
+    const stored = await prisma.message.findUniqueOrThrow({
+      where: { id: (res.body as TicketMessage).id },
+    })
+    expect(stored).toMatchObject({ author: 'agent', direction: 'outbound', emailMessageId: null })
+    expect(stored.agentId).not.toBe(other.id)
+  })
+
+  test('is open to admins as well as agents', async () => {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const ticket = await createTicket()
+
+    const res = await reply(ticket.id, { body: 'On it.' }, await sessionCookieFor(admin.id))
+
+    expect(res.status).toBe(201)
+  })
+
+  test('gives an unauthenticated caller 401 and saves nothing', async () => {
+    const ticket = await createTicket()
+
+    const res = await request(app)
+      .post(`/api/tickets/${String(ticket.id)}/replies`)
+      .send({ body: 'On it.' })
+
+    expect(res.status).toBe(401)
+    expect(await prisma.message.count()).toBe(0)
+  })
+
+  test('answers 404 for an id with no ticket, and for a malformed one, saving nothing', async () => {
+    const ticket = await createTicket()
+
+    for (const id of [String(ticket.id + 1), 'abc', '1e2', '2147483648']) {
+      const res = await reply(id, { body: 'On it.' })
+      expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Ticket not found' })
+    }
+    expect(await prisma.message.count()).toBe(0)
+  })
+
+  const invalid: [string, object][] = [
+    ['an empty body', {}],
+    ['an empty reply', { body: '' }],
+    ['a reply of only whitespace', { body: '   \n ' }],
+    ['a reply over 10,000 characters', { body: 'a'.repeat(10_001) }],
+    ['a reply that is not a string', { body: 42 }],
+  ]
+
+  for (const [label, payload] of invalid) {
+    test(`rejects ${label} and saves nothing`, async () => {
+      const ticket = await createTicket({ updatedAt: day(1) })
+
+      const res = await reply(ticket.id, payload)
+
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'Invalid request body' })
+      expect(await prisma.message.count()).toBe(0)
+      expect(
+        (await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).updatedAt,
+      ).toEqual(day(1))
+    })
+  }
+
+  test('accepts a reply of exactly 10,000 characters', async () => {
+    const ticket = await createTicket()
+
+    expect((await reply(ticket.id, { body: 'a'.repeat(10_000) })).status).toBe(201)
   })
 })

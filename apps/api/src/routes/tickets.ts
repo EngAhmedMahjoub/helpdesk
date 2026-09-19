@@ -2,7 +2,9 @@ import { Router } from 'express'
 import {
   type TicketDetail,
   type TicketListResponse,
+  type TicketMessage,
   type TicketSummary,
+  createReplySchema,
   listTicketsQuerySchema,
   ticketIdSchema,
   updateTicketSchema,
@@ -37,22 +39,30 @@ function toSummary(
   }
 }
 
+// Explicit: emailMessageId is plumbing for threading, and an agent is named
+// by id and name only, never the rest of their row.
+const messageFields = {
+  id: true,
+  direction: true,
+  author: true,
+  agent: { select: { id: true, name: true } },
+  body: true,
+  createdAt: true,
+} satisfies Prisma.MessageSelect
+
+function toMessage(
+  message: Prisma.MessageGetPayload<{ select: typeof messageFields }>,
+): TicketMessage {
+  return { ...message, createdAt: message.createdAt.toISOString() }
+}
+
 /** A ticket with its thread, for the detail view and as the answer to a change. */
 const detailFields = {
   ...summaryFields,
   summary: true,
   autoCloseAt: true,
   messages: {
-    // Explicit here too: emailMessageId is plumbing for threading, and an
-    // agent is named by id and name only, never the rest of their row.
-    select: {
-      id: true,
-      direction: true,
-      author: true,
-      agent: { select: { id: true, name: true } },
-      body: true,
-      createdAt: true,
-    },
+    select: messageFields,
     // Oldest first, as a thread reads; id breaks ties as on the list.
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   },
@@ -64,10 +74,7 @@ function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields 
     ...toSummary(rest),
     summary,
     autoCloseAt: autoCloseAt?.toISOString() ?? null,
-    messages: messages.map((message) => ({
-      ...message,
-      createdAt: message.createdAt.toISOString(),
-    })),
+    messages: messages.map(toMessage),
   }
 }
 
@@ -154,6 +161,51 @@ ticketsRouter.patch('/:id', async (req, res) => {
       select: detailFields,
     })
     res.json(toDetail(ticket))
+  } catch (err) {
+    if (isPrismaError(err, 'P2025')) {
+      res.status(404).json({ error: TICKET_NOT_FOUND })
+      return
+    }
+    throw err
+  }
+})
+
+ticketsRouter.post('/:id/replies', async (req, res) => {
+  const body = parseBody(createReplySchema, req, res)
+  if (!body) return
+
+  const id = ticketIdSchema.safeParse(req.params.id)
+  if (!id.success) {
+    res.status(404).json({ error: TICKET_NOT_FOUND })
+    return
+  }
+
+  // requireAuth put the user there; the reply is theirs, whatever the body says.
+  const agentId = req.user?.id ?? ''
+
+  try {
+    const message = await prisma.$transaction(async (tx) => {
+      // A reply is activity on the ticket, so it moves up a list sorted by
+      // updatedAt. Inserting a message does not touch the ticket row by itself.
+      // The update also answers P2025 for a ticket that is not there.
+      await tx.ticket.update({ where: { id: id.data }, data: { updatedAt: new Date() } })
+
+      return tx.message.create({
+        data: {
+          ticketId: id.data,
+          direction: 'outbound',
+          author: 'agent',
+          agentId,
+          body: body.body,
+          // Null until Phase 4 sends it: the Message-ID is the email's, and
+          // there is no email yet.
+          emailMessageId: null,
+        },
+        select: messageFields,
+      })
+    })
+
+    res.status(201).json(toMessage(message))
   } catch (err) {
     if (isPrismaError(err, 'P2025')) {
       res.status(404).json({ error: TICKET_NOT_FOUND })
