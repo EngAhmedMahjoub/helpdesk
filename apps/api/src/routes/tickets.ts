@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import {
+  type TicketDetail,
   type TicketListResponse,
   type TicketSummary,
   listTicketsQuerySchema,
+  ticketIdSchema,
 } from '@helpdesk/shared'
 import { prisma } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
@@ -32,6 +34,8 @@ function toSummary(
     updatedAt: ticket.updatedAt.toISOString(),
   }
 }
+
+const TICKET_NOT_FOUND = 'Ticket not found'
 
 export const ticketsRouter = Router()
 
@@ -64,6 +68,56 @@ ticketsRouter.get('/', async (req, res) => {
     page: query.page,
     pageSize: query.pageSize,
     total,
+  }
+  res.json(body)
+})
+
+ticketsRouter.get('/:id', async (req, res) => {
+  // A malformed id answers the same 404 as a well-formed one with no row: it
+  // cannot name a ticket either way.
+  const id = ticketIdSchema.safeParse(req.params.id)
+  if (!id.success) {
+    res.status(404).json({ error: TICKET_NOT_FOUND })
+    return
+  }
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: id.data },
+    select: {
+      ...summaryFields,
+      summary: true,
+      autoCloseAt: true,
+      messages: {
+        // Explicit here too: emailMessageId is plumbing for threading, and an
+        // agent is named by id and name only, never the rest of their row.
+        select: {
+          id: true,
+          direction: true,
+          author: true,
+          agent: { select: { id: true, name: true } },
+          body: true,
+          createdAt: true,
+        },
+        // Oldest first, as a thread reads; id breaks ties as on the list.
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      },
+    },
+  })
+
+  if (!ticket) {
+    res.status(404).json({ error: TICKET_NOT_FOUND })
+    return
+  }
+
+  const { summary, autoCloseAt, messages, ...rest } = ticket
+  const body: TicketDetail = {
+    ...toSummary(rest),
+    summary,
+    autoCloseAt: autoCloseAt?.toISOString() ?? null,
+    messages: messages.map((message) => ({
+      ...message,
+      createdAt: message.createdAt.toISOString(),
+    })),
   }
   res.json(body)
 })
