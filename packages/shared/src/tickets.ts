@@ -88,3 +88,19 @@ export type TicketDetail = TicketSummary & {
   autoCloseAt: string | null
   messages: TicketMessage[]
 }
+
+/**
+ * The body of `PATCH /api/tickets/:id`: any of these, at least one. An agent
+ * may only clear needsAgent — setting it is the AI's escalation, not a choice
+ * made from the ticket screen — and clearing it clears escalationReason too.
+ * Anything else in the body is stripped, so a change of nothing is a 400.
+ */
+export const updateTicketSchema = z
+  .object({
+    status: z.enum(TICKET_STATUSES).optional(),
+    category: z.enum(TICKET_CATEGORIES).optional(),
+    needsAgent: z.literal(false).optional(),
+  })
+  .refine((body) => Object.values(body).some((value) => value !== undefined))
+
+export type UpdateTicketRequest = z.infer<typeof updateTicketSchema>
