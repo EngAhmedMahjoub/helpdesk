@@ -42,3 +42,39 @@ model Session {
 
   @@index([userId])
 }
+
+enum TicketStatus {
+  open
+  resolved
+  closed
+}
+
+enum TicketCategory {
+  general
+  technical
+  refund
+}
+
+enum EscalationReason {
+  refund_approval
+  ai_failed
+}
+
+model Ticket {
+  id               Int               @id @default(autoincrement())
+  subject          String
+  studentEmail     String
+  // Nullable: an email's From header need not carry a display name.
+  studentName      String?
+  status           TicketStatus      @default(open)
+  // Null until the AI or an agent classifies the ticket.
+  category         TicketCategory?
+  summary          String?
+  needsAgent       Boolean           @default(false)
+  // Why needsAgent was set; null while it is false.
+  escalationReason EscalationReason?
+  // Only a Resolved ticket has one: when auto-close will set it Closed.
+  autoCloseAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
