@@ -1,0 +1,51 @@
+import { z } from 'zod'
+
+export const TICKET_STATUSES = ['open', 'resolved', 'closed'] as const
+export const TICKET_CATEGORIES = ['general', 'technical', 'refund'] as const
+export const ESCALATION_REASONS = ['refund_approval', 'ai_failed'] as const
+
+export type TicketStatus = (typeof TICKET_STATUSES)[number]
+export type TicketCategory = (typeof TICKET_CATEGORIES)[number]
+export type EscalationReason = (typeof ESCALATION_REASONS)[number]
+
+/** A ticket as the list shows it: no messages, summary or auto-close date. */
+export type TicketSummary = {
+  id: number
+  subject: string
+  studentEmail: string
+  studentName: string | null
+  status: TicketStatus
+  category: TicketCategory | null
+  needsAgent: boolean
+  escalationReason: EscalationReason | null
+  createdAt: string
+  updatedAt: string
+}
+
+export const TICKET_PAGE_SIZE_MAX = 100
+
+/**
+ * The query string of `GET /api/tickets`. Every parameter is optional. By
+ * default the most recently active tickets come first, 20 to a page.
+ */
+export const listTicketsQuerySchema = z.object({
+  status: z.enum(TICKET_STATUSES).optional(),
+  category: z.enum(TICKET_CATEGORIES).optional(),
+  sort: z.enum(['createdAt', 'updatedAt']).default('updatedAt'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  // Coerced: a query string carries every value as text.
+  page: z.coerce.number().int().min(1).default(1),
+  // Capped, so one request cannot ask for the whole table.
+  pageSize: z.coerce.number().int().min(1).max(TICKET_PAGE_SIZE_MAX).default(20),
+})
+
+/** What the page sends: every parameter may be left out. */
+export type ListTicketsQuery = z.input<typeof listTicketsQuerySchema>
+
+export type TicketListResponse = {
+  tickets: TicketSummary[]
+  page: number
+  pageSize: number
+  /** Tickets matching the filters across every page, for the page count. */
+  total: number
+}

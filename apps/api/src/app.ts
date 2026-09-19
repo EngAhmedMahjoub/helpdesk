@@ -5,6 +5,7 @@ import type { HealthResponse } from '@helpdesk/shared'
 import { prisma } from './db.ts'
 import { env } from './env.ts'
 import { authRouter } from './routes/auth.ts'
+import { ticketsRouter } from './routes/tickets.ts'
 import { usersRouter } from './routes/users.ts'
 
 /**
@@ -65,6 +66,7 @@ export function createApp() {
 
   app.use('/api/auth', authRouter)
   app.use('/api/users', usersRouter)
+  app.use('/api/tickets', ticketsRouter)
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not Found' })
