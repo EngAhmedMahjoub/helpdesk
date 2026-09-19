@@ -2,6 +2,7 @@ import type request from 'supertest'
 import type { Role } from '@helpdesk/shared'
 import { hashPassword } from '../src/auth/password.ts'
 import { SESSION_COOKIE, createSession } from '../src/auth/session.ts'
+import type { Prisma } from '../src/generated/prisma/client.ts'
 import { prisma } from './db.ts'
 
 /** Long enough for the API's password rules, for any test that signs in with one. */
@@ -59,4 +60,13 @@ export function sessionCookieFrom(res: request.Response): string | undefined {
 /** True when the response tells the browser to drop the session cookie. */
 export function clearsSessionCookie(res: request.Response): boolean {
   return setCookies(res).some((c) => c.startsWith(`${SESSION_COOKIE}=;`))
+}
+
+export type NewTicket = Partial<Omit<Prisma.TicketUncheckedCreateInput, 'id' | 'messages'>>
+
+/** A ticket row: an Open ticket from a sample student unless told otherwise. */
+export async function createTicket(overrides: NewTicket = {}) {
+  return prisma.ticket.create({
+    data: { subject: 'Cannot log in', studentEmail: 'student@example.com', ...overrides },
+  })
 }
