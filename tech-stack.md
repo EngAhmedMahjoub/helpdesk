@@ -124,6 +124,7 @@ Database sessions.
 | Resolved | Issue is solved. Set by the AI or an agent. |
 | Closed | Ticket is no longer open. Set by an agent or by auto-close. |
 | Auto-close | A Resolved ticket closes 14 days after it was resolved. Open and Closed tickets have no timer. |
+| Setting a status | Always through `statusChange()` in `apps/api/src/tickets/status.ts`, which returns the status with its `autoCloseAt`: now + 14 days for Resolved, null otherwise. Setting Resolved again restarts the timer. A change that does not set a status leaves the timer alone. |
 | Timer reset | A student message on a Resolved ticket restarts the 14-day timer. |
 | Student reply to Resolved or Closed | Status does not change. AI processes the new message: replies and updates category and summary. |
 | Escalation | Ticket flagged `needsAgent` with reason `refund_approval` or `ai_failed` |
