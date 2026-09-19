@@ -10,6 +10,7 @@
     "db:migrate": "bun --bun --env-file=.env run prisma migrate dev",
     "db:test:setup": "bun --bun --env-file=.env.test run prisma migrate deploy",
     "db:seed": "bun --bun --env-file=.env run prisma db seed",
+    "db:seed:dev": "bun --env-file=.env prisma/seed-dev.ts",
     "db:studio": "bun --bun --env-file=.env run prisma studio",
     "lint": "oxlint --deny-warnings",
     "test": "bun run db:test:setup && bun test"
