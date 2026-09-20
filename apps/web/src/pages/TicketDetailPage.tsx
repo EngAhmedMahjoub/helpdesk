@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { type TicketDetail, ticketIdSchema } from '@helpdesk/shared'
 import MessageThread from '@/components/message-thread'
+import ReplyBox from '@/components/reply-box'
 import TicketControls from '@/components/ticket-controls'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -58,6 +59,16 @@ function Ticket({ id }: { id: number }) {
         <MessageThread
           messages={ticket.data.messages}
           studentName={ticket.data.studentName ?? ticket.data.studentEmail}
+        />
+      </section>
+
+      <section aria-labelledby="reply-heading" className="mt-8">
+        <h2 className="sr-only" id="reply-heading">
+          Reply
+        </h2>
+        <ReplyBox
+          student={ticket.data.studentName ?? ticket.data.studentEmail}
+          ticketId={ticket.data.id}
         />
       </section>
     </>
