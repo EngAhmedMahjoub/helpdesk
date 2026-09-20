@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import express from 'express'
 import request from 'supertest'
-import { createLoginRateLimit, createUserWriteRateLimit } from '../src/auth/rate-limit.ts'
+import {
+  createLoginRateLimit,
+  createTicketWriteRateLimit,
+  createUserWriteRateLimit,
+} from '../src/auth/rate-limit.ts'
 
 /**
  * A stand-in for the login route, carrying a limiter that actually enforces.
@@ -206,5 +210,73 @@ describe('which environments enforce the user-management write limit', () => {
 
   test('does not enforce in development', async () => {
     expect(await userWritesEnforcedUnder('development')).toBe(false)
+  })
+})
+
+describe('ticket write limit', () => {
+  /** A stand-in for POST /api/tickets/:id/replies behind an enforcing limiter. */
+  function appWithTicketLimiter() {
+    const app = express()
+    app.use((req, _res, next) => {
+      req.user = { id: String(req.headers['x-agent']), email: '', name: '', role: 'agent' }
+      next()
+    })
+    app.post('/replies', createTicketWriteRateLimit(), (_req, res) => {
+      res.status(201).end()
+    })
+    return app
+  }
+
+  const reply = (app: ReturnType<typeof appWithTicketLimiter>, agent: string) =>
+    request(app).post('/replies').set('x-agent', agent)
+
+  test('refuses an agent further replies once their budget is spent', async () => {
+    const app = appWithTicketLimiter()
+    for (let i = 0; i < 120; i += 1) {
+      expect((await reply(app, 'agent-1')).status).toBe(201)
+    }
+
+    const blocked = await reply(app, 'agent-1')
+
+    expect(blocked.status).toBe(429)
+    expect(blocked.body).toEqual({ error: 'Too many replies, please try again later' })
+  })
+
+  test('budgets each agent separately, so a busy colleague costs nothing', async () => {
+    const app = appWithTicketLimiter()
+    for (let i = 0; i < 121; i += 1) await reply(app, 'agent-1')
+
+    expect((await reply(app, 'agent-2')).status).toBe(201)
+  })
+})
+
+describe('which environments enforce the ticket write limit', () => {
+  /** As for the other two: a child process, since the wiring is read at import. */
+  async function ticketRepliesEnforcedUnder(nodeEnv: string) {
+    const source = `
+      const { ticketWriteRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
+      const express = (await import('express')).default
+      const app = express()
+      app.use(express.json())
+      app.post('/replies', ticketWriteRateLimit, (_req, res) => res.status(201).end())
+      const server = app.listen(0)
+      const { port } = server.address()
+      let last = 0
+      for (let i = 0; i < 121; i += 1) {
+        last = (await fetch(\`http://localhost:\${port}/replies\`, { method: 'POST' })).status
+      }
+      server.close()
+      console.log(String(last))
+    `
+
+    return lastStatusIs429(source, nodeEnv)
+  }
+
+  test('enforces in production', async () => {
+    expect(await ticketRepliesEnforcedUnder('production')).toBe(true)
+  })
+
+  test('does not enforce in development', async () => {
+    expect(await ticketRepliesEnforcedUnder('development')).toBe(false)
   })
 })

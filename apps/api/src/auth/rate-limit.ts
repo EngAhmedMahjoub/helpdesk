@@ -85,3 +85,36 @@ export function createUserWriteRateLimit(
 export const userWriteRateLimit = createUserWriteRateLimit({
   skip: env.NODE_ENV !== 'production',
 })
+
+/**
+ * Caps writes to a ticket — replies today, and whatever else agents post to one
+ * later — per acting user.
+ *
+ * A reply may carry 10,000 characters, and a thread is read back whole. One
+ * agent session, stolen or scripted, could otherwise grow a single ticket until
+ * every later read of it is expensive. Higher than the user-management limit:
+ * answering tickets is the job, and a busy agent working through a queue should
+ * never meet this.
+ *
+ * Keyed and gated like the user-management limit: the acting user's id behind
+ * requireAuth, and production only, so the end-to-end suite can reply freely.
+ */
+export function createTicketWriteRateLimit(
+  options: { skip?: boolean } = {},
+): RateLimitRequestHandler {
+  const { skip = false } = options
+
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 120,
+    skip: () => skip,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? 'unknown'),
+    message: { error: 'Too many replies, please try again later' },
+  })
+}
+
+export const ticketWriteRateLimit = createTicketWriteRateLimit({
+  skip: env.NODE_ENV !== 'production',
+})
