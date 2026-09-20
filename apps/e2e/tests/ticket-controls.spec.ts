@@ -41,13 +41,14 @@ test('an unclassified ticket can be classified, and not put back', async ({
 
   await adminPage.goto(`/tickets/${String(ticket.id)}`)
 
-  // A placeholder, not a value: nothing has classified it yet.
+  // Its own word for having no category yet; the select is never left without
+  // a value, or Radix would hold state of its own (#167).
   await expect(category).toHaveText('unclassified')
 
   await chooseOption(adminPage, 'Category', 'technical')
   await expect(category).toHaveText('technical')
-  // The announcement, not the trigger, is what says the change was saved, and
-  // reloading before it lands cancels the request mid-flight.
+  // Reloading before the PATCH lands would cancel it mid-flight, so wait for
+  // the announcement, which is rendered from the API's answer.
   await expect(updateAnnouncement(adminPage)).toHaveText('Ticket updated: open, technical.')
 
   await adminPage.reload()
@@ -57,7 +58,7 @@ test('an unclassified ticket can be classified, and not put back', async ({
     await category.click()
 
     // The API takes no null back, so a ticket can be classified but never
-    // un-classified; the placeholder must not have become an option.
+    // un-classified: once it has a category, unclassified is not even listed.
     await expect(adminPage.getByRole('option')).toHaveText(['general', 'technical', 'refund'])
 
     await adminPage.keyboard.press('Escape')
