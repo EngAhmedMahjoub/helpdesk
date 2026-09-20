@@ -1,6 +1,6 @@
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
-import type { CurrentUser, HealthResponse, UserSummary } from '@helpdesk/shared'
+import type { CurrentUser, HealthResponse, TicketSummary, UserSummary } from '@helpdesk/shared'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { createQueryClient } from '../src/lib/query-client.ts'
@@ -29,6 +29,21 @@ export const userSummary = (
   isActive: true,
   isProtected: false,
   createdAt: '2026-02-01T09:00:00.000Z',
+  ...overrides,
+})
+
+/** A row of the ticket list: an open, unclassified ticket unless told otherwise. */
+export const ticketSummary = (
+  overrides: Partial<TicketSummary> & Pick<TicketSummary, 'id' | 'subject'>,
+): TicketSummary => ({
+  studentEmail: 'student@student.example',
+  studentName: 'Sam Student',
+  status: 'open',
+  category: null,
+  needsAgent: false,
+  escalationReason: null,
+  createdAt: '2026-09-01T09:00:00.000Z',
+  updatedAt: '2026-09-01T09:00:00.000Z',
   ...overrides,
 })
 
