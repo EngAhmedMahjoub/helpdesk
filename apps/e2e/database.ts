@@ -1,7 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../api/src/generated/prisma/client.ts'
-import type { Role } from '../api/src/generated/prisma/enums.ts'
+import type {
+  EscalationReason,
+  MessageAuthor,
+  MessageDirection,
+  Role,
+  TicketCategory,
+  TicketStatus,
+} from '../api/src/generated/prisma/enums.ts'
 import { DATABASE_URL } from './config.ts'
 
 /**
@@ -137,4 +144,136 @@ export async function deleteSessionByToken(token: string): Promise<void> {
  */
 export function countSessionsFor(userId: string): Promise<number> {
   return prisma.session.count({ where: { userId } })
+}
+
+/**
+ * A subject stem no other test can collide with. Every ticket a spec creates
+ * starts with its own stem, which is how a spec picks its own rows out of a
+ * list it shares with the rest of the run: the list has no search box, so the
+ * subject is the only thing a locator can filter on.
+ */
+export function uniqueSubject(label: string): string {
+  return `E2E ${label} ${randomUUID().slice(0, 8)}`
+}
+
+export type NewMessage = {
+  author: MessageAuthor
+  body: string
+  /** Required for an agent message and meaningless otherwise: who wrote it. */
+  agentId?: string
+  /** The thread reads by timestamp, so a seeded one needs its own order. */
+  createdAt?: Date
+}
+
+export type NewTicket = {
+  subject: string
+  studentEmail?: string
+  studentName?: string
+  status?: TicketStatus
+  category?: TicketCategory
+  summary?: string
+  needsAgent?: boolean
+  escalationReason?: EscalationReason
+  /** Set explicitly where a spec asserts on sort order; Prisma honours both. */
+  createdAt?: Date
+  updatedAt?: Date
+  messages?: NewMessage[]
+}
+
+export type TestTicket = {
+  id: number
+  subject: string
+  studentEmail: string
+  studentName: string | null
+  /** What the Student cell shows: the name when there is one, else the address. */
+  student: string
+}
+
+/** A student message arrives, everything else is sent back out. */
+function directionOf(author: MessageAuthor): MessageDirection {
+  return author === 'student' ? 'inbound' : 'outbound'
+}
+
+/**
+ * Creates a ticket, with its thread if the spec wants one.
+ *
+ * No endpoint makes tickets — Phase 4's webhook is what will — so a spec that
+ * needs one to look at builds it here. The address defaults to one of its own
+ * so two specs cannot end up sharing a student.
+ */
+export async function createTicket({
+  subject,
+  studentEmail = uniqueEmail('student'),
+  studentName,
+  status = 'open',
+  category,
+  summary,
+  needsAgent = false,
+  escalationReason,
+  createdAt,
+  updatedAt,
+  messages = [],
+}: NewTicket): Promise<TestTicket> {
+  const ticket = await prisma.ticket.create({
+    data: {
+      subject,
+      studentEmail,
+      studentName,
+      status,
+      category,
+      summary,
+      needsAgent,
+      escalationReason,
+      createdAt,
+      updatedAt,
+      messages: {
+        create: messages.map((message) => ({
+          direction: directionOf(message.author),
+          author: message.author,
+          agentId: message.agentId,
+          body: message.body,
+          createdAt: message.createdAt,
+          // Null until Phase 4 sends the mail, as the API leaves it.
+          emailMessageId: null,
+        })),
+      },
+    },
+  })
+
+  return {
+    id: ticket.id,
+    subject: ticket.subject,
+    studentEmail: ticket.studentEmail,
+    studentName: ticket.studentName,
+    student: ticket.studentName ?? ticket.studentEmail,
+  }
+}
+
+/** Messages go with the ticket through the cascade on `Message.ticketId`. */
+export async function deleteTickets(ids: number[]): Promise<void> {
+  if (ids.length === 0) return
+  await prisma.ticket.deleteMany({ where: { id: { in: ids } } })
+}
+
+/** The stored ticket, for checking what a change actually wrote. */
+export function findTicketById(id: number) {
+  return prisma.ticket.findUnique({ where: { id } })
+}
+
+/**
+ * Messages on one ticket. Scoped to a ticket the spec made, never a total: the
+ * whole run shares this table.
+ */
+export function countMessagesFor(ticketId: number): Promise<number> {
+  return prisma.message.count({ where: { ticketId } })
+}
+
+/**
+ * The id behind an address, for the agent a seeded reply is attributed to.
+ * `Message.agentId` is Restrict, so only a user nothing deletes — the seeded
+ * admin — can safely author one.
+ */
+export async function userIdFor(email: string): Promise<string> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } })
+  return user.id
 }
