@@ -1,6 +1,13 @@
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
-import type { CurrentUser, HealthResponse, TicketSummary, UserSummary } from '@helpdesk/shared'
+import type {
+  CurrentUser,
+  HealthResponse,
+  TicketDetail,
+  TicketMessage,
+  TicketSummary,
+  UserSummary,
+} from '@helpdesk/shared'
 import { createMemoryRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { createQueryClient } from '../src/lib/query-client.ts'
@@ -44,6 +51,28 @@ export const ticketSummary = (
   escalationReason: null,
   createdAt: '2026-09-01T09:00:00.000Z',
   updatedAt: '2026-09-01T09:00:00.000Z',
+  ...overrides,
+})
+
+/** A ticket as the detail page reads it: the summary fields, plus a thread. */
+export const ticketDetail = (
+  overrides: Partial<TicketDetail> & Pick<TicketDetail, 'id' | 'subject'>,
+): TicketDetail => ({
+  ...ticketSummary(overrides),
+  summary: null,
+  autoCloseAt: null,
+  messages: [],
+  ...overrides,
+})
+
+/** One message in a thread: a student's, unless told otherwise. */
+export const ticketMessage = (
+  overrides: Partial<TicketMessage> & Pick<TicketMessage, 'id' | 'body'>,
+): TicketMessage => ({
+  direction: 'inbound',
+  author: 'student',
+  agent: null,
+  createdAt: '2026-09-02T09:00:00.000Z',
   ...overrides,
 })
 

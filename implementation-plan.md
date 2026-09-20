@@ -72,20 +72,20 @@ None.
 
 ## Phase 3 — Tickets (Manual, No Email or AI Yet)
 
-| ID | Task | Done when |
-|---|---|---|
-| 3.1 | `Ticket` model: subject, studentEmail, studentName, status (open/resolved/closed), category (general/technical/refund, nullable), summary (nullable), needsAgent (boolean), escalationReason (refund_approval/ai_failed, nullable), autoCloseAt (nullable), timestamps | Migration applied |
-| 3.2 | `Message` model: ticketId, direction (inbound/outbound), author (student/ai/agent), agentId (nullable), body, emailMessageId, createdAt | Migration applied |
-| 3.3 | Dev seed script creating sample tickets and messages | Seeded data visible in database |
-| 3.4 | `GET /api/tickets` — filter by status and category, sort by created/updated, pagination | Tests for each filter and sort |
-| 3.5 | `GET /api/tickets/:id` — ticket with messages | Test passes |
-| 3.6 | `PATCH /api/tickets/:id` — agent changes status, category, and clears `needsAgent` | Test passes; invalid values rejected |
-| 3.6a | Status transition helper used everywhere: setting Resolved sets `autoCloseAt` = now + 14 days; any other status clears it | Unit tests for each transition |
-| 3.7 | `POST /api/tickets/:id/replies` — agent reply saved as outbound message (sending added in Phase 4) | Test passes |
-| 3.8 | Frontend: ticket list with filters and sorting | Filters and sort update the list |
-| 3.9 | Frontend: ticket detail with message thread | Thread shows student, AI, and agent messages distinctly |
-| 3.10 | Frontend: status and category controls on detail page | Changes persist after reload |
-| 3.11 | Frontend: agent reply box | Reply appears in the thread |
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 3.1 | `Ticket` model: subject, studentEmail, studentName, status (open/resolved/closed), category (general/technical/refund, nullable), summary (nullable), needsAgent (boolean), escalationReason (refund_approval/ai_failed, nullable), autoCloseAt (nullable), timestamps | Migration applied | Done |
+| 3.2 | `Message` model: ticketId, direction (inbound/outbound), author (student/ai/agent), agentId (nullable), body, emailMessageId, createdAt | Migration applied | Done |
+| 3.3 | Dev seed script creating sample tickets and messages | Seeded data visible in database | Done |
+| 3.4 | `GET /api/tickets` — filter by status and category, sort by created/updated, pagination | Tests for each filter and sort | Done |
+| 3.5 | `GET /api/tickets/:id` — ticket with messages | Test passes | Done |
+| 3.6 | `PATCH /api/tickets/:id` — agent changes status, category, and clears `needsAgent` | Test passes; invalid values rejected | Done |
+| 3.6a | Status transition helper used everywhere: setting Resolved sets `autoCloseAt` = now + 14 days; any other status clears it | Unit tests for each transition | Done |
+| 3.7 | `POST /api/tickets/:id/replies` — agent reply saved as outbound message (sending added in Phase 4) | Test passes | Done |
+| 3.8 | Frontend: ticket list with filters and sorting | Filters and sort update the list | Done |
+| 3.9 | Frontend: ticket detail with message thread | Thread shows student, AI, and agent messages distinctly | Done |
+| 3.10 | Frontend: status and category controls on detail page | Changes persist after reload |  |
+| 3.11 | Frontend: agent reply box | Reply appears in the thread |  |
 
 ## Phase 4 — Email
 

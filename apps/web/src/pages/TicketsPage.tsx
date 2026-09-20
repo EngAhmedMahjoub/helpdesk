@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import {
   type ListTicketsQuery,
   type TicketListResponse,
@@ -169,8 +169,10 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
     <TableRow>
       {/* Fixed columns cut long text off instead of widening to fit it; title
           keeps the whole value a hover away. */}
-      <TableCell className="truncate font-medium text-foreground" title={ticket.subject}>
-        {ticket.subject}
+      <TableCell className="truncate font-medium" title={ticket.subject}>
+        <Link className="text-foreground hover:underline" to={`/tickets/${String(ticket.id)}`}>
+          {ticket.subject}
+        </Link>
       </TableCell>
       <TableCell
         className="truncate text-muted-foreground"

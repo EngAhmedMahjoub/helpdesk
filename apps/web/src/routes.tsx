@@ -5,6 +5,7 @@ import RequireAuth from '@/components/require-auth'
 import HomePage from '@/pages/HomePage'
 import LoginPage from '@/pages/LoginPage'
 import NotFoundPage from '@/pages/NotFoundPage'
+import TicketDetailPage from '@/pages/TicketDetailPage'
 import TicketsPage from '@/pages/TicketsPage'
 import UsersPage from '@/pages/UsersPage'
 
@@ -22,6 +23,7 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, Component: HomePage },
           { path: 'tickets', Component: TicketsPage },
+          { path: 'tickets/:id', Component: TicketDetailPage },
           {
             Component: RequireAdmin,
             children: [{ path: 'users', Component: UsersPage }],
