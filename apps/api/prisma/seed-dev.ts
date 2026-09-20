@@ -16,6 +16,20 @@ if (env.NODE_ENV !== 'development') {
   process.exit(1)
 }
 
+// NODE_ENV alone is not enough: it says how this process was started, not which
+// database it is pointed at. A .env aimed at the hosted database to debug
+// something, with NODE_ENV still development, would delete and rewrite sample
+// tickets there. The host has to be this machine as well.
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1', 'host.docker.internal']
+const host = URL.parse(env.DATABASE_URL)?.hostname.replace(/^\[|\]$/g, '')
+
+if (!host || !LOCAL_HOSTS.includes(host)) {
+  console.error(
+    `Refusing to seed sample tickets into a non-local database (host: ${host ?? 'unreadable'}).`,
+  )
+  process.exit(1)
+}
+
 // Every sample student is on this domain, which is how a re-run finds the
 // tickets it made before. .example is reserved (RFC 2606), so no real student
 // can share it and no mail sent to one can be delivered.
