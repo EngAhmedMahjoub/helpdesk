@@ -7,13 +7,17 @@ import {
 } from '@playwright/test'
 import { ADMIN, API_URL } from './config.ts'
 import {
+  createTicket,
   createUser,
   deleteSessionByToken,
+  deleteTickets,
   deleteUsers,
   deleteUsersByEmail,
   prisma,
   uniqueEmail,
+  type NewTicket,
   type NewUser,
+  type TestTicket,
   type TestUser,
 } from './database.ts'
 
@@ -29,7 +33,7 @@ type WorkerFixtures = {
   databaseConnection: void
 }
 
-type AuthFixtures = {
+type TestFixtures = {
   /** Gives the page's browser context a session, without driving the form. */
   signIn: (credentials: Credentials) => Promise<void>
   /** A page already holding a session for the seeded admin. Navigate it yourself. */
@@ -41,11 +45,19 @@ type AuthFixtures = {
    * createTestUser cannot clean those up: it never made them.
    */
   claimEmail: (label: string) => string
+  /**
+   * Makes a ticket this test owns, with its thread, and deletes it afterwards.
+   *
+   * Attribute a seeded agent message to the seeded admin, not to a user from
+   * `createTestUser`: `Message.agentId` is Restrict, and the user fixture tears
+   * down after this one, so its delete would hit a reply still pointing at it.
+   */
+  createTestTicket: (ticket: NewTicket) => Promise<TestTicket>
   /** Deletes whatever session the test's browser is still holding. */
   sessionCleanup: void
 }
 
-export const test = base.extend<AuthFixtures, WorkerFixtures>({
+export const test = base.extend<TestFixtures, WorkerFixtures>({
   databaseConnection: [
     // Playwright reads a fixture's dependencies out of this destructuring
     // pattern and rejects any other shape of argument, so a fixture that
@@ -106,6 +118,21 @@ export const test = base.extend<AuthFixtures, WorkerFixtures>({
     // By address because the id was never ours to know. Runs even when the test
     // failed halfway, which is when a stray row is most likely.
     await deleteUsersByEmail(claimed)
+  },
+
+  // eslint-disable-next-line no-empty-pattern
+  createTestTicket: async ({}, use) => {
+    const created: number[] = []
+
+    await use(async (ticket) => {
+      const made = await createTicket(ticket)
+      created.push(made.id)
+      return made
+    })
+
+    // Messages go with them. The database is prepared once per run, so a ticket
+    // left behind is one every later test in the run has to page past.
+    await deleteTickets(created)
   },
 
   sessionCleanup: [

@@ -31,6 +31,12 @@ directly — the fixtures there carry the sign-in helpers and the cleanup.
 | `signIn(credentials)` | A session in the page's browser context, over the API |
 | `adminPage` | A page already signed in as the seeded admin |
 | `createTestUser(options)` | A user with an address unique to the test, deleted afterwards |
+| `createTestTicket(ticket)` | A ticket with its thread, subject unique to the test, deleted afterwards |
+
+`../tickets-page.ts` holds the locators the ticket screens need: the Radix
+selects are comboboxes rather than `<select>`, so `selectOption` does not reach
+them, and the list has no search box, so a spec picks its own rows out of a
+shared table by the subject stem `uniqueSubject` gave them.
 
 `../database.ts` reaches `helpdesk_e2e` directly, for the setup and assertions
 no endpoint offers: making users before Phase 2 ships the endpoint, and checking
@@ -45,3 +51,9 @@ The database is prepared once per run, not per test, so:
   browser is holding when it finishes.
 - Never let one spec depend on another having run. The suite must pass run twice
   in a row without re-preparing the database in between.
+- Attribute a seeded agent message to the seeded admin. `Message.agentId` is
+  Restrict, and `createTestUser` tears down after `createTestTicket`, so a reply
+  left pointing at a test's own agent blocks that agent's delete.
+- `ticket-list.spec.ts` asserts on an exact total, which it can only do because
+  it filters to Closed *and* Refund — a pair no other spec uses. Leave that pair
+  alone, or that spec starts counting your tickets too.
