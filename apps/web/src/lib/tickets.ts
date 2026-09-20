@@ -1,4 +1,9 @@
-import type { ListTicketsQuery, TicketDetail, TicketListResponse } from '@helpdesk/shared'
+import type {
+  ListTicketsQuery,
+  TicketDetail,
+  TicketListResponse,
+  UpdateTicketRequest,
+} from '@helpdesk/shared'
 import { apiRequest } from '@/lib/api'
 
 /**
@@ -19,4 +24,8 @@ export const ticketQueryKey = (id: number) => ['ticket', id] as const
 
 export function fetchTicket(id: number): Promise<TicketDetail> {
   return apiRequest<TicketDetail>(`/tickets/${String(id)}`)
+}
+
+export function updateTicket(id: number, request: UpdateTicketRequest): Promise<TicketDetail> {
+  return apiRequest<TicketDetail>(`/tickets/${String(id)}`, { method: 'PATCH', data: request })
 }
