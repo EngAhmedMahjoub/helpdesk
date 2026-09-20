@@ -59,10 +59,10 @@ export function hasQuery(expected: Record<string, string>): (url: URL) => boolea
 /**
  * The ticket detail's live region, once a change has been saved.
  *
- * The one signal on that page that the API answered. The Category select is
- * given no value at all while a ticket is unclassified, which leaves Radix
- * holding its own state: the trigger shows the word an agent picked whether or
- * not the PATCH ever landed, so waiting on the trigger waits for nothing.
+ * Both selects now render what the API stored (#167), so their triggers are a
+ * signal too. This stays the one that cannot be misread: a reload fired before
+ * the PATCH lands cancels it mid-flight, and the announcement is what says it
+ * landed.
  */
 export function updateAnnouncement(page: Page): Locator {
   return page.getByRole('status').filter({ hasText: 'Ticket updated' })

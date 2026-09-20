@@ -18,6 +18,15 @@ import {
 } from '@/components/ui/select'
 import { useUpdateTicket } from '@/hooks/use-tickets'
 
+/**
+ * Stands in for a null category, so the select always has a value. Given
+ * `undefined` Radix reads the select as uncontrolled and the trigger keeps
+ * whatever was last clicked — showing a classification the API may have
+ * refused. It is offered as a disabled option: a ticket can be classified,
+ * but the API takes nothing back to unclassified.
+ */
+const UNCLASSIFIED = 'unclassified'
+
 const escalationReasons = {
   refund_approval: 'refund approval',
   ai_failed: 'AI could not answer',
@@ -53,11 +62,9 @@ export default function TicketControls({ ticket }: { ticket: TicketDetail }) {
             update.mutate({ category: value as TicketCategory })
           }}
           options={TICKET_CATEGORIES}
-          // Null until the AI or an agent classifies it. The API takes no null
-          // back, so "unclassified" is a placeholder rather than an option:
-          // a ticket can be classified, not un-classified.
-          placeholder="unclassified"
-          value={ticket.category ?? undefined}
+          // Only while it has no category: once classified there is no way back.
+          unsetOption={ticket.category === null ? UNCLASSIFIED : undefined}
+          value={ticket.category ?? UNCLASSIFIED}
         />
 
         {ticket.needsAgent && (
@@ -104,15 +111,16 @@ function Field({
   label,
   options,
   value,
-  placeholder,
+  unsetOption,
   disabled,
   onChange,
 }: {
   id: string
   label: string
   options: readonly string[]
-  value: string | undefined
-  placeholder?: string
+  value: string
+  /** A value the select may show but nobody may choose. */
+  unsetOption?: string
   disabled: boolean
   onChange: (value: string) => void
 }) {
@@ -121,9 +129,16 @@ function Field({
       <Label htmlFor={id}>{label}</Label>
       <Select disabled={disabled} onValueChange={onChange} value={value}>
         <SelectTrigger className="w-40 capitalize" id={id}>
-          <SelectValue placeholder={placeholder} />
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
+          {unsetOption && (
+            // Rendered so the trigger has something to show, disabled so the
+            // value it stands for cannot be chosen.
+            <SelectItem className="capitalize" disabled value={unsetOption}>
+              {unsetOption}
+            </SelectItem>
+          )}
           {options.map((option) => (
             <SelectItem className="capitalize" key={option} value={option}>
               {option}
