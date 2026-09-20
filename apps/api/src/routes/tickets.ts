@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  MESSAGE_PAGE_SIZE,
   type TicketDetail,
   type TicketListResponse,
   type TicketMessage,
@@ -12,6 +13,7 @@ import {
 import { isPrismaError, prisma } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
+import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
 import { parseBody, parseQuery } from '../http.ts'
 import { statusChange } from '../tickets/status.ts'
 
@@ -63,8 +65,14 @@ const detailFields = {
   autoCloseAt: true,
   messages: {
     select: messageFields,
-    // Oldest first, as a thread reads; id breaks ties as on the list.
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    // Capped: a thread is read back whole, and nothing bounds how many messages
+    // one can hold — a student mailing in all day, or an agent replying in a
+    // loop. The newest are the ones being worked on, so an over-long thread
+    // loses its oldest here; MESSAGE_PAGE_SIZE says as much to the reader.
+    take: MESSAGE_PAGE_SIZE,
+    // Newest first so the cap keeps the newest; the handler turns them back
+    // the way a thread reads. id breaks ties as on the list.
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
   },
 } satisfies Prisma.TicketSelect
 
@@ -74,7 +82,8 @@ function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields 
     ...toSummary(rest),
     summary,
     autoCloseAt: autoCloseAt?.toISOString() ?? null,
-    messages: messages.map(toMessage),
+    // Selected newest first for the cap; a thread reads the other way.
+    messages: messages.map(toMessage).reverse(),
   }
 }
 
@@ -170,7 +179,7 @@ ticketsRouter.patch('/:id', async (req, res) => {
   }
 })
 
-ticketsRouter.post('/:id/replies', async (req, res) => {
+ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
   const body = parseBody(createReplySchema, req, res)
   if (!body) return
 
@@ -180,8 +189,14 @@ ticketsRouter.post('/:id/replies', async (req, res) => {
     return
   }
 
-  // requireAuth put the user there; the reply is theirs, whatever the body says.
-  const agentId = req.user?.id ?? ''
+  // requireAuth put the user there; the reply is theirs, whatever the body
+  // says. Answered rather than defaulted: an empty id would reach the foreign
+  // key and surface as a 500 where 401 is the honest answer.
+  const agentId = req.user?.id
+  if (!agentId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
 
   try {
     const message = await prisma.$transaction(async (tx) => {
