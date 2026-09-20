@@ -1,4 +1,4 @@
-import type { ListTicketsQuery, TicketListResponse } from '@helpdesk/shared'
+import type { ListTicketsQuery, TicketDetail, TicketListResponse } from '@helpdesk/shared'
 import { apiRequest } from '@/lib/api'
 
 /**
@@ -12,4 +12,11 @@ export function fetchTickets(query: ListTicketsQuery): Promise<TicketListRespons
   // params, not a hand-built query string: axios encodes the values, and
   // undefined ones are left out rather than sent empty.
   return apiRequest<TicketListResponse>('/tickets', { params: query })
+}
+
+/** The key one ticket's detail is cached under, keyed by its id. */
+export const ticketQueryKey = (id: number) => ['ticket', id] as const
+
+export function fetchTicket(id: number): Promise<TicketDetail> {
+  return apiRequest<TicketDetail>(`/tickets/${String(id)}`)
 }

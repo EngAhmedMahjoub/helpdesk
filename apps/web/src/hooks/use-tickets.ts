@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import type { ListTicketsQuery } from '@helpdesk/shared'
-import { fetchTickets, ticketsQueryKey } from '@/lib/tickets'
+import { fetchTicket, fetchTickets, ticketQueryKey, ticketsQueryKey } from '@/lib/tickets'
 
 /**
  * A page of tickets. The previous page stays on screen while the next one
@@ -12,5 +12,13 @@ export function useTickets(query: ListTicketsQuery) {
     queryKey: ticketsQueryKey(query),
     queryFn: () => fetchTickets(query),
     placeholderData: keepPreviousData,
+  })
+}
+
+/** One ticket with its thread. `id` is already parsed from the URL. */
+export function useTicket(id: number) {
+  return useQuery({
+    queryKey: ticketQueryKey(id),
+    queryFn: () => fetchTicket(id),
   })
 }
