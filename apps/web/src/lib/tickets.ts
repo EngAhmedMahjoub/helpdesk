@@ -1,7 +1,9 @@
 import type {
+  CreateReplyRequest,
   ListTicketsQuery,
   TicketDetail,
   TicketListResponse,
+  TicketMessage,
   UpdateTicketRequest,
 } from '@helpdesk/shared'
 import { apiRequest } from '@/lib/api'
@@ -28,4 +30,12 @@ export function fetchTicket(id: number): Promise<TicketDetail> {
 
 export function updateTicket(id: number, request: UpdateTicketRequest): Promise<TicketDetail> {
   return apiRequest<TicketDetail>(`/tickets/${String(id)}`, { method: 'PATCH', data: request })
+}
+
+/** Saves an agent's reply. The API answers with the message it stored. */
+export function createReply(id: number, request: CreateReplyRequest): Promise<TicketMessage> {
+  return apiRequest<TicketMessage>(`/tickets/${String(id)}/replies`, {
+    method: 'POST',
+    data: request,
+  })
 }

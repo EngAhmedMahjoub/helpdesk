@@ -1,6 +1,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ListTicketsQuery, UpdateTicketRequest } from '@helpdesk/shared'
+import type {
+  CreateReplyRequest,
+  ListTicketsQuery,
+  TicketDetail,
+  UpdateTicketRequest,
+} from '@helpdesk/shared'
 import {
+  createReply,
   fetchTicket,
   fetchTickets,
   ticketQueryKey,
@@ -42,6 +48,26 @@ export function useUpdateTicket(id: number) {
     mutationFn: (changes: UpdateTicketRequest) => updateTicket(id, changes),
     onSuccess: (ticket) => {
       queryClient.setQueryData(ticketQueryKey(id), ticket)
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] })
+    },
+  })
+}
+
+/**
+ * Sends an agent's reply. The answer is the stored message, so it joins the
+ * end of the cached thread at once; the ticket itself is refetched because the
+ * reply moved its last-activity stamp, and the lists with it.
+ */
+export function useCreateReply(id: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request: CreateReplyRequest) => createReply(id, request),
+    onSuccess: (message) => {
+      queryClient.setQueryData(ticketQueryKey(id), (ticket: TicketDetail | undefined) =>
+        ticket ? { ...ticket, messages: [...ticket.messages, message] } : ticket,
+      )
+      void queryClient.invalidateQueries({ queryKey: ticketQueryKey(id) })
       void queryClient.invalidateQueries({ queryKey: ['tickets'] })
     },
   })
