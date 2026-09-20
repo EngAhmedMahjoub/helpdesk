@@ -2,7 +2,7 @@ import { ArrowLeft } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { type TicketDetail, ticketIdSchema } from '@helpdesk/shared'
 import MessageThread from '@/components/message-thread'
-import { Badge } from '@/components/ui/badge'
+import TicketControls from '@/components/ticket-controls'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTicket } from '@/hooks/use-tickets'
@@ -76,17 +76,7 @@ function Header({ ticket }: { ticket: TicketDetail }) {
         </a>
       </p>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {/* The words carry the meaning; the colours only second them. */}
-        <Badge variant={ticket.status === 'open' ? 'default' : 'outline'}>{ticket.status}</Badge>
-        <Badge variant="secondary">{ticket.category ?? 'unclassified'}</Badge>
-        {ticket.needsAgent && (
-          <Badge variant="destructive">
-            Needs agent{ticket.escalationReason === 'refund_approval' ? ': refund approval' : ''}
-            {ticket.escalationReason === 'ai_failed' ? ': AI could not answer' : ''}
-          </Badge>
-        )}
-      </div>
+      <TicketControls ticket={ticket} />
 
       {ticket.summary && (
         <p className="mt-4 rounded-lg border bg-muted/40 p-4 text-foreground">
