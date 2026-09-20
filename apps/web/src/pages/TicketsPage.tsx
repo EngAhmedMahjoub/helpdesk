@@ -9,6 +9,14 @@ import TableSkeleton, { type Column } from '@/components/table-skeleton'
 import TicketFilters, { type SortChoice } from '@/components/ticket-filters'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -115,6 +123,11 @@ export default function TicketsPage() {
           onPage={(page) => {
             update({ page }, { keepPage: true })
           }}
+          onPageSize={(pageSize) => {
+            // Back to page 1: page 4 of twenty-row pages is past the end of
+            // fifty-row ones, and an empty page reads as no tickets at all.
+            update({ pageSize })
+          }}
         />
       )}
     </main>
@@ -189,12 +202,17 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
   )
 }
 
+// The sizes an agent picks between. Each is within the API's cap of 100.
+const PAGE_SIZES = [5, 10, 20, 50] as const
+
 function Pagination({
   data,
   onPage,
+  onPageSize,
 }: {
   data: TicketListResponse
   onPage: (page: number) => void
+  onPageSize: (pageSize: number) => void
 }) {
   const pages = Math.max(1, Math.ceil(data.total / data.pageSize))
   const first = (data.page - 1) * data.pageSize + 1
@@ -210,30 +228,59 @@ function Pagination({
           : `Showing ${String(first)}–${String(last)} of ${String(data.total)}`}
       </p>
 
-      <div className="flex items-center gap-2">
-        <Button
-          disabled={data.page <= 1}
-          onClick={() => {
-            onPage(data.page - 1)
-          }}
-          size="sm"
-          variant="outline"
-        >
-          Previous
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          Page {data.page} of {pages}
-        </span>
-        <Button
-          disabled={data.page >= pages}
-          onClick={() => {
-            onPage(data.page + 1)
-          }}
-          size="sm"
-          variant="outline"
-        >
-          Next
-        </Button>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Label className="text-sm font-normal text-muted-foreground" htmlFor="rows-per-page">
+            Rows per page
+          </Label>
+          <Select
+            onValueChange={(value) => {
+              onPageSize(Number(value))
+            }}
+            value={String(data.pageSize)}
+          >
+            <SelectTrigger className="w-20" id="rows-per-page" size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {/* The API's own page size, when it is not one of the choices —
+                  a hand-typed ?pageSize=7 would otherwise show an empty box. */}
+              {[...new Set([...PAGE_SIZES, data.pageSize])]
+                .sort((a, b) => a - b)
+                .map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={data.page <= 1}
+            onClick={() => {
+              onPage(data.page - 1)
+            }}
+            size="sm"
+            variant="outline"
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {data.page} of {pages}
+          </span>
+          <Button
+            disabled={data.page >= pages}
+            onClick={() => {
+              onPage(data.page + 1)
+            }}
+            size="sm"
+            variant="outline"
+          >
+            Next
+          </Button>
+        </div>
       </div>
     </nav>
   )

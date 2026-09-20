@@ -159,6 +159,44 @@ test('pages forward and back, and a filter returns to page one', async () => {
   expect(queries.at(-1)?.get('page')).toBe('1')
 })
 
+test('changing rows per page re-asks from the first page', async () => {
+  const user = userEvent.setup()
+  const { queries } = stubTickets((query) =>
+    listOf(tickets, {
+      page: Number(query.get('page') ?? 1),
+      pageSize: Number(query.get('pageSize') ?? 20),
+      total: 60,
+    }),
+  )
+
+  renderRoute('/tickets?pageSize=10&page=3')
+  expect(await screen.findByText('Showing 21–22 of 60')).toBeTruthy()
+
+  await user.click(screen.getByLabelText('Rows per page'))
+  await user.click(await screen.findByRole('option', { name: '50' }))
+
+  await waitFor(() => {
+    expect(queries.at(-1)?.get('pageSize')).toBe('50')
+  })
+  // Page 3 of ten-row pages is past the end of fifty-row ones.
+  expect(queries.at(-1)?.get('page')).toBe('1')
+})
+
+test('offers a page size the URL asked for, even one not on the menu', async () => {
+  const user = userEvent.setup()
+  stubTickets((query) =>
+    listOf(tickets, { pageSize: Number(query.get('pageSize') ?? 20), total: 7 }),
+  )
+
+  renderRoute('/tickets?pageSize=7')
+  await screen.findByRole('table')
+
+  await user.click(screen.getByLabelText('Rows per page'))
+
+  expect(await screen.findByRole('option', { name: '7' })).toBeTruthy()
+  expect(screen.getByRole('option', { name: '10' })).toBeTruthy()
+})
+
 test('says so when no ticket matches', async () => {
   stubTickets(() => listOf([]))
 
