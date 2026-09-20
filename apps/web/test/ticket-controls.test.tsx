@@ -84,6 +84,63 @@ test('an agent classifies an unclassified ticket', async () => {
   })
 })
 
+test('a refused classification leaves the select reading unclassified', async () => {
+  const user = userEvent.setup()
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/tickets/26': (request) =>
+      request.method === 'PATCH'
+        ? responds.error(400, 'Invalid request body')
+        : Response.json(open),
+  })
+
+  renderRoute('/tickets/26')
+  await waitFor(() => {
+    expect(trigger('Category').textContent).toContain('unclassified')
+  })
+
+  await user.click(trigger('Category'))
+  await user.click(await screen.findByRole('option', { name: 'technical' }))
+
+  expect((await screen.findByRole('alert')).textContent).toBe('Invalid request body')
+  // The API refused, so the ticket is still unclassified and the select has to
+  // say so rather than keep the word that was clicked.
+  expect(trigger('Category').textContent).toContain('unclassified')
+})
+
+test('unclassified is offered but cannot be chosen: there is no way back', async () => {
+  const user = userEvent.setup()
+  const { patches } = stubTicket()
+
+  renderRoute('/tickets/26')
+  await waitFor(() => {
+    expect(trigger('Category')).toBeTruthy()
+  })
+
+  await user.click(trigger('Category'))
+  const unclassified = await screen.findByRole('option', { name: 'unclassified' })
+  expect(unclassified.getAttribute('aria-disabled')).toBe('true')
+
+  await user.click(unclassified)
+
+  expect(patches).toEqual([])
+})
+
+test('a classified ticket is not offered unclassified at all', async () => {
+  const user = userEvent.setup()
+  stubTicket(ticketDetail({ id: 26, subject: 'Classified', category: 'refund' }))
+
+  renderRoute('/tickets/26')
+  await waitFor(() => {
+    expect(trigger('Category').textContent).toContain('refund')
+  })
+
+  await user.click(trigger('Category'))
+  await screen.findByRole('option', { name: 'technical' })
+
+  expect(screen.queryByRole('option', { name: 'unclassified' })).toBeNull()
+})
+
 test('a change survives a reload, because the API kept it', async () => {
   const user = userEvent.setup()
   const { current } = stubTicket()
