@@ -75,12 +75,35 @@ test('shows the ticket above its thread', async () => {
   expect(await screen.findByRole('heading', { name: 'Can I move my start date?' })).toBeTruthy()
   expect(screen.getByRole('link', { name: 'jonas@student.example' })).toHaveProperty(
     'href',
-    'mailto:jonas@student.example',
+    'mailto:jonas%40student.example',
   )
   expect(screen.getByText('closed')).toBeTruthy()
   expect(screen.getByText('general')).toBeTruthy()
   expect(screen.getByText('Moved from the March to the April cohort.')).toBeTruthy()
   expect(screen.getByText('Opened:')).toBeTruthy()
+})
+
+test('encodes the address in the mailto link', async () => {
+  // An address carrying mail headers would otherwise open an agent's client
+  // pre-addressed and pre-written. Nothing writes one today; Phase 4's webhook
+  // will.
+  stubTicket(
+    ticketDetail({
+      id: 11,
+      subject: 'Header injection',
+      studentName: null,
+      studentEmail: 'victim@uni.test?to=attacker@evil.test&subject=Reset',
+    }),
+  )
+
+  renderRoute('/tickets/11')
+
+  const link = await screen.findByRole('link', {
+    name: 'victim@uni.test?to=attacker@evil.test&subject=Reset',
+  })
+  expect(link.getAttribute('href')).toBe(
+    'mailto:victim%40uni.test%3Fto%3Dattacker%40evil.test%26subject%3DReset',
+  )
 })
 
 test('names the escalation and the auto-close date when there are any', async () => {

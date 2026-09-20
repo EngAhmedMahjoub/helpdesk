@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
-import type { TicketDetail, TicketListResponse, TicketMessage } from '@helpdesk/shared'
+import {
+  MESSAGE_PAGE_SIZE,
+  type TicketDetail,
+  type TicketListResponse,
+  type TicketMessage,
+} from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
 import { prisma, resetDatabase } from './db.ts'
 import { createTicket, createUser, sessionCookieFor } from './fixtures.ts'
@@ -372,6 +377,57 @@ describe('GET /api/tickets/:id', () => {
       expect(res.body).toEqual({ error: 'Ticket not found' })
     })
   }
+})
+
+describe('GET /api/tickets/:id with a long thread', () => {
+  test(`carries at most ${String(MESSAGE_PAGE_SIZE)} messages, keeping the newest, still oldest first`, async () => {
+    const ticket = await createTicket()
+    // One over the cap, so the oldest is the one left out.
+    await prisma.message.createMany({
+      data: Array.from({ length: MESSAGE_PAGE_SIZE + 1 }, (_, index) => ({
+        ticketId: ticket.id,
+        direction: 'inbound' as const,
+        author: 'student' as const,
+        body: `Message ${String(index)}`,
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+      })),
+    })
+
+    const res = await request(app)
+      .get(`/api/tickets/${String(ticket.id)}`)
+      .set('Cookie', agentCookie)
+
+    const { messages } = res.body as TicketDetail
+    expect(messages).toHaveLength(MESSAGE_PAGE_SIZE)
+    expect(messages[0]?.body).toBe('Message 1')
+    expect(messages.at(-1)?.body).toBe(`Message ${String(MESSAGE_PAGE_SIZE)}`)
+    // Oldest first, as a thread reads, whichever way they were selected.
+    const times = messages.map((message) => Date.parse(message.createdAt))
+    expect(times).toEqual([...times].sort((a, b) => a - b))
+  })
+
+  test('leaves a thread under the cap whole', async () => {
+    const ticket = await createTicket()
+    await prisma.message.createMany({
+      data: Array.from({ length: 3 }, (_, index) => ({
+        ticketId: ticket.id,
+        direction: 'inbound' as const,
+        author: 'student' as const,
+        body: `Message ${String(index)}`,
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+      })),
+    })
+
+    const res = await request(app)
+      .get(`/api/tickets/${String(ticket.id)}`)
+      .set('Cookie', agentCookie)
+
+    expect((res.body as TicketDetail).messages.map((m) => m.body)).toEqual([
+      'Message 0',
+      'Message 1',
+      'Message 2',
+    ])
+  })
 })
 
 describe('PATCH /api/tickets/:id', () => {

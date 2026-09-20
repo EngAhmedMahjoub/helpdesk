@@ -82,6 +82,12 @@ export type TicketMessage = {
   createdAt: string
 }
 
+/**
+ * How many messages a ticket's detail carries. A thread is read back whole, so
+ * it cannot grow without bound; past this the oldest are left out.
+ */
+export const MESSAGE_PAGE_SIZE = 200
+
 /** The body of `GET /api/tickets/:id`: the ticket and its thread, oldest message first. */
 export type TicketDetail = TicketSummary & {
   summary: string | null

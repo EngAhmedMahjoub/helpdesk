@@ -82,7 +82,10 @@ function Header({ ticket }: { ticket: TicketDetail }) {
 
       <p className="mt-2 text-muted-foreground">
         {ticket.studentName ? `${ticket.studentName} · ` : ''}
-        <a className="hover:text-foreground" href={`mailto:${ticket.studentEmail}`}>
+        <a
+          className="hover:text-foreground"
+          href={`mailto:${encodeURIComponent(ticket.studentEmail)}`}
+        >
           {ticket.studentEmail}
         </a>
       </p>
