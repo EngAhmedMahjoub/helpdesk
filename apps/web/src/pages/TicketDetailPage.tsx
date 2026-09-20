@@ -1,7 +1,9 @@
+import { ArrowLeft } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { type TicketDetail, ticketIdSchema } from '@helpdesk/shared'
 import MessageThread from '@/components/message-thread'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTicket } from '@/hooks/use-tickets'
 import { isApiError } from '@/lib/api'
@@ -16,9 +18,14 @@ export default function TicketDetailPage() {
 
   return (
     <main className="mx-auto max-w-4xl p-8">
-      <Link className="text-sm text-muted-foreground hover:text-foreground" to="/tickets">
-        ← All tickets
-      </Link>
+      {/* A button to look at, a link underneath: it goes somewhere, so it
+          keeps an href — openable in a new tab, and read out as a link. */}
+      <Button asChild size="sm" variant="outline">
+        <Link to="/tickets">
+          <ArrowLeft aria-hidden />
+          All tickets
+        </Link>
+      </Button>
 
       {parsed.success ? <Ticket id={parsed.data} /> : <NotFound />}
     </main>
