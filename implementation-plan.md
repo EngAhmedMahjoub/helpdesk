@@ -85,7 +85,7 @@ None.
 | 3.8 | Frontend: ticket list with filters and sorting | Filters and sort update the list | Done |
 | 3.9 | Frontend: ticket detail with message thread | Thread shows student, AI, and agent messages distinctly | Done |
 | 3.10 | Frontend: status and category controls on detail page | Changes persist after reload |Done |
-| 3.11 | Frontend: agent reply box | Reply appears in the thread |  |
+| 3.11 | Frontend: agent reply box | Reply appears in the thread |Done |
 
 ## Phase 4 — Email
 
