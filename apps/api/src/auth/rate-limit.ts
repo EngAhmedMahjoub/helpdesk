@@ -51,6 +51,29 @@ export function createLoginRateLimit(options: { skip?: boolean } = {}): RateLimi
 export const loginRateLimit = createLoginRateLimit({ skip: env.NODE_ENV !== 'production' })
 
 /**
+ * A limiter keyed by whoever is acting, for the writes behind requireAuth.
+ *
+ * The IP fallback never fires there; it is what keeps a route wired without
+ * the guard on a limit of its own rather than one bucket for everybody.
+ *
+ * Returns a factory, so each limit keeps its own name — and with it the comment
+ * saying why that number and that message — and so the tests can build one that
+ * enforces regardless of NODE_ENV.
+ */
+function perUserRateLimit(limit: number, message: string) {
+  return (options: { skip?: boolean } = {}): RateLimitRequestHandler =>
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit,
+      skip: () => options.skip ?? false,
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+      keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? 'unknown'),
+      message: { error: message },
+    })
+}
+
+/**
  * Caps user-management writes — creating agents and switching them on or off —
  * per admin.
  *
@@ -60,27 +83,15 @@ export const loginRateLimit = createLoginRateLimit({ skip: env.NODE_ENV !== 'pro
  *
  * Keyed by the admin's id rather than IP: requireAuth has already run, so the
  * caller is known, and a busy office sharing one address should not share one
- * budget. The IP fallback never fires behind requireAuth; it is there so a
- * route wired without it still gets a limit instead of a shared bucket.
+ * budget.
  *
  * Production only, like the login limit. The end-to-end suite creates and
  * deactivates users all day, and a live limit there would fail specs by order.
  */
-export function createUserWriteRateLimit(
-  options: { skip?: boolean } = {},
-): RateLimitRequestHandler {
-  const { skip = false } = options
-
-  return rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 60,
-    skip: () => skip,
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-    keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? 'unknown'),
-    message: { error: 'Too many changes to users, please try again later' },
-  })
-}
+export const createUserWriteRateLimit = perUserRateLimit(
+  60,
+  'Too many changes to users, please try again later',
+)
 
 export const userWriteRateLimit = createUserWriteRateLimit({
   skip: env.NODE_ENV !== 'production',
@@ -99,21 +110,10 @@ export const userWriteRateLimit = createUserWriteRateLimit({
  * Keyed and gated like the user-management limit: the acting user's id behind
  * requireAuth, and production only, so the end-to-end suite can reply freely.
  */
-export function createTicketWriteRateLimit(
-  options: { skip?: boolean } = {},
-): RateLimitRequestHandler {
-  const { skip = false } = options
-
-  return rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 120,
-    skip: () => skip,
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-    keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? 'unknown'),
-    message: { error: 'Too many replies, please try again later' },
-  })
-}
+export const createTicketWriteRateLimit = perUserRateLimit(
+  120,
+  'Too many replies, please try again later',
+)
 
 export const ticketWriteRateLimit = createTicketWriteRateLimit({
   skip: env.NODE_ENV !== 'production',
