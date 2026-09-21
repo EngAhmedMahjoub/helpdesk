@@ -4,14 +4,8 @@ import {
   TICKET_CATEGORIES,
   TICKET_STATUSES,
 } from '@helpdesk/shared'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import SelectField from '@/components/select-field'
+import { SelectItem } from '@/components/ui/select'
 
 /** The sort and its direction as one choice, because they are one control. */
 export type SortChoice = `${'createdAt' | 'updatedAt'}:${'asc' | 'desc'}`
@@ -66,26 +60,21 @@ export default function TicketFilters({
         value={category ?? ALL}
       />
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="filter-sort">Sort by</Label>
-        <Select
-          onValueChange={(value) => {
-            onSort(value as SortChoice)
-          }}
-          value={sort}
-        >
-          <SelectTrigger className="w-48" id="filter-sort">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(sortLabels).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <SelectField
+        className="w-48"
+        id="filter-sort"
+        label="Sort by"
+        onChange={(value) => {
+          onSort(value as SortChoice)
+        }}
+        value={sort}
+      >
+        {Object.entries(sortLabels).map(([value, label]) => (
+          <SelectItem key={value} value={value}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectField>
     </div>
   )
 }
@@ -104,21 +93,13 @@ function Filter({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Select onValueChange={onChange} value={value}>
-        <SelectTrigger className="w-40" id={id}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>All</SelectItem>
-          {options.map((option) => (
-            <SelectItem className="capitalize" key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <SelectField id={id} label={label} onChange={onChange} value={value}>
+      <SelectItem value={ALL}>All</SelectItem>
+      {options.map((option) => (
+        <SelectItem className="capitalize" key={option} value={option}>
+          {option}
+        </SelectItem>
+      ))}
+    </SelectField>
   )
 }
