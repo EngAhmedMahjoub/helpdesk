@@ -2,7 +2,14 @@ import { expect, test } from 'bun:test'
 import { cleanup, screen, waitFor } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import type { TicketDetail, UpdateTicketRequest } from '@helpdesk/shared'
-import { renderRoute, responds, stubApi, ticketDetail, ticketMessage } from './helpers.tsx'
+import {
+  renderRoute,
+  responds,
+  stubApi,
+  ticketDetail,
+  ticketMessage,
+  ticketSummary,
+} from './helpers.tsx'
 
 const open = ticketDetail({
   id: 26,
@@ -217,4 +224,54 @@ test('a refused change is shown, and the control keeps the stored value', async 
 
   expect((await screen.findByRole('alert')).textContent).toBe('Invalid request body')
   expect(trigger('Status').textContent).toContain('open')
+})
+
+test('a changed ticket does not sit stale in the list behind it', async () => {
+  const user = userEvent.setup()
+  let status: 'open' | 'closed' = 'open'
+  const listCalls: string[] = []
+
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/tickets': (request) => {
+      listCalls.push(request.url)
+      return Response.json({
+        tickets: [ticketSummary({ id: 26, subject: "Can't log in", status })],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+      })
+    },
+    '/tickets/26': async (request) => {
+      if (request.method === 'PATCH') {
+        status = ((await request.clone().json()) as { status: typeof status }).status
+      }
+      return Response.json({ ...open, status })
+    },
+  })
+
+  // Start on the list, so its query is in the cache to go stale.
+  const router = renderRoute('/tickets')
+  expect(await screen.findByRole('cell', { name: 'open' })).toBeTruthy()
+  const before = listCalls.length
+
+  await user.click(screen.getByRole('link', { name: "Can't log in" }))
+  await waitFor(() => {
+    expect(trigger('Status')).toBeTruthy()
+  })
+  await user.click(trigger('Status'))
+  await user.click(await screen.findByRole('option', { name: 'closed' }))
+  await waitFor(() => {
+    expect(trigger('Status').textContent).toContain('closed')
+  })
+
+  await user.click(screen.getByRole('link', { name: 'All tickets' }))
+  await waitFor(() => {
+    expect(router.state.location.pathname).toBe('/tickets')
+  })
+
+  // The list was invalidated by the change, so it asked again rather than
+  // showing the status it had cached.
+  expect(listCalls.length).toBeGreaterThan(before)
+  expect(await screen.findByRole('cell', { name: 'closed' })).toBeTruthy()
 })

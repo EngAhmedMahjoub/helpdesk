@@ -83,6 +83,26 @@ test('shows the ticket above its thread', async () => {
   expect(screen.getByText('Opened:')).toBeTruthy()
 })
 
+test('pins each timestamp to the instant the API sent, whatever the reader sees', async () => {
+  stubTicket()
+
+  renderRoute('/tickets/32')
+  await screen.findByRole('heading', { name: 'Can I move my start date?' })
+
+  // The rendered text is the reader's own locale, deliberately, so the
+  // machine-readable attribute is what a test can hold to.
+  const stamps = document.querySelectorAll('time')
+  expect([...stamps].map((stamp) => stamp.getAttribute('dateTime'))).toEqual([
+    '2026-08-30T15:55:00.000Z',
+    '2026-08-31T15:55:00.000Z',
+    '2026-09-02T09:00:00.000Z',
+    '2026-09-02T09:00:00.000Z',
+    '2026-09-02T09:00:00.000Z',
+  ])
+  // And each one says something, rather than rendering an empty element.
+  for (const stamp of stamps) expect(stamp.textContent).not.toBe('')
+})
+
 test('encodes the address in the mailto link', async () => {
   // An address carrying mail headers would otherwise open an agent's client
   // pre-addressed and pre-written. Nothing writes one today; Phase 4's webhook
