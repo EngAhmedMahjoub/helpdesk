@@ -11,6 +11,7 @@ Based on `project-scope.md` and `tech-stack.md`. Each task is small enough for o
 | Auto-close | Resolved tickets close 14 days after being resolved. Open and Closed tickets have no timer. |
 | Timer reset | A student message on a Resolved ticket restarts the 14-day timer. |
 | AI call fails after retries | Escalate to a human agent: ticket stays Open and is flagged as needing an agent. |
+| Ticket assignment | A ticket has at most one assignee, an active agent or admin. Assignment is a label, not a permission: any agent or admin can assign, reassign or clear it, and anyone can still reply or change status. Deactivating a user clears their assignments. |
 | Knowledge base content | Written with Claude Code as part of Phase 5. |
 | Hosting | Free tiers: Vercel (frontend), Koyeb (API + background jobs in one process), Neon (Postgres), Resend (email), GitHub Actions (CI/CD and scheduled tasks). |
 | Runtime and package manager | Bun, with Bun workspaces |
@@ -86,6 +87,12 @@ None.
 | 3.9 | Frontend: ticket detail with message thread | Thread shows student, AI, and agent messages distinctly | Done |
 | 3.10 | Frontend: status and category controls on detail page | Changes persist after reload |Done |
 | 3.11 | Frontend: agent reply box | Reply appears in the thread |Done |
+| 3.12 | `Ticket.assigneeId`: nullable relation to `User`, `onDelete: SetNull`, indexed | Migration applied | |
+| 3.13 | `PATCH /api/tickets/:id` accepts `assigneeId` (a user id or `null`), refusing an unknown or deactivated user; list and detail return the assignee's id and name | Tests for assign, reassign, clear, unknown user, deactivated user | |
+| 3.14 | Deactivating a user clears their assignments in the same transaction | A deactivated agent's tickets come back unassigned | |
+| 3.15 | `GET /api/tickets?assignee=me\|none` filter | Tests for each value, alone and with status and category | |
+| 3.16 | Frontend: assignee select and **Assign to me** on the ticket detail page | Assignment persists after reload | |
+| 3.17 | Frontend: Assignee column and filter on the ticket list | Filter narrows the list and lives in the URL | |
 
 ## Phase 4 — Email
 
