@@ -178,6 +178,9 @@ test('shows not found for a ticket the API does not have', async () => {
   renderRoute('/tickets/404')
 
   expect(await screen.findByRole('heading', { name: 'Ticket not found' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Back to the ticket list' }).getAttribute('href')).toBe(
+    '/tickets',
+  )
 })
 
 test('shows not found for a malformed id without asking the API', async () => {
@@ -186,6 +189,9 @@ test('shows not found for a malformed id without asking the API', async () => {
   renderRoute('/tickets/abc')
 
   expect(await screen.findByRole('heading', { name: 'Ticket not found' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Back to the ticket list' }).getAttribute('href')).toBe(
+    '/tickets',
+  )
   expect(requests.some((request) => request.url.includes('/tickets'))).toBe(false)
 })
 

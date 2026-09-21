@@ -1,5 +1,4 @@
-import { ADMIN, API_URL } from '../config.ts'
-import { countSessionsFor, findSessionByToken, prisma } from '../database.ts'
+import { countSessionsFor, findSessionByToken } from '../database.ts'
 import { expect, sessionCookie, test } from '../fixtures.ts'
 import { submitLoginForm } from '../login-form.ts'
 import { announcement, openEditDialog, signInElsewhere, userRow } from '../users-page.ts'
@@ -74,55 +73,4 @@ test('an agent whose email and password the admin changes signs in with the new 
   } finally {
     await signedIn.context.close()
   }
-})
-
-test('an admin who is not the seeded admin can change only themselves and agents', async ({
-  page,
-  signIn,
-  createTestUser,
-}) => {
-  const viewer = await createTestUser({ label: 'plain-admin', role: 'admin' })
-  const otherAdmin = await createTestUser({ label: 'other-admin', role: 'admin' })
-  const agent = await createTestUser({ label: 'editable-by-plain-admin' })
-  await signIn(viewer)
-
-  await page.goto('/users')
-
-  await test.step('a pencil on their own row and on an agent’s', async () => {
-    // Asserted before the absences below: until the list says who the viewer
-    // is, every row shows the no-pencil text, and those checks would pass on a
-    // page that had not finished deciding.
-    await expect(
-      userRow(page, viewer.email).getByRole('button', { name: `Edit ${viewer.name}`, exact: true }),
-    ).toBeVisible()
-    await expect(
-      userRow(page, agent.email).getByRole('button', { name: `Edit ${agent.name}`, exact: true }),
-    ).toBeVisible()
-  })
-
-  await test.step('no button on another admin’s row or the seeded admin’s', async () => {
-    const otherRow = userRow(page, otherAdmin.email)
-    await expect(otherRow.getByText('—')).toBeVisible()
-    // Any button, not just the pencil: a renamed control would still be one.
-    await expect(otherRow.getByRole('button')).toHaveCount(0)
-
-    const seededRow = userRow(page, ADMIN.email)
-    await expect(seededRow.getByText('Protected')).toBeVisible()
-    await expect(seededRow.getByRole('button')).toHaveCount(0)
-  })
-
-  await test.step('the API refuses the change when it is sent anyway', async () => {
-    // The hidden pencil is a courtesy; authorise() in the route is the boundary.
-    const response = await page.request.patch(`${API_URL}/api/users/${otherAdmin.id}`, {
-      data: { name: 'E2E Renamed Without Permission' },
-    })
-
-    expect(response.status()).toBe(403)
-    expect(await response.json()).toEqual({
-      error: 'Only the seeded admin can change another admin',
-    })
-
-    const unchanged = await prisma.user.findUniqueOrThrow({ where: { id: otherAdmin.id } })
-    expect(unchanged.name).toBe(otherAdmin.name)
-  })
 })

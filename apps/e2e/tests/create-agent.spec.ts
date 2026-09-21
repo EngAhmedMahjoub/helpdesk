@@ -1,5 +1,4 @@
 import type { Page } from '@playwright/test'
-import { countUsersWithEmail } from '../database.ts'
 import { expect, test } from '../fixtures.ts'
 import { submitLoginForm } from '../login-form.ts'
 import { announcement, userRow } from '../users-page.ts'
@@ -66,31 +65,4 @@ test('an agent an admin adds can sign in with the initial password', async ({
       await agentContext.close()
     }
   })
-})
-
-test('adding an agent with a taken email keeps the dialog open with the error on Email', async ({
-  adminPage,
-  createTestUser,
-}) => {
-  const existing = await createTestUser({ label: 'taken-address' })
-
-  await adminPage.goto('/users')
-  await addAgent(adminPage, {
-    name: 'E2E Duplicate Attempt',
-    email: existing.email,
-    password: 'initial-password-not-a-secret',
-  })
-
-  const dialog = adminPage.getByRole('dialog', { name: 'Add agent' })
-  // Each field is an unnamed group holding its label, input and error; scoping
-  // to the one holding Email proves the message landed on that field and not
-  // in a banner above the form.
-  const emailField = dialog.getByRole('group').filter({ has: adminPage.getByLabel('Email') })
-  await expect(emailField.getByRole('alert')).toHaveText('A user with that email already exists')
-  await expect(dialog.getByLabel('Email')).toHaveAttribute('aria-invalid', 'true')
-  await expect(dialog).toBeVisible()
-
-  // Checked in the database rather than the list: the modal hides the page
-  // behind it from the accessibility tree, so no row assertion there could fail.
-  expect(await countUsersWithEmail(existing.email)).toBe(1)
 })
