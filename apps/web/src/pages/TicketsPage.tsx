@@ -1,22 +1,9 @@
-import { Link, useSearchParams } from 'react-router'
-import {
-  type ListTicketsQuery,
-  type TicketListResponse,
-  type TicketSummary,
-  listTicketsQuerySchema,
-} from '@helpdesk/shared'
+import { Link } from 'react-router'
+import type { ListTicketsQuery, TicketListResponse, TicketSummary } from '@helpdesk/shared'
 import TableSkeleton, { type Column } from '@/components/table-skeleton'
 import TicketFilters, { type SortChoice } from '@/components/ticket-filters'
+import TicketPagination from '@/components/ticket-pagination'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -25,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useTicketQuery } from '@/hooks/use-ticket-query'
 import { useTickets } from '@/hooks/use-tickets'
 
 // Built once rather than per row. undefined locale means the reader's own.
@@ -48,43 +36,11 @@ const columns: Column[] = [
   { label: 'Last activity', width: 'w-[15%]' },
 ]
 
-/**
- * The filters, sort and page live in the URL rather than in component state, so
- * a filtered list can be linked to, survives a reload, and the back button
- * steps through the choices an agent made.
- */
-function useTicketQuery() {
-  const [searchParams, setSearchParams] = useSearchParams()
-
-  // A URL nobody typed by hand always parses. A hand-edited one that does not
-  // falls back to the default list rather than showing an error a visitor
-  // cannot act on; the controls below then rewrite it.
-  const parsed = listTicketsQuerySchema.safeParse(Object.fromEntries(searchParams))
-  const query: ListTicketsQuery = parsed.success ? parsed.data : listTicketsQuerySchema.parse({})
-
-  function update(changes: Partial<ListTicketsQuery>, options: { keepPage?: boolean } = {}) {
-    const next = { ...query, ...changes }
-    // Any change but paging returns to page 1: page 3 of the old filter is
-    // rarely a page of the new one, and an empty page looks like no tickets.
-    if (!options.keepPage) next.page = 1
-
-    setSearchParams(
-      Object.fromEntries(
-        Object.entries(next)
-          .filter(([, value]) => value !== undefined && value !== '')
-          .map(([key, value]) => [key, String(value)]),
-      ),
-    )
-  }
-
-  return { query, update }
-}
-
 export default function TicketsPage() {
   const { query, update } = useTicketQuery()
   const tickets = useTickets(query)
 
-  const sort: SortChoice = `${query.sort ?? 'updatedAt'}:${query.order ?? 'desc'}`
+  const sort: SortChoice = `${query.sort}:${query.order}`
 
   return (
     <main className="mx-auto max-w-6xl p-8">
@@ -118,7 +74,7 @@ export default function TicketsPage() {
       </div>
 
       {tickets.data && tickets.data.total > 0 && (
-        <Pagination
+        <TicketPagination
           data={tickets.data}
           onPage={(page) => {
             update({ page }, { keepPage: true })
@@ -201,89 +157,5 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
         </time>
       </TableCell>
     </TableRow>
-  )
-}
-
-// The sizes an agent picks between. Each is within the API's cap of 100.
-const PAGE_SIZES = [5, 10, 20, 50] as const
-
-function Pagination({
-  data,
-  onPage,
-  onPageSize,
-}: {
-  data: TicketListResponse
-  onPage: (page: number) => void
-  onPageSize: (pageSize: number) => void
-}) {
-  const pages = Math.max(1, Math.ceil(data.total / data.pageSize))
-  const first = (data.page - 1) * data.pageSize + 1
-  const last = first + data.tickets.length - 1
-
-  return (
-    <nav aria-label="Pagination" className="mt-6 flex items-center justify-between gap-4">
-      {/* A live region: the numbers change without the page moving, and the
-          buttons that changed them keep focus, so nothing else announces it. */}
-      <p aria-live="polite" className="text-sm text-muted-foreground">
-        {data.tickets.length === 0
-          ? `No tickets on page ${String(data.page)} of ${String(data.total)}`
-          : `Showing ${String(first)}–${String(last)} of ${String(data.total)}`}
-      </p>
-
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Label className="text-sm font-normal text-muted-foreground" htmlFor="rows-per-page">
-            Rows per page
-          </Label>
-          <Select
-            onValueChange={(value) => {
-              onPageSize(Number(value))
-            }}
-            value={String(data.pageSize)}
-          >
-            <SelectTrigger className="w-20" id="rows-per-page" size="sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {/* The API's own page size, when it is not one of the choices —
-                  a hand-typed ?pageSize=7 would otherwise show an empty box. */}
-              {[...new Set([...PAGE_SIZES, data.pageSize])]
-                .sort((a, b) => a - b)
-                .map((size) => (
-                  <SelectItem key={size} value={String(size)}>
-                    {size}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            disabled={data.page <= 1}
-            onClick={() => {
-              onPage(data.page - 1)
-            }}
-            size="sm"
-            variant="outline"
-          >
-            Previous
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Page {data.page} of {pages}
-          </span>
-          <Button
-            disabled={data.page >= pages}
-            onClick={() => {
-              onPage(data.page + 1)
-            }}
-            size="sm"
-            variant="outline"
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    </nav>
   )
 }
