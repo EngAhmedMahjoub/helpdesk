@@ -629,13 +629,7 @@ describe('POST /api/tickets/:id/replies', () => {
 
     await reply(ticket.id, { body: 'On it.' })
 
-    const thread = (
-      (
-        await request(app)
-          .get(`/api/tickets/${String(ticket.id)}`)
-          .set('Cookie', agentCookie)
-      ).body as TicketDetail
-    ).messages
+    const thread = ((await detail(ticket.id)).body as TicketDetail).messages
     expect(thread.map((m) => [m.author, m.body])).toEqual([
       ['student', 'Help'],
       ['agent', 'On it.'],

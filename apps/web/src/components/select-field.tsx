@@ -22,7 +22,7 @@ export default function SelectField({
   value: string
   onChange: (value: string) => void
   disabled?: boolean
-  /** The trigger's width, since these sit in rows of differing widths. */
+  /** Classes for the trigger: its width, and how the value it shows is cased. */
   className?: string
   children: React.ReactNode
 }) {

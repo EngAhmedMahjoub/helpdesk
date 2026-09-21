@@ -11,7 +11,7 @@ export function useTicketQuery() {
 
   // A URL nobody typed by hand always parses. A hand-edited one that does not
   // falls back to the default list rather than showing an error a visitor
-  // cannot act on; the controls below then rewrite it.
+  // cannot act on; the page's controls then rewrite it.
   const parsed = listTicketsQuerySchema.safeParse(Object.fromEntries(searchParams))
   // The schema's output, not its input: every field carries its default from
   // here on, so nothing downstream has to re-state them.
