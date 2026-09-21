@@ -33,9 +33,11 @@ Do not unit-test shadcn or Tailwind internals. A component that only arranges li
 
 ## Subagents
 
-All three are defined in `.claude/agents/` and registered at session start; a newly added one needs a restart.
+All four are defined in `.claude/agents/` and registered at session start; a newly added one needs a restart.
 
 **`e2e-test-writer` — use it for every Playwright spec.** Do not hand-write specs in `apps/e2e/tests`. It already knows the harness and the traps in it: that `helpdesk_e2e` is prepared once per run rather than per test, so specs must own and clean up what they create and never assert on totals; that ports 3100 and 5273 exist to keep a run away from the development servers and their data; and which phases are unbuilt, so it will not write specs for placeholder screens. Give it the journey to cover, not the mechanics.
+
+**`e2e-test-reviewer` — use it when the Playwright suite needs pruning or a test's layer is in doubt.** Read-only, and the counterpart to the writer: it judges each `test(...)` on whether a real browser buys anything, and reports Keep, Demote to component or API, Delete as already covered, or Split — with the destination file and fixture named, and what the move would lose.
 
 **`security-reviewer` — use it before merging anything touching auth**, the Resend webhook, the task endpoints, or code reaching the database or the Anthropic API. Read-only. It marks each finding Confirmed or Suspected and says what it could not trace.
 
