@@ -10,19 +10,17 @@ test('signing out returns to the login form and deletes the session', async ({ a
   await expect(adminPage).toHaveURL('/login')
   await expect(adminPage.getByRole('heading', { name: 'Sign in' })).toBeVisible()
 
-  // The row itself, not just the cookie: a token whose session outlived the
-  // sign-out would still authenticate anyone who kept a copy of it.
-  await expect.poll(() => findSessionByToken(cookie.value)).toBeNull()
-  expect(await findSessionCookie(adminPage)).toBeUndefined()
-})
+  await test.step('the session is gone on the server and in the browser', async () => {
+    // The row itself, not just the cookie: a token whose session outlived the
+    // sign-out would still authenticate anyone who kept a copy of it.
+    await expect.poll(() => findSessionByToken(cookie.value)).toBeNull()
+    expect(await findSessionCookie(adminPage)).toBeUndefined()
+  })
 
-test('the dashboard is not served from cache after signing out', async ({ adminPage }) => {
-  await adminPage.goto('/')
-  await adminPage.getByRole('button', { name: 'Sign out' }).click()
-  await expect(adminPage).toHaveURL('/login')
+  await test.step('the dashboard is not served from cache afterwards', async () => {
+    await adminPage.goto('/')
 
-  await adminPage.goto('/')
-
-  await expect(adminPage).toHaveURL('/login')
-  await expect(adminPage.getByRole('heading', { name: 'Sign in' })).toBeVisible()
+    await expect(adminPage).toHaveURL('/login')
+    await expect(adminPage.getByRole('heading', { name: 'Sign in' })).toBeVisible()
+  })
 })
