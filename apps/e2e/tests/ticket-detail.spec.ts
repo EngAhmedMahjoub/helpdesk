@@ -1,9 +1,7 @@
 import { ADMIN } from '../config.ts'
 import { uniqueSubject, userIdFor } from '../database.ts'
 import { expect, test } from '../fixtures.ts'
-import { message, thread, ticketRow } from '../tickets-page.ts'
-
-const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000)
+import { message, minutesAgo, thread, ticketRow } from '../tickets-page.ts'
 
 test('a subject on the list opens the ticket and its thread, oldest message first', async ({
   adminPage,

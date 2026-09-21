@@ -1,6 +1,6 @@
 import { uniqueSubject } from '../database.ts'
 import { expect, test } from '../fixtures.ts'
-import { chooseOption, hasQuery, ownRows, ticketRow } from '../tickets-page.ts'
+import { chooseOption, hasQuery, minutesAgo, ownRows, ticketRow } from '../tickets-page.ts'
 
 /**
  * Every spec in a run shares `helpdesk_e2e`, and the list has no search box, so
@@ -10,8 +10,6 @@ import { chooseOption, hasQuery, ownRows, ticketRow } from '../tickets-page.ts'
  * whatever else is running beside it.
  */
 const ALL_ON_ONE_PAGE = 'pageSize=50'
-
-const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000)
 
 test('the list shows who a ticket is from, its status, category and escalation', async ({
   adminPage,
