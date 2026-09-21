@@ -14,16 +14,8 @@ import {
 } from '@/components/ui/table'
 import { useTicketQuery } from '@/hooks/use-ticket-query'
 import { useTickets } from '@/hooks/use-tickets'
-
-// Built once rather than per row. undefined locale means the reader's own.
-// Short enough for a narrow column; the cell's title carries the full stamp.
-const updatedFormat = new Intl.DateTimeFormat(undefined, {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-const fullFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'short' })
+import { compactDateTime, fullDateTime } from '@/lib/format'
+import { studentLabel } from '@/lib/tickets'
 
 // One list for the skeleton and the table, so their headers and widths cannot
 // drift apart. Sums to 100%; Subject gets the most because it runs longest.
@@ -134,7 +126,7 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
         className="truncate text-muted-foreground"
         title={`${ticket.studentName ?? ''} <${ticket.studentEmail}>`.trim()}
       >
-        {ticket.studentName ?? ticket.studentEmail}
+        {studentLabel(ticket)}
       </TableCell>
       <TableCell>
         {/* The word carries the meaning; the colour only seconds it, so a
@@ -152,8 +144,8 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
         )}
       </TableCell>
       <TableCell className="truncate text-muted-foreground">
-        <time dateTime={ticket.updatedAt} title={fullFormat.format(new Date(ticket.updatedAt))}>
-          {updatedFormat.format(new Date(ticket.updatedAt))}
+        <time dateTime={ticket.updatedAt} title={fullDateTime.format(new Date(ticket.updatedAt))}>
+          {compactDateTime.format(new Date(ticket.updatedAt))}
         </time>
       </TableCell>
     </TableRow>

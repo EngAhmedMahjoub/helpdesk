@@ -4,16 +4,24 @@ import type {
   TicketDetail,
   TicketListResponse,
   TicketMessage,
+  TicketSummary,
   UpdateTicketRequest,
 } from '@helpdesk/shared'
 import { apiRequest } from '@/lib/api'
 
 /**
- * The key a page of tickets is cached under. The query is part of it, so each
- * combination of filters, sort and page is its own cache entry and going back
- * to one already seen shows it at once.
+ * Every page of tickets, whatever its filters: what a change to one ticket
+ * invalidates.
  */
-export const ticketsQueryKey = (query: ListTicketsQuery) => ['tickets', query] as const
+export const ticketsQueryKeyPrefix = ['tickets'] as const
+
+/**
+ * The key one page is cached under. The query is part of it, so each
+ * combination of filters, sort and page is its own entry and going back to one
+ * already seen shows it at once.
+ */
+export const ticketsQueryKey = (query: ListTicketsQuery) =>
+  [...ticketsQueryKeyPrefix, query] as const
 
 export function fetchTickets(query: ListTicketsQuery): Promise<TicketListResponse> {
   // params, not a hand-built query string: axios encodes the values, and
@@ -39,3 +47,10 @@ export function createReply(id: number, request: CreateReplyRequest): Promise<Ti
     data: request,
   })
 }
+
+/**
+ * What to call a student: their name, or the address they wrote from when the
+ * email carried no name.
+ */
+export const studentLabel = (ticket: Pick<TicketSummary, 'studentName' | 'studentEmail'>) =>
+  ticket.studentName ?? ticket.studentEmail

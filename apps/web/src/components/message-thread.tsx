@@ -1,7 +1,6 @@
 import type { TicketMessage } from '@helpdesk/shared'
 import { Badge } from '@/components/ui/badge'
-
-const timeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+import { dateAndTime } from '@/lib/format'
 
 /**
  * How each author appears. The label is the ticket's own word for who wrote a
@@ -64,7 +63,7 @@ export default function MessageThread({
                   className="ml-auto text-sm text-muted-foreground"
                   dateTime={message.createdAt}
                 >
-                  {timeFormat.format(new Date(message.createdAt))}
+                  {dateAndTime.format(new Date(message.createdAt))}
                 </time>
               </header>
               {/* whitespace-pre-wrap: an email's own line breaks are the only
