@@ -7,7 +7,7 @@ import { hashPassword } from '../auth/password.ts'
 import { requireAdmin, requireAuth } from '../auth/middleware.ts'
 import { userWriteRateLimit } from '../auth/rate-limit.ts'
 import { hashToken, readSessionToken } from '../auth/session.ts'
-import { parseBody } from '../http.ts'
+import { parseBody, parseId } from '../http.ts'
 
 /** The columns a user list or a creation response may expose. Never the hash. */
 const summaryFields = {
@@ -87,17 +87,12 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
   const body = parseBody(updateUserSchema, req, res)
   if (!body) return
 
-  // A malformed id answers the same 404 as a well-formed one with no row: it
-  // cannot name a user either way. Checked here only to answer early — User.id
-  // is TEXT, so a malformed id would reach Postgres and simply miss. The parsed
-  // value is used from here on: with a middleware ahead of this handler, Express
-  // no longer infers the route's params and types req.params.id as string[] too.
-  const parsedId = z.uuid().safeParse(req.params.id)
-  if (!parsedId.success) {
-    res.status(404).json({ error: USER_NOT_FOUND })
-    return
-  }
-  const id = parsedId.data
+  // Checked only to answer early — User.id is TEXT, so a malformed id would
+  // reach Postgres and simply miss. The parsed value is used from here on:
+  // with a middleware ahead of this handler, Express no longer infers the
+  // route's params and types req.params.id as string[] too.
+  const id = parseId(z.uuid(), req, res, USER_NOT_FOUND)
+  if (id === undefined) return
   const actorId = req.user?.id ?? ''
 
   // Both parties in one read: who is asking decides as much as who is asked

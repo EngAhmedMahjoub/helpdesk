@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import {
   MESSAGE_PAGE_SIZE,
   type TicketDetail,
@@ -14,7 +14,7 @@ import { isPrismaError, prisma } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
 import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
-import { parseBody, parseQuery } from '../http.ts'
+import { parseBody, parseId, parseQuery } from '../http.ts'
 import { statusChange } from '../tickets/status.ts'
 
 /** The columns the list exposes. Explicit, so a column added later stays out until chosen. */
@@ -89,6 +89,17 @@ function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields 
 
 const TICKET_NOT_FOUND = 'Ticket not found'
 
+/**
+ * Answers 404 when Prisma reports the row was not there, and says whether it
+ * did; the caller rethrows anything else. A ticket can be deleted between the
+ * id check and the write.
+ */
+function answered404(err: unknown, res: Response): boolean {
+  if (!isPrismaError(err, 'P2025')) return false
+  res.status(404).json({ error: TICKET_NOT_FOUND })
+  return true
+}
+
 export const ticketsRouter = Router()
 
 // Every ticket route is for agents and admins alike, so the guard sits on the
@@ -125,15 +136,11 @@ ticketsRouter.get('/', async (req, res) => {
 })
 
 ticketsRouter.get('/:id', async (req, res) => {
-  // A malformed id answers the same 404 as a well-formed one with no row: it
-  // cannot name a ticket either way.
-  const id = ticketIdSchema.safeParse(req.params.id)
-  if (!id.success) {
-    res.status(404).json({ error: TICKET_NOT_FOUND })
-    return
-  }
+  // undefined, not falsy: an id is a number, and 0 would read as absent.
+  const id = parseId(ticketIdSchema, req, res, TICKET_NOT_FOUND)
+  if (id === undefined) return
 
-  const ticket = await prisma.ticket.findUnique({ where: { id: id.data }, select: detailFields })
+  const ticket = await prisma.ticket.findUnique({ where: { id }, select: detailFields })
 
   if (!ticket) {
     res.status(404).json({ error: TICKET_NOT_FOUND })
@@ -149,15 +156,12 @@ ticketsRouter.patch('/:id', async (req, res) => {
   const body = parseBody(updateTicketSchema, req, res)
   if (!body) return
 
-  const id = ticketIdSchema.safeParse(req.params.id)
-  if (!id.success) {
-    res.status(404).json({ error: TICKET_NOT_FOUND })
-    return
-  }
+  const id = parseId(ticketIdSchema, req, res, TICKET_NOT_FOUND)
+  if (id === undefined) return
 
   try {
     const ticket = await prisma.ticket.update({
-      where: { id: id.data },
+      where: { id },
       data: {
         // autoCloseAt moves only with a status in the request: a category
         // change alone must not start or stop a Resolved ticket's timer.
@@ -171,10 +175,7 @@ ticketsRouter.patch('/:id', async (req, res) => {
     })
     res.json(toDetail(ticket))
   } catch (err) {
-    if (isPrismaError(err, 'P2025')) {
-      res.status(404).json({ error: TICKET_NOT_FOUND })
-      return
-    }
+    if (answered404(err, res)) return
     throw err
   }
 })
@@ -183,11 +184,8 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
   const body = parseBody(createReplySchema, req, res)
   if (!body) return
 
-  const id = ticketIdSchema.safeParse(req.params.id)
-  if (!id.success) {
-    res.status(404).json({ error: TICKET_NOT_FOUND })
-    return
-  }
+  const id = parseId(ticketIdSchema, req, res, TICKET_NOT_FOUND)
+  if (id === undefined) return
 
   // requireAuth put the user there; the reply is theirs, whatever the body
   // says. Answered rather than defaulted: an empty id would reach the foreign
@@ -203,11 +201,11 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
       // A reply is activity on the ticket, so it moves up a list sorted by
       // updatedAt. Inserting a message does not touch the ticket row by itself.
       // The update also answers P2025 for a ticket that is not there.
-      await tx.ticket.update({ where: { id: id.data }, data: { updatedAt: new Date() } })
+      await tx.ticket.update({ where: { id }, data: { updatedAt: new Date() } })
 
       return tx.message.create({
         data: {
-          ticketId: id.data,
+          ticketId: id,
           direction: 'outbound',
           author: 'agent',
           agentId,
@@ -222,10 +220,7 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
 
     res.status(201).json(toMessage(message))
   } catch (err) {
-    if (isPrismaError(err, 'P2025')) {
-      res.status(404).json({ error: TICKET_NOT_FOUND })
-      return
-    }
+    if (answered404(err, res)) return
     throw err
   }
 })
