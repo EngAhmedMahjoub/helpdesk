@@ -160,6 +160,9 @@ test('cancelling the deactivation changes nothing', async () => {
 
   await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
   expect(patches(requests)).toHaveLength(0)
+  // Back in the editor rather than out of it, and the agent is still active.
+  expect(screen.getByRole('dialog', { name: 'Edit Gil Agent' })).toBeDefined()
+  expect(dialog.getByRole('button', { name: 'Deactivate Gil Agent' })).toBeDefined()
 })
 
 test('a failed deactivation stays in the confirmation, beside its button', async () => {

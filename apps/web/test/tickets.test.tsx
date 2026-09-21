@@ -64,6 +64,31 @@ test('shows the tickets the API returned', async () => {
   expect(await screen.findByRole('cell', { name: 'tom@student.example' })).toBeTruthy()
 })
 
+test('an unclassified ticket nobody escalated shows a dash and No', async () => {
+  stubTickets(() => listOf([ticketSummary({ id: 3, subject: 'Where are my slides' })]))
+
+  renderRoute('/tickets')
+
+  const row = within(
+    (await screen.findByRole('cell', { name: 'Where are my slides' })).closest('tr')!,
+  )
+  // A dash rather than an empty cell: nothing has classified it yet.
+  expect(row.getByRole('cell', { name: '—' })).toBeTruthy()
+  expect(row.getByRole('cell', { name: 'No' })).toBeTruthy()
+})
+
+test('an agent sees the ticket list', async () => {
+  stubApi({
+    '/auth/me': responds.currentAgent,
+    '/tickets': () => Response.json(listOf(tickets)),
+  })
+
+  const router = renderRoute('/tickets')
+
+  expect(await screen.findByRole('cell', { name: 'Refund for the bootcamp' })).toBeTruthy()
+  expect(router.state.location.pathname).toBe('/tickets')
+})
+
 test('asks for the filters, sort and page in the URL', async () => {
   const { queries } = stubTickets(() => listOf(tickets, { page: 2, pageSize: 2, total: 6 }))
 
@@ -114,20 +139,54 @@ test('choosing a status filters the list and puts it in the URL', async () => {
   expect(new URLSearchParams(router.state.location.search).get('status')).toBe('resolved')
 })
 
-test('choosing a sort re-asks the API in that order', async () => {
+test('choosing All drops the status and keeps the category', async () => {
   const user = userEvent.setup()
   const { queries } = stubTickets(() => listOf(tickets))
 
-  renderRoute('/tickets')
+  const router = renderRoute('/tickets?status=open&category=technical')
   await screen.findByRole('table')
 
-  await user.click(screen.getByLabelText('Sort by'))
-  await user.click(await screen.findByRole('option', { name: 'Oldest ticket' }))
+  await user.click(screen.getByLabelText('Status'))
+  await user.click(await screen.findByRole('option', { name: 'All' }))
 
   await waitFor(() => {
-    expect(queries.at(-1)?.get('sort')).toBe('createdAt')
+    expect(queries.at(-1)?.has('status')).toBe(false)
   })
-  expect(queries.at(-1)?.get('order')).toBe('asc')
+  expect(queries.at(-1)?.get('category')).toBe('technical')
+  const search = new URLSearchParams(router.state.location.search)
+  expect(search.has('status')).toBe(false)
+  expect(search.get('category')).toBe('technical')
+})
+
+test('each sort option asks for its column and direction', async () => {
+  const user = userEvent.setup()
+  const { queries } = stubTickets(() => listOf(tickets))
+
+  const router = renderRoute('/tickets')
+  await screen.findByRole('table')
+
+  // Latest activity last: it is the default, so choosing it first changes nothing.
+  const choices = [
+    ['Oldest activity', 'updatedAt', 'asc'],
+    ['Newest ticket', 'createdAt', 'desc'],
+    ['Oldest ticket', 'createdAt', 'asc'],
+    ['Latest activity', 'updatedAt', 'desc'],
+  ] as const
+
+  for (const [label, sort, order] of choices) {
+    await user.click(screen.getByLabelText('Sort by'))
+    await user.click(await screen.findByRole('option', { name: label }))
+
+    await waitFor(() => {
+      const search = new URLSearchParams(router.state.location.search)
+      expect([search.get('sort'), search.get('order')]).toEqual([sort, order])
+    })
+  }
+
+  // Asked for once each. Latest activity was the first request, and coming
+  // back to it is served from the cache rather than asked for again.
+  const asked = queries.map((query) => `${query.get('sort')}:${query.get('order')}`)
+  expect(asked).toEqual(['updatedAt:desc', 'updatedAt:asc', 'createdAt:desc', 'createdAt:asc'])
 })
 
 test('pages forward and back, and a filter returns to page one', async () => {

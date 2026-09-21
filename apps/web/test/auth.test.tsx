@@ -15,6 +15,20 @@ test('a logged-out visitor to a protected route lands on /login', async () => {
   expect(router.state.historyAction).toBe(NavigationType.Replace)
 })
 
+// Every protected screen, not only the dashboard: one RequireAuth wraps them
+// today, and a route moved outside it would otherwise go unnoticed.
+for (const path of ['/tickets', '/tickets/1', '/users']) {
+  test(`a logged-out visitor to ${path} lands on /login`, async () => {
+    stubApi({ '/auth/me': responds.noSession })
+
+    const router = renderRoute(path)
+
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeDefined()
+    expect(router.state.location.pathname).toBe('/login')
+    expect(router.state.historyAction).toBe(NavigationType.Replace)
+  })
+}
+
 test('the protected route shows a labelled spinner while the session check is in flight', () => {
   stubApi({ '/auth/me': responds.currentUser, '/health': responds.health })
 
