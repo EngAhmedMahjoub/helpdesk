@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { prisma, resetDatabase } from './db.ts'
+import { createMessage } from './fixtures.ts'
 
 beforeEach(resetDatabase)
 
@@ -86,9 +87,7 @@ describe('Message', () => {
 
   test('belongs to a ticket and is deleted with it', async () => {
     const ticket = await newTicket()
-    await prisma.message.create({
-      data: { ticketId: ticket.id, direction: 'inbound', author: 'student', body: 'Help' },
-    })
+    await createMessage({ ticketId: ticket.id })
 
     await prisma.ticket.delete({ where: { id: ticket.id } })
 
@@ -98,15 +97,7 @@ describe('Message', () => {
   test('refuses a second message with the same email Message-ID, but not two without one', async () => {
     const ticket = await newTicket()
     const message = (emailMessageId: string | null) =>
-      prisma.message.create({
-        data: {
-          ticketId: ticket.id,
-          direction: 'inbound',
-          author: 'student',
-          body: 'Help',
-          emailMessageId,
-        },
-      })
+      createMessage({ ticketId: ticket.id, emailMessageId })
 
     await message('<abc@mail.example.com>')
     await message(null)
@@ -121,14 +112,12 @@ describe('Message', () => {
     const agent = await prisma.user.create({
       data: { email: 'agent@example.com', name: 'Agent', passwordHash: 'x' },
     })
-    await prisma.message.create({
-      data: {
-        ticketId: ticket.id,
-        direction: 'outbound',
-        author: 'agent',
-        agentId: agent.id,
-        body: 'Try resetting your password.',
-      },
+    await createMessage({
+      ticketId: ticket.id,
+      direction: 'outbound',
+      author: 'agent',
+      agentId: agent.id,
+      body: 'Try resetting your password.',
     })
 
     await expect((async () => prisma.user.delete({ where: { id: agent.id } }))()).rejects.toThrow()
