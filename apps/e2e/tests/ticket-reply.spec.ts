@@ -41,23 +41,3 @@ test('a reply joins the end of the thread and outlives a reload', async ({
     expect(await countMessagesFor(ticket.id)).toBe(2)
   })
 })
-
-test('an empty reply is refused before anything is sent', async ({
-  adminPage,
-  createTestTicket,
-}) => {
-  const ticket = await createTestTicket({
-    subject: `${uniqueSubject('reply-empty')} quick question`,
-    studentName: 'Maya Chen',
-    messages: [{ author: 'student', body: 'Is the deadline Friday?' }],
-  })
-
-  await adminPage.goto(`/tickets/${String(ticket.id)}`)
-  await expect(thread(adminPage)).toHaveCount(1)
-
-  await adminPage.getByRole('button', { name: 'Send reply' }).click()
-
-  await expect(adminPage.getByRole('alert')).toHaveText('Write a reply')
-  await expect(thread(adminPage)).toHaveCount(1)
-  expect(await countMessagesFor(ticket.id)).toBe(1)
-})

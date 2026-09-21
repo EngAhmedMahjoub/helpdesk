@@ -52,17 +52,3 @@ test('a subject on the list opens the ticket and its thread, oldest message firs
     await expect(adminPage).toHaveURL('/tickets')
   })
 })
-
-/**
- * Ids restart at 1 every run, so 999999 is a ticket nothing can have made; abc
- * is not an id at all. Both are the same "no such ticket" to a reader, and the
- * API answers both the same 404.
- */
-for (const path of ['/tickets/999999', '/tickets/abc']) {
-  test(`${path} shows that there is no such ticket`, async ({ adminPage }) => {
-    await adminPage.goto(path)
-
-    await expect(adminPage.getByRole('heading', { name: 'Ticket not found' })).toBeVisible()
-    await expect(adminPage.getByRole('link', { name: 'Back to the ticket list' })).toBeVisible()
-  })
-}

@@ -5,7 +5,6 @@ import type {
   EscalationReason,
   MessageAuthor,
   MessageDirection,
-  Role,
   TicketCategory,
   TicketStatus,
 } from '../api/src/generated/prisma/enums.ts'
@@ -35,8 +34,6 @@ function hashToken(token: string): string {
 }
 
 export type NewUser = {
-  role?: Role
-  isActive?: boolean
   /** Goes into the address, so a failing run says which test left the row. */
   label?: string
 }
@@ -46,7 +43,6 @@ export type TestUser = {
   email: string
   name: string
   password: string
-  role: Role
 }
 
 /** Not a secret: this database is created, truncated and thrown away by CI. */
@@ -81,11 +77,7 @@ export function uniqueEmail(label: string): string {
  * would otherwise fight over one row — and a test that truncated or reused it
  * would break whichever test happened to be mid-assertion.
  */
-export async function createUser({
-  role = 'agent',
-  isActive = true,
-  label = 'user',
-}: NewUser = {}): Promise<TestUser> {
+export async function createUser({ label = 'user' }: NewUser = {}): Promise<TestUser> {
   const email = uniqueEmail(label)
 
   const user = await prisma.user.create({
@@ -93,12 +85,11 @@ export async function createUser({
       email,
       name: `E2E ${label}`,
       passwordHash: TEST_USER_PASSWORD_HASH,
-      role,
-      isActive,
+      role: 'agent',
     },
   })
 
-  return { id: user.id, email: user.email, name: user.name, password: TEST_USER_PASSWORD, role }
+  return { id: user.id, email: user.email, name: user.name, password: TEST_USER_PASSWORD }
 }
 
 /** Sessions go with the user through the cascade on `Session.userId`. */
@@ -114,15 +105,6 @@ export async function deleteUsers(ids: string[]): Promise<void> {
 export async function deleteUsersByEmail(emails: string[]): Promise<void> {
   if (emails.length === 0) return
   await prisma.user.deleteMany({ where: { email: { in: emails } } })
-}
-
-/** Scoped to one address, never a total: other specs' users share this table. */
-export function countUsersWithEmail(email: string): Promise<number> {
-  return prisma.user.count({ where: { email } })
-}
-
-export function setUserActive(id: string, isActive: boolean): Promise<unknown> {
-  return prisma.user.update({ where: { id }, data: { isActive } })
 }
 
 /** The session a raw cookie value identifies, or null once it is gone. */
@@ -185,8 +167,6 @@ export type TestTicket = {
   subject: string
   studentEmail: string
   studentName: string | null
-  /** What the Student cell shows: the name when there is one, else the address. */
-  student: string
 }
 
 /** A student message arrives, everything else is sent back out. */
@@ -245,7 +225,6 @@ export async function createTicket({
     subject: ticket.subject,
     studentEmail: ticket.studentEmail,
     studentName: ticket.studentName,
-    student: ticket.studentName ?? ticket.studentEmail,
   }
 }
 
@@ -253,11 +232,6 @@ export async function createTicket({
 export async function deleteTickets(ids: number[]): Promise<void> {
   if (ids.length === 0) return
   await prisma.ticket.deleteMany({ where: { id: { in: ids } } })
-}
-
-/** The stored ticket, for checking what a change actually wrote. */
-export function findTicketById(id: number) {
-  return prisma.ticket.findUnique({ where: { id } })
 }
 
 /**
