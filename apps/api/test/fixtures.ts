@@ -70,3 +70,33 @@ export async function createTicket(overrides: NewTicket = {}) {
     data: { subject: 'Cannot log in', studentEmail: 'student@example.com', ...overrides },
   })
 }
+
+export type NewMessage = Partial<Omit<Prisma.MessageUncheckedCreateInput, 'id'>> &
+  Pick<Prisma.MessageUncheckedCreateInput, 'ticketId'>
+
+/**
+ * A message row: an inbound student message unless told otherwise, which is
+ * what most tests want and leaves the fields a test is about as the only ones
+ * it writes.
+ */
+export async function createMessage(overrides: NewMessage) {
+  return prisma.message.create({
+    data: { direction: 'inbound', author: 'student', body: 'Help', ...overrides },
+  })
+}
+
+/**
+ * `count` student messages a minute apart, oldest first, for the tests that
+ * care how many a thread holds rather than what any one of them says.
+ */
+export async function createThread(ticketId: number, count: number) {
+  await prisma.message.createMany({
+    data: Array.from({ length: count }, (_, index) => ({
+      ticketId,
+      direction: 'inbound' as const,
+      author: 'student' as const,
+      body: `Message ${String(index)}`,
+      createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+    })),
+  })
+}

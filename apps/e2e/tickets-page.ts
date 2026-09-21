@@ -67,3 +67,10 @@ export function hasQuery(expected: Record<string, string>): (url: URL) => boolea
 export function updateAnnouncement(page: Page): Locator {
   return page.getByRole('status').filter({ hasText: 'Ticket updated' })
 }
+
+/**
+ * A moment in the recent past, for a spec that needs its own rows in a known
+ * order. No data of its own, so sharing it takes nothing from each spec owning
+ * what it creates.
+ */
+export const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000)

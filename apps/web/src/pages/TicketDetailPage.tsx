@@ -7,9 +7,9 @@ import TicketControls from '@/components/ticket-controls'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTicket } from '@/hooks/use-tickets'
+import { dateAndTime } from '@/lib/format'
+import { studentLabel } from '@/lib/tickets'
 import { isApiError } from '@/lib/api'
-
-const stampFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 export default function TicketDetailPage() {
   const { id } = useParams()
@@ -48,6 +48,8 @@ function Ticket({ id }: { id: number }) {
     )
   }
 
+  const student = studentLabel(ticket.data)
+
   return (
     <>
       <Header ticket={ticket.data} />
@@ -56,20 +58,14 @@ function Ticket({ id }: { id: number }) {
         <h2 className="sr-only" id="thread-heading">
           Messages
         </h2>
-        <MessageThread
-          messages={ticket.data.messages}
-          studentName={ticket.data.studentName ?? ticket.data.studentEmail}
-        />
+        <MessageThread messages={ticket.data.messages} studentName={student} />
       </section>
 
       <section aria-labelledby="reply-heading" className="mt-8">
         <h2 className="sr-only" id="reply-heading">
           Reply
         </h2>
-        <ReplyBox
-          student={ticket.data.studentName ?? ticket.data.studentEmail}
-          ticketId={ticket.data.id}
-        />
+        <ReplyBox student={student} ticketId={ticket.data.id} />
       </section>
     </>
   )
@@ -113,7 +109,7 @@ function Stamp({ label, value }: { label: string; value: string }) {
     <div className="flex gap-1">
       <dt>{label}:</dt>
       <dd>
-        <time dateTime={value}>{stampFormat.format(new Date(value))}</time>
+        <time dateTime={value}>{dateAndTime.format(new Date(value))}</time>
       </dd>
     </div>
   )

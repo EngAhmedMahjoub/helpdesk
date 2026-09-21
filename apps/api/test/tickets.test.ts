@@ -8,7 +8,13 @@ import {
 } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
 import { prisma, resetDatabase } from './db.ts'
-import { createTicket, createUser, sessionCookieFor } from './fixtures.ts'
+import {
+  createMessage,
+  createThread,
+  createTicket,
+  createUser,
+  sessionCookieFor,
+} from './fixtures.ts'
 
 const app = createApp()
 
@@ -23,6 +29,12 @@ const day = (n: number) => new Date(Date.UTC(2026, 8, n, 9))
 
 /** GETs the list as a signed-in agent. */
 const list = (query = '') => request(app).get(`/api/tickets${query}`).set('Cookie', agentCookie)
+
+/** GETs one ticket as that same agent. */
+const detail = (id: number | string) =>
+  request(app)
+    .get(`/api/tickets/${String(id)}`)
+    .set('Cookie', agentCookie)
 
 const subjects = (res: request.Response) =>
   (res.body as TicketListResponse).tickets.map((ticket) => ticket.subject)
@@ -207,11 +219,6 @@ describe('GET /api/tickets with an invalid query', () => {
 })
 
 describe('GET /api/tickets/:id', () => {
-  const detail = (id: number | string) =>
-    request(app)
-      .get(`/api/tickets/${String(id)}`)
-      .set('Cookie', agentCookie)
-
   test('returns the ticket with its thread, oldest message first', async () => {
     const replier = await createUser({ email: 'gil@example.com', name: 'Gil Agent' })
     const ticket = await createTicket({
@@ -225,35 +232,27 @@ describe('GET /api/tickets/:id', () => {
       updatedAt: day(6),
     })
     // Created out of order, so the response's order is the query's, not insertion's.
-    const reply = await prisma.message.create({
-      data: {
-        ticketId: ticket.id,
-        direction: 'outbound',
-        author: 'agent',
-        agentId: replier.id,
-        body: 'Checking the grading log now.',
-        createdAt: day(3),
-      },
+    const reply = await createMessage({
+      ticketId: ticket.id,
+      direction: 'outbound',
+      author: 'agent',
+      agentId: replier.id,
+      body: 'Checking the grading log now.',
+      createdAt: day(3),
     })
-    const question = await prisma.message.create({
-      data: {
-        ticketId: ticket.id,
-        direction: 'inbound',
-        author: 'student',
-        body: 'My quiz says 0 out of 10.',
-        emailMessageId: '<q@student.example>',
-        createdAt: day(1),
-      },
+    const question = await createMessage({
+      ticketId: ticket.id,
+      body: 'My quiz says 0 out of 10.',
+      emailMessageId: '<q@student.example>',
+      createdAt: day(1),
     })
-    const answer = await prisma.message.create({
-      data: {
-        ticketId: ticket.id,
-        direction: 'outbound',
-        author: 'ai',
-        body: 'Scores can take an hour to appear.',
-        emailMessageId: '<a@helpdesk.example>',
-        createdAt: day(2),
-      },
+    const answer = await createMessage({
+      ticketId: ticket.id,
+      direction: 'outbound',
+      author: 'ai',
+      body: 'Scores can take an hour to appear.',
+      emailMessageId: '<a@helpdesk.example>',
+      createdAt: day(2),
     })
 
     const res = await detail(ticket.id)
@@ -317,14 +316,7 @@ describe('GET /api/tickets/:id', () => {
     const mine = await createTicket({ subject: 'Mine' })
     const other = await createTicket({ subject: 'Other' })
     for (const ticketId of [mine.id, other.id]) {
-      await prisma.message.create({
-        data: {
-          ticketId,
-          direction: 'inbound',
-          author: 'student',
-          body: `For ${String(ticketId)}`,
-        },
-      })
+      await createMessage({ ticketId, body: `For ${String(ticketId)}` })
     }
 
     const res = await detail(mine.id)
@@ -383,19 +375,9 @@ describe('GET /api/tickets/:id with a long thread', () => {
   test(`carries at most ${String(MESSAGE_PAGE_SIZE)} messages, keeping the newest, still oldest first`, async () => {
     const ticket = await createTicket()
     // One over the cap, so the oldest is the one left out.
-    await prisma.message.createMany({
-      data: Array.from({ length: MESSAGE_PAGE_SIZE + 1 }, (_, index) => ({
-        ticketId: ticket.id,
-        direction: 'inbound' as const,
-        author: 'student' as const,
-        body: `Message ${String(index)}`,
-        createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
-      })),
-    })
+    await createThread(ticket.id, MESSAGE_PAGE_SIZE + 1)
 
-    const res = await request(app)
-      .get(`/api/tickets/${String(ticket.id)}`)
-      .set('Cookie', agentCookie)
+    const res = await detail(ticket.id)
 
     const { messages } = res.body as TicketDetail
     expect(messages).toHaveLength(MESSAGE_PAGE_SIZE)
@@ -408,19 +390,9 @@ describe('GET /api/tickets/:id with a long thread', () => {
 
   test('leaves a thread under the cap whole', async () => {
     const ticket = await createTicket()
-    await prisma.message.createMany({
-      data: Array.from({ length: 3 }, (_, index) => ({
-        ticketId: ticket.id,
-        direction: 'inbound' as const,
-        author: 'student' as const,
-        body: `Message ${String(index)}`,
-        createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
-      })),
-    })
+    await createThread(ticket.id, 3)
 
-    const res = await request(app)
-      .get(`/api/tickets/${String(ticket.id)}`)
-      .set('Cookie', agentCookie)
+    const res = await detail(ticket.id)
 
     expect((res.body as TicketDetail).messages.map((m) => m.body)).toEqual([
       'Message 0',
@@ -441,9 +413,7 @@ describe('PATCH /api/tickets/:id', () => {
 
   test('changes the status and answers with the ticket and its thread', async () => {
     const ticket = await createTicket({ status: 'open' })
-    await prisma.message.create({
-      data: { ticketId: ticket.id, direction: 'inbound', author: 'student', body: 'Help' },
-    })
+    await createMessage({ ticketId: ticket.id })
 
     const res = await patch(ticket.id, { status: 'closed' })
 
@@ -655,25 +625,11 @@ describe('POST /api/tickets/:id/replies', () => {
 
   test("appears at the end of the ticket's thread", async () => {
     const ticket = await createTicket()
-    await prisma.message.create({
-      data: {
-        ticketId: ticket.id,
-        direction: 'inbound',
-        author: 'student',
-        body: 'Help',
-        createdAt: day(1),
-      },
-    })
+    await createMessage({ ticketId: ticket.id, createdAt: day(1) })
 
     await reply(ticket.id, { body: 'On it.' })
 
-    const thread = (
-      (
-        await request(app)
-          .get(`/api/tickets/${String(ticket.id)}`)
-          .set('Cookie', agentCookie)
-      ).body as TicketDetail
-    ).messages
+    const thread = ((await detail(ticket.id)).body as TicketDetail).messages
     expect(thread.map((m) => [m.author, m.body])).toEqual([
       ['student', 'Help'],
       ['agent', 'On it.'],

@@ -14,9 +14,7 @@ import {
 } from '@/components/ui/table'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useUsers } from '@/hooks/use-users'
-
-// Built once rather than per row. undefined locale means the reader's own.
-const joinedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
+import { dateOnly } from '@/lib/format'
 
 // One list for the skeleton and the table, so their headers and widths cannot
 // drift apart. Sums to 100%; Email gets the most because it runs longest.
@@ -125,7 +123,7 @@ function UsersTable({
               </Badge>
             </TableCell>
             <TableCell className="text-muted-foreground">
-              <time dateTime={user.createdAt}>{joinedFormat.format(new Date(user.createdAt))}</time>
+              <time dateTime={user.createdAt}>{dateOnly.format(new Date(user.createdAt))}</time>
             </TableCell>
             <TableCell>
               <UserActions onChanged={onChanged} user={user} viewer={viewer} />

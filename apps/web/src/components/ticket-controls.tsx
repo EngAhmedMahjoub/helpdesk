@@ -8,14 +8,8 @@ import {
 import { PendingLabel } from '@/components/page-spinner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import SelectField from '@/components/select-field'
+import { SelectItem } from '@/components/ui/select'
 import { useUpdateTicket } from '@/hooks/use-tickets'
 
 /**
@@ -125,27 +119,26 @@ function Field({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Select disabled={disabled} onValueChange={onChange} value={value}>
-        <SelectTrigger className="w-40 capitalize" id={id}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {unsetOption && (
-            // Rendered so the trigger has something to show, disabled so the
-            // value it stands for cannot be chosen.
-            <SelectItem className="capitalize" disabled value={unsetOption}>
-              {unsetOption}
-            </SelectItem>
-          )}
-          {options.map((option) => (
-            <SelectItem className="capitalize" key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <SelectField
+      className="w-40 capitalize"
+      disabled={disabled}
+      id={id}
+      label={label}
+      onChange={onChange}
+      value={value}
+    >
+      {unsetOption && (
+        // Rendered so the trigger has something to show, disabled so the
+        // value it stands for cannot be chosen.
+        <SelectItem className="capitalize" disabled value={unsetOption}>
+          {unsetOption}
+        </SelectItem>
+      )}
+      {options.map((option) => (
+        <SelectItem className="capitalize" key={option} value={option}>
+          {option}
+        </SelectItem>
+      ))}
+    </SelectField>
   )
 }

@@ -11,6 +11,7 @@ import {
   fetchTickets,
   ticketQueryKey,
   ticketsQueryKey,
+  ticketsQueryKeyPrefix,
   updateTicket,
 } from '@/lib/tickets'
 
@@ -48,7 +49,7 @@ export function useUpdateTicket(id: number) {
     mutationFn: (changes: UpdateTicketRequest) => updateTicket(id, changes),
     onSuccess: (ticket) => {
       queryClient.setQueryData(ticketQueryKey(id), ticket)
-      void queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      void queryClient.invalidateQueries({ queryKey: ticketsQueryKeyPrefix })
     },
   })
 }
@@ -68,7 +69,7 @@ export function useCreateReply(id: number) {
         ticket ? { ...ticket, messages: [...ticket.messages, message] } : ticket,
       )
       void queryClient.invalidateQueries({ queryKey: ticketQueryKey(id) })
-      void queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      void queryClient.invalidateQueries({ queryKey: ticketsQueryKeyPrefix })
     },
   })
 }
