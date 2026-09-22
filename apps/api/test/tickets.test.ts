@@ -138,6 +138,80 @@ describe('GET /api/tickets filters', () => {
   })
 })
 
+describe('GET /api/tickets by assignee', () => {
+  let gilCookie: string
+
+  beforeEach(async () => {
+    const gil = await createUser({ email: 'gil@example.com', name: 'Gil Agent' })
+    const fay = await createUser({ email: 'fay@example.com', name: 'Fay Agent' })
+    gilCookie = await sessionCookieFor(gil.id)
+
+    const ticket = (subject: string, data: Parameters<typeof createTicket>[0]) =>
+      createTicket({ subject, ...data })
+    await ticket('Gil open refund', { assigneeId: gil.id, status: 'open', category: 'refund' })
+    await ticket('Gil open general', { assigneeId: gil.id, status: 'open', category: 'general' })
+    await ticket('Gil resolved refund', {
+      assigneeId: gil.id,
+      status: 'resolved',
+      category: 'refund',
+    })
+    await ticket('Fay open refund', { assigneeId: fay.id, status: 'open', category: 'refund' })
+    await ticket('Nobody open refund', { status: 'open', category: 'refund' })
+    await ticket('Nobody resolved general', { status: 'resolved', category: 'general' })
+  })
+
+  const listAs = (cookie: string, query: string) =>
+    request(app).get(`/api/tickets${query}&sort=createdAt&order=asc`).set('Cookie', cookie)
+
+  test('me: only the tickets assigned to whoever is asking', async () => {
+    const res = await listAs(gilCookie, '?assignee=me')
+
+    expect(res.status).toBe(200)
+    expect(subjects(res)).toEqual(['Gil open refund', 'Gil open general', 'Gil resolved refund'])
+    expect((res.body as TicketListResponse).total).toBe(3)
+  })
+
+  test('me: someone with nothing assigned gets an empty page', async () => {
+    // The top-level agent, who holds no ticket here.
+    const res = await listAs(agentCookie, '?assignee=me')
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ tickets: [], total: 0 })
+  })
+
+  test('none: only the tickets nobody holds', async () => {
+    const res = await listAs(gilCookie, '?assignee=none')
+
+    expect(subjects(res)).toEqual(['Nobody open refund', 'Nobody resolved general'])
+    expect((res.body as TicketListResponse).total).toBe(2)
+  })
+
+  test('me with status and category', async () => {
+    const res = await listAs(gilCookie, '?assignee=me&status=open&category=refund')
+
+    expect(subjects(res)).toEqual(['Gil open refund'])
+    expect((res.body as TicketListResponse).total).toBe(1)
+  })
+
+  test('none with status and category', async () => {
+    const res = await listAs(gilCookie, '?assignee=none&status=resolved&category=general')
+
+    expect(subjects(res)).toEqual(['Nobody resolved general'])
+    expect((res.body as TicketListResponse).total).toBe(1)
+  })
+
+  test('left out, it filters nothing', async () => {
+    const res = await listAs(gilCookie, '?category=refund')
+
+    expect(subjects(res)).toEqual([
+      'Gil open refund',
+      'Gil resolved refund',
+      'Fay open refund',
+      'Nobody open refund',
+    ])
+  })
+})
+
 describe('GET /api/tickets sorting', () => {
   // Created and updated in different orders, so each sort gives its own answer.
   beforeEach(async () => {
@@ -211,6 +285,9 @@ describe('GET /api/tickets with an invalid query', () => {
     ['a fractional page', '?page=1.5'],
     ['a page size over the cap', '?pageSize=101'],
     ['a status given twice', '?status=open&status=closed'],
+    ['an unknown assignee value', '?assignee=anyone'],
+    // Someone else's tickets are not a filter this list offers.
+    ['a user id as the assignee', `?assignee=${crypto.randomUUID()}`],
   ]
 
   for (const [label, query] of cases) {

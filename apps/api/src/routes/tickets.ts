@@ -117,7 +117,20 @@ ticketsRouter.get('/', async (req, res) => {
   const query = parseQuery(listTicketsQuerySchema, req, res)
   if (!query) return
 
-  const where: Prisma.TicketWhereInput = { status: query.status, category: query.category }
+  // requireAuth put the user there. Answered rather than defaulted, as on
+  // replies: an empty id would match nobody's tickets and read as "none yours".
+  const userId = req.user?.id
+  if (query.assignee === 'me' && !userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  const where: Prisma.TicketWhereInput = {
+    status: query.status,
+    category: query.category,
+    // undefined leaves the filter off; null matches the unassigned.
+    assigneeId: query.assignee && (query.assignee === 'me' ? userId : null),
+  }
 
   const [tickets, total] = await prisma.$transaction([
     prisma.ticket.findMany({

@@ -48,6 +48,9 @@ export const TICKET_PAGE_SIZE_MAX = 100
 export const listTicketsQuerySchema = z.object({
   status: z.enum(TICKET_STATUSES).optional(),
   category: z.enum(TICKET_CATEGORIES).optional(),
+  // "me" rather than an id: the API reads who that is from the session, so a
+  // link to "my tickets" means the same thing for whoever opens it.
+  assignee: z.enum(['me', 'none']).optional(),
   sort: z.enum(['createdAt', 'updatedAt']).default('updatedAt'),
   order: z.enum(['asc', 'desc']).default('desc'),
   // Coerced: a query string carries every value as text.
