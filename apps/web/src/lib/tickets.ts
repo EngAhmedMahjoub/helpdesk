@@ -1,4 +1,5 @@
 import type {
+  Assignee,
   CreateReplyRequest,
   ListTicketsQuery,
   TicketDetail,
@@ -29,8 +30,11 @@ export function fetchTickets(query: ListTicketsQuery): Promise<TicketListRespons
   return apiRequest<TicketListResponse>('/tickets', { params: query })
 }
 
+/** Every ticket's detail, whichever ticket: what a change to a user invalidates. */
+export const ticketQueryKeyPrefix = ['ticket'] as const
+
 /** The key one ticket's detail is cached under, keyed by its id. */
-export const ticketQueryKey = (id: number) => ['ticket', id] as const
+export const ticketQueryKey = (id: number) => [...ticketQueryKeyPrefix, id] as const
 
 export function fetchTicket(id: number): Promise<TicketDetail> {
   return apiRequest<TicketDetail>(`/tickets/${String(id)}`)
@@ -46,6 +50,16 @@ export function createReply(id: number, request: CreateReplyRequest): Promise<Ti
     method: 'POST',
     data: request,
   })
+}
+
+/**
+ * Who a ticket can be assigned to. Its own key, not under the tickets prefix:
+ * a change to one ticket does not change who can take the others.
+ */
+export const assigneesQueryKey = ['assignees'] as const
+
+export function fetchAssignees(): Promise<Assignee[]> {
+  return apiRequest<Assignee[]>('/tickets/assignees')
 }
 
 /**

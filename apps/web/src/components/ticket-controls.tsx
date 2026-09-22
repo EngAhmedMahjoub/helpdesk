@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import SelectField from '@/components/select-field'
 import { SelectItem } from '@/components/ui/select'
-import { useUpdateTicket } from '@/hooks/use-tickets'
+import { useCurrentUser } from '@/hooks/use-auth'
+import { useAssignees, useUpdateTicket } from '@/hooks/use-tickets'
 
 /**
  * Stands in for a null category, so the select always has a value. Given
@@ -61,6 +62,14 @@ export default function TicketControls({ ticket }: { ticket: TicketDetail }) {
           value={ticket.category ?? UNCLASSIFIED}
         />
 
+        <AssigneeControl
+          disabled={update.isPending}
+          onAssign={(assigneeId) => {
+            update.mutate({ assigneeId })
+          }}
+          ticket={ticket}
+        />
+
         {ticket.needsAgent && (
           <div className="flex items-center gap-2">
             <Badge variant="destructive">
@@ -96,6 +105,71 @@ export default function TicketControls({ ticket }: { ticket: TicketDetail }) {
           ? `Ticket updated: ${ticket.status}, ${ticket.category ?? 'unclassified'}.`
           : ''}
       </p>
+    </div>
+  )
+}
+
+/**
+ * Stands in for no assignee, for the same reason UNCLASSIFIED stands in for
+ * no category. Unlike it, choosing it is allowed: a ticket can be handed back.
+ * No user id can collide with it, since every id is a UUID.
+ */
+const UNASSIGNED = 'unassigned'
+
+/**
+ * Who holds the ticket, and a shortcut for taking it. The choices are the
+ * active users the API would accept, so a deactivated one is never offered.
+ */
+function AssigneeControl({
+  ticket,
+  disabled,
+  onAssign,
+}: {
+  ticket: TicketDetail
+  disabled: boolean
+  onAssign: (assigneeId: string | null) => void
+}) {
+  const assignees = useAssignees()
+  const me = useCurrentUser().data
+  const current = ticket.assignee
+
+  // The assignee is kept in the choices even when the list lacks them — not
+  // loaded yet, or deactivated since — so the trigger always names who holds it.
+  const choices = assignees.data ?? []
+  const options =
+    current && !choices.some((each) => each.id === current.id) ? [current, ...choices] : choices
+
+  return (
+    <div className="flex items-end gap-2">
+      <SelectField
+        className="w-48"
+        disabled={disabled}
+        id={`assignee-${String(ticket.id)}`}
+        label="Assignee"
+        onChange={(value) => {
+          onAssign(value === UNASSIGNED ? null : value)
+        }}
+        value={current?.id ?? UNASSIGNED}
+      >
+        <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+        {options.map((each) => (
+          <SelectItem key={each.id} value={each.id}>
+            {each.name}
+          </SelectItem>
+        ))}
+      </SelectField>
+
+      {me && current?.id !== me.id && (
+        <Button
+          disabled={disabled}
+          onClick={() => {
+            onAssign(me.id)
+          }}
+          variant="outline"
+        >
+          Assign to me
+        </Button>
+      )}
     </div>
   )
 }
