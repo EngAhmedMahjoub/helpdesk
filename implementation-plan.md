@@ -92,7 +92,7 @@ None.
 | 3.14 | Deactivating a user clears their assignments in the same transaction | A deactivated agent's tickets come back unassigned | Done |
 | 3.15 | `GET /api/tickets?assignee=me\|none` filter | Tests for each value, alone and with status and category | Done |
 | 3.16 | Frontend: assignee select and **Assign to me** on the ticket detail page | Assignment persists after reload | Done |
-| 3.17 | Frontend: Assignee column and filter on the ticket list | Filter narrows the list and lives in the URL | |
+| 3.17 | Frontend: Assignee column and filter on the ticket list | Filter narrows the list and lives in the URL | Done |
 
 ## Phase 4 — Email
 

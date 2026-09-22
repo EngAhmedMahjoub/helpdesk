@@ -89,15 +89,34 @@ test('an agent sees the ticket list', async () => {
   expect(router.state.location.pathname).toBe('/tickets')
 })
 
+test('names who holds each ticket, and says so when nobody does', async () => {
+  stubTickets(() =>
+    listOf([
+      ticketSummary({ id: 4, subject: 'Held one', assignee: { id: 'gil', name: 'Gil Agent' } }),
+      ticketSummary({ id: 5, subject: 'Loose one' }),
+    ]),
+  )
+
+  renderRoute('/tickets')
+
+  const held = within((await screen.findByRole('cell', { name: 'Held one' })).closest('tr')!)
+  expect(held.getByRole('cell', { name: 'Gil Agent' })).toBeTruthy()
+  const loose = within(screen.getByRole('cell', { name: 'Loose one' }).closest('tr')!)
+  expect(loose.getByRole('cell', { name: 'Unassigned' })).toBeTruthy()
+})
+
 test('asks for the filters, sort and page in the URL', async () => {
   const { queries } = stubTickets(() => listOf(tickets, { page: 2, pageSize: 2, total: 6 }))
 
-  renderRoute('/tickets?status=open&category=refund&sort=createdAt&order=asc&page=2&pageSize=2')
+  renderRoute(
+    '/tickets?status=open&category=refund&assignee=me&sort=createdAt&order=asc&page=2&pageSize=2',
+  )
 
   await screen.findByRole('table')
   expect(Object.fromEntries(queries[0]!)).toEqual({
     status: 'open',
     category: 'refund',
+    assignee: 'me',
     sort: 'createdAt',
     order: 'asc',
     page: '2',
@@ -156,6 +175,38 @@ test('choosing All drops the status and keeps the category', async () => {
   const search = new URLSearchParams(router.state.location.search)
   expect(search.has('status')).toBe(false)
   expect(search.get('category')).toBe('technical')
+})
+
+test('the Assignee filter narrows the list to mine or to unassigned, and lives in the URL', async () => {
+  const user = userEvent.setup()
+  const { queries } = stubTickets(() => listOf(tickets))
+
+  const router = renderRoute('/tickets?category=refund')
+  await screen.findByRole('table')
+  const search = () => new URLSearchParams(router.state.location.search)
+
+  for (const [label, value] of [
+    ['Assigned to me', 'me'],
+    ['Unassigned', 'none'],
+  ] as const) {
+    await user.click(screen.getByLabelText('Assignee'))
+    await user.click(await screen.findByRole('option', { name: label }))
+
+    await waitFor(() => {
+      expect(queries.at(-1)?.get('assignee')).toBe(value)
+    })
+    expect(search().get('assignee')).toBe(value)
+    // The other filters stay: this one narrows them, it does not replace them.
+    expect(queries.at(-1)?.get('category')).toBe('refund')
+  }
+
+  // Anyone takes the filter off, and the parameter with it.
+  await user.click(screen.getByLabelText('Assignee'))
+  await user.click(await screen.findByRole('option', { name: 'Anyone' }))
+  await waitFor(() => {
+    expect(search().has('assignee')).toBe(false)
+  })
+  expect(search().get('category')).toBe('refund')
 })
 
 test('each sort option asks for its column and direction', async () => {
