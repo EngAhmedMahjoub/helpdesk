@@ -1,4 +1,5 @@
 import {
+  type ListTicketsQuery,
   type TicketCategory,
   type TicketStatus,
   TICKET_CATEGORIES,
@@ -21,21 +22,33 @@ const sortLabels: Record<SortChoice, string> = {
 // the All options carry their own value and are mapped back to undefined.
 const ALL = 'all'
 
+type AssigneeFilter = ListTicketsQuery['assignee']
+
+/** Whose tickets, in words: the API takes "me" and "none", not a person. */
+const assigneeLabels: Record<NonNullable<AssigneeFilter>, string> = {
+  me: 'Assigned to me',
+  none: 'Unassigned',
+}
+
 type Props = {
   status: TicketStatus | undefined
   category: TicketCategory | undefined
+  assignee: AssigneeFilter
   sort: SortChoice
   onStatus: (status: TicketStatus | undefined) => void
   onCategory: (category: TicketCategory | undefined) => void
+  onAssignee: (assignee: AssigneeFilter) => void
   onSort: (sort: SortChoice) => void
 }
 
 export default function TicketFilters({
   status,
   category,
+  assignee,
   sort,
   onStatus,
   onCategory,
+  onAssignee,
   onSort,
 }: Props) {
   return (
@@ -59,6 +72,24 @@ export default function TicketFilters({
         options={TICKET_CATEGORIES}
         value={category ?? ALL}
       />
+
+      <SelectField
+        className="w-44"
+        id="filter-assignee"
+        label="Assignee"
+        onChange={(value) => {
+          onAssignee(value === ALL ? undefined : (value as NonNullable<AssigneeFilter>))
+        }}
+        value={assignee ?? ALL}
+      >
+        {/* Anyone rather than All: it reads as a person, which this filter is about. */}
+        <SelectItem value={ALL}>Anyone</SelectItem>
+        {Object.entries(assigneeLabels).map(([value, label]) => (
+          <SelectItem key={value} value={value}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectField>
 
       <SelectField
         className="w-48"

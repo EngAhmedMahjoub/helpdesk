@@ -20,12 +20,13 @@ import { studentLabel } from '@/lib/tickets'
 // One list for the skeleton and the table, so their headers and widths cannot
 // drift apart. Sums to 100%; Subject gets the most because it runs longest.
 const columns: Column[] = [
-  { label: 'Subject', width: 'w-[30%]' },
-  { label: 'Student', width: 'w-[21%]' },
-  { label: 'Status', width: 'w-[11%]' },
-  { label: 'Category', width: 'w-[12%]' },
-  { label: 'Needs agent', width: 'w-[11%]' },
-  { label: 'Last activity', width: 'w-[15%]' },
+  { label: 'Subject', width: 'w-[26%]' },
+  { label: 'Student', width: 'w-[17%]' },
+  { label: 'Status', width: 'w-[10%]' },
+  { label: 'Category', width: 'w-[11%]' },
+  { label: 'Assignee', width: 'w-[13%]' },
+  { label: 'Needs agent', width: 'w-[10%]' },
+  { label: 'Last activity', width: 'w-[13%]' },
 ]
 
 export default function TicketsPage() {
@@ -42,7 +43,9 @@ export default function TicketsPage() {
       </p>
 
       <TicketFilters
+        assignee={query.assignee}
         category={query.category}
+        onAssignee={(assignee) => update({ assignee })}
         onCategory={(category) => update({ category })}
         onSort={(choice) => {
           const [sortBy, order] = choice.split(':') as [ListTicketsQuery['sort'], 'asc' | 'desc']
@@ -135,6 +138,9 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
       </TableCell>
       <TableCell className="text-muted-foreground">
         {ticket.category ?? <span className="text-muted-foreground">—</span>}
+      </TableCell>
+      <TableCell className="truncate text-muted-foreground" title={ticket.assignee?.name}>
+        {ticket.assignee?.name ?? 'Unassigned'}
       </TableCell>
       <TableCell>
         {ticket.needsAgent ? (
