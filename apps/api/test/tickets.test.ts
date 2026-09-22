@@ -61,6 +61,7 @@ describe('GET /api/tickets access', () => {
 
 describe('GET /api/tickets defaults', () => {
   test('returns every ticket, most recently updated first, as summaries', async () => {
+    const gil = await createUser({ email: 'gil@example.com', name: 'Gil Agent' })
     const older = await createTicket({
       subject: 'Older',
       studentName: 'Maya Chen',
@@ -68,6 +69,7 @@ describe('GET /api/tickets defaults', () => {
       summary: 'Not for the list',
       needsAgent: true,
       escalationReason: 'ai_failed',
+      assigneeId: gil.id,
       createdAt: day(1),
       updatedAt: day(2),
     })
@@ -89,9 +91,12 @@ describe('GET /api/tickets defaults', () => {
       category: 'technical',
       needsAgent: true,
       escalationReason: 'ai_failed',
+      // By id and name only, never the rest of the user's row.
+      assignee: { id: gil.id, name: 'Gil Agent' },
       createdAt: day(1).toISOString(),
       updatedAt: day(2).toISOString(),
     })
+    expect(body.tickets[0]?.assignee).toBeNull()
   })
 
   test('returns an empty page, not an error, when there are no tickets', async () => {
@@ -228,6 +233,7 @@ describe('GET /api/tickets/:id', () => {
       category: 'technical',
       summary: 'Quiz 3 scored 0 after submitting',
       autoCloseAt: day(20),
+      assigneeId: replier.id,
       createdAt: day(1),
       updatedAt: day(6),
     })
@@ -267,6 +273,7 @@ describe('GET /api/tickets/:id', () => {
       category: 'technical',
       needsAgent: false,
       escalationReason: null,
+      assignee: { id: replier.id, name: 'Gil Agent' },
       summary: 'Quiz 3 scored 0 after submitting',
       autoCloseAt: day(20).toISOString(),
       createdAt: day(1).toISOString(),
@@ -583,6 +590,120 @@ describe('PATCH /api/tickets/:id', () => {
 
     expect(res.status).toBe(200)
     expect(await stored(ticket.id)).toMatchObject({ status: 'closed', subject: 'Original' })
+  })
+
+  describe('assignment', () => {
+    const agent = () => createUser({ email: 'gil@example.com', name: 'Gil Agent' })
+
+    test('assigns a ticket and answers with the assignee, leaving the rest alone', async () => {
+      const gil = await agent()
+      const ticket = await createTicket({ status: 'open', category: 'general', needsAgent: true })
+
+      const res = await patch(ticket.id, { assigneeId: gil.id })
+
+      expect(res.status).toBe(200)
+      expect((res.body as TicketDetail).assignee).toEqual({ id: gil.id, name: 'Gil Agent' })
+      expect(await stored(ticket.id)).toMatchObject({
+        assigneeId: gil.id,
+        // A label: assigning is not a status change, and not an escalation's end.
+        status: 'open',
+        category: 'general',
+        needsAgent: true,
+      })
+    })
+
+    test('assigns to an admin as readily as to an agent', async () => {
+      const admin = await createUser({ role: 'admin', email: 'ada@example.com', name: 'Ada' })
+      const ticket = await createTicket()
+
+      const res = await patch(ticket.id, { assigneeId: admin.id })
+
+      expect(res.status).toBe(200)
+      expect((await stored(ticket.id)).assigneeId).toBe(admin.id)
+    })
+
+    test('reassigns a ticket from one user to another', async () => {
+      const gil = await agent()
+      const fay = await createUser({ email: 'fay@example.com', name: 'Fay Agent' })
+      const ticket = await createTicket({ assigneeId: gil.id })
+
+      const res = await patch(ticket.id, { assigneeId: fay.id })
+
+      expect(res.status).toBe(200)
+      expect((res.body as TicketDetail).assignee).toEqual({ id: fay.id, name: 'Fay Agent' })
+      expect((await stored(ticket.id)).assigneeId).toBe(fay.id)
+    })
+
+    test('clears the assignee with null', async () => {
+      const gil = await agent()
+      const ticket = await createTicket({ assigneeId: gil.id })
+
+      const res = await patch(ticket.id, { assigneeId: null })
+
+      expect(res.status).toBe(200)
+      expect((res.body as TicketDetail).assignee).toBeNull()
+      expect((await stored(ticket.id)).assigneeId).toBeNull()
+    })
+
+    test('leaves the assignee alone when the request does not name one', async () => {
+      const gil = await agent()
+      const ticket = await createTicket({ assigneeId: gil.id })
+
+      await patch(ticket.id, { status: 'resolved' })
+
+      expect((await stored(ticket.id)).assigneeId).toBe(gil.id)
+    })
+
+    // One answer for both: either way there is nobody to hand the ticket to.
+    const unavailable: [string, () => Promise<string>][] = [
+      ['an unknown user', async () => crypto.randomUUID()],
+      [
+        'a deactivated user',
+        async () => (await createUser({ email: 'gone@example.com', isActive: false })).id,
+      ],
+    ]
+
+    for (const [label, assigneeId] of unavailable) {
+      test(`refuses ${label} and changes nothing`, async () => {
+        const gil = await agent()
+        const ticket = await createTicket({ assigneeId: gil.id })
+
+        const res = await patch(ticket.id, { assigneeId: await assigneeId() })
+
+        expect(res.status).toBe(400)
+        expect(res.body).toEqual({ error: 'Assign the ticket to an active user' })
+        expect((await stored(ticket.id)).assigneeId).toBe(gil.id)
+      })
+    }
+
+    test('refuses an unavailable assignee even beside a valid change, and changes nothing', async () => {
+      const ticket = await createTicket({ status: 'open' })
+
+      const res = await patch(ticket.id, { status: 'closed', assigneeId: crypto.randomUUID() })
+
+      expect(res.status).toBe(400)
+      expect((await stored(ticket.id)).status).toBe('open')
+    })
+
+    test('refuses an id that is not a UUID as a malformed body', async () => {
+      const ticket = await createTicket()
+
+      for (const assigneeId of ['gil', '', 42]) {
+        const res = await patch(ticket.id, { assigneeId })
+        expect(res.status).toBe(400)
+        expect(res.body).toEqual({ error: 'Invalid request body' })
+      }
+      expect((await stored(ticket.id)).assigneeId).toBeNull()
+    })
+
+    test('answers 404 for a ticket that is not there, even with an active assignee', async () => {
+      const gil = await agent()
+
+      const res = await patch(2_147_483_000, { assigneeId: gil.id })
+
+      expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Ticket not found' })
+    })
   })
 })
 
