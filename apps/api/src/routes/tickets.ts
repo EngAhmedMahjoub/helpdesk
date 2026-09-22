@@ -27,9 +27,11 @@ const summaryFields = {
   category: true,
   needsAgent: true,
   escalationReason: true,
+  // Named like a message's agent: by id and name, never the rest of their row.
+  assignee: { select: { id: true, name: true } },
   createdAt: true,
   updatedAt: true,
-} as const
+} satisfies Prisma.TicketSelect
 
 function toSummary(
   ticket: Prisma.TicketGetPayload<{ select: typeof summaryFields }>,
@@ -88,6 +90,11 @@ function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields 
 }
 
 const TICKET_NOT_FOUND = 'Ticket not found'
+
+// One answer for a user who does not exist and one who is deactivated: either
+// way there is nobody to hand the ticket to, and the ticket screen shows the
+// same thing for both.
+const ASSIGNEE_UNAVAILABLE = 'Assign the ticket to an active user'
 
 /**
  * Answers 404 when Prisma reports the row was not there, and says whether it
@@ -159,10 +166,24 @@ ticketsRouter.patch('/:id', async (req, res) => {
   const id = parseId(ticketIdSchema, req, res, TICKET_NOT_FOUND)
   if (id === undefined) return
 
+  // null clears the assignee and needs no user; only a named one is checked.
+  if (body.assigneeId) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: body.assigneeId, isActive: true },
+      select: { id: true },
+    })
+    if (!assignee) {
+      res.status(400).json({ error: ASSIGNEE_UNAVAILABLE })
+      return
+    }
+  }
+
   try {
     const ticket = await prisma.ticket.update({
       where: { id },
       data: {
+        // undefined leaves the assignee as it is; null takes it away.
+        assigneeId: body.assigneeId,
         // autoCloseAt moves only with a status in the request: a category
         // change alone must not start or stop a Resolved ticket's timer.
         ...(body.status && statusChange(body.status)),

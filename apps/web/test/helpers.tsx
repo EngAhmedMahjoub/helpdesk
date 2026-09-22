@@ -39,7 +39,7 @@ export const userSummary = (
   ...overrides,
 })
 
-/** A row of the ticket list: an open, unclassified ticket unless told otherwise. */
+/** A row of the ticket list: an open, unclassified, unassigned ticket unless told otherwise. */
 export const ticketSummary = (
   overrides: Partial<TicketSummary> & Pick<TicketSummary, 'id' | 'subject'>,
 ): TicketSummary => ({
@@ -49,6 +49,7 @@ export const ticketSummary = (
   category: null,
   needsAgent: false,
   escalationReason: null,
+  assignee: null,
   createdAt: '2026-09-01T09:00:00.000Z',
   updatedAt: '2026-09-01T09:00:00.000Z',
   ...overrides,

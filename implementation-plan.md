@@ -88,7 +88,7 @@ None.
 | 3.10 | Frontend: status and category controls on detail page | Changes persist after reload |Done |
 | 3.11 | Frontend: agent reply box | Reply appears in the thread |Done |
 | 3.12 | `Ticket.assigneeId`: nullable relation to `User`, `onDelete: SetNull`, indexed | Migration applied | Done |
-| 3.13 | `PATCH /api/tickets/:id` accepts `assigneeId` (a user id or `null`), refusing an unknown or deactivated user; list and detail return the assignee's id and name | Tests for assign, reassign, clear, unknown user, deactivated user | |
+| 3.13 | `PATCH /api/tickets/:id` accepts `assigneeId` (a user id or `null`), refusing an unknown or deactivated user; list and detail return the assignee's id and name | Tests for assign, reassign, clear, unknown user, deactivated user | Done |
 | 3.14 | Deactivating a user clears their assignments in the same transaction | A deactivated agent's tickets come back unassigned | |
 | 3.15 | `GET /api/tickets?assignee=me\|none` filter | Tests for each value, alone and with status and category | |
 | 3.16 | Frontend: assignee select and **Assign to me** on the ticket detail page | Assignment persists after reload | |

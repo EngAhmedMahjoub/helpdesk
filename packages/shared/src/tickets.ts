@@ -18,6 +18,8 @@ export type TicketSummary = {
   category: TicketCategory | null
   needsAgent: boolean
   escalationReason: EscalationReason | null
+  /** Who is responsible for the ticket, by id and name only; null while nobody is. */
+  assignee: { id: string; name: string } | null
   createdAt: string
   updatedAt: string
 }
@@ -99,6 +101,7 @@ export type TicketDetail = TicketSummary & {
  * The body of `PATCH /api/tickets/:id`: any of these, at least one. An agent
  * may only clear needsAgent — setting it is the AI's escalation, not a choice
  * made from the ticket screen — and clearing it clears escalationReason too.
+ * assigneeId names an active user, or is null to leave the ticket with nobody.
  * Anything else in the body is stripped, so a change of nothing is a 400.
  */
 export const updateTicketSchema = z
@@ -106,6 +109,9 @@ export const updateTicketSchema = z
     status: z.enum(TICKET_STATUSES).optional(),
     category: z.enum(TICKET_CATEGORIES).optional(),
     needsAgent: z.literal(false).optional(),
+    // A UUID, the shape of every user id: anything else cannot name a user, so
+    // it is refused here rather than as a lookup that finds nothing.
+    assigneeId: z.uuid().nullable().optional(),
   })
   .refine((body) => Object.values(body).some((value) => value !== undefined))
 
