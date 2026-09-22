@@ -4,7 +4,7 @@ import request from 'supertest'
 import type { UserSummary } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
 import { prisma, resetDatabase } from './db.ts'
-import { createUser, sessionCookieFor } from './fixtures.ts'
+import { createTicket, createUser, sessionCookieFor } from './fixtures.ts'
 
 const app = createApp()
 
@@ -340,6 +340,74 @@ describe('PATCH /api/users/:id deactivating an agent', () => {
       .post('/api/auth/login')
       .send({ email: 'agent@example.com', password })
     expect(login.status).toBe(401)
+  })
+})
+
+describe('PATCH /api/users/:id and the tickets assigned to the user', () => {
+  const assigneesOf = async (...ids: number[]) =>
+    (
+      await prisma.ticket.findMany({
+        where: { id: { in: ids } },
+        orderBy: { id: 'asc' },
+        select: { assigneeId: true },
+      })
+    ).map((ticket) => ticket.assigneeId)
+
+  async function setUp() {
+    const admin = await createUser({ role: 'admin', email: 'admin@example.com' })
+    const agent = await createUser()
+    const other = await createUser({ email: 'other@example.com' })
+    const tickets = [
+      await createTicket({ assigneeId: agent.id }),
+      await createTicket({ assigneeId: agent.id }),
+      await createTicket({ assigneeId: other.id }),
+      await createTicket(),
+    ]
+    const patch = async (body: object) =>
+      request(app)
+        .patch(`/api/users/${agent.id}`)
+        .set('Cookie', await sessionCookieFor(admin.id))
+        .send(body)
+    return { agent, other, ids: tickets.map((ticket) => ticket.id), patch }
+  }
+
+  test("deactivating clears the user's assignments, and only theirs", async () => {
+    const { other, ids, patch } = await setUp()
+
+    const res = await patch({ isActive: false })
+
+    expect(res.status).toBe(200)
+    expect(await assigneesOf(...ids)).toEqual([null, null, other.id, null])
+  })
+
+  test('reactivating does not hand the tickets back', async () => {
+    const { other, ids, patch } = await setUp()
+    await patch({ isActive: false })
+
+    const res = await patch({ isActive: true })
+
+    expect(res.status).toBe(200)
+    expect(await assigneesOf(...ids)).toEqual([null, null, other.id, null])
+  })
+
+  test('editing details keeps the assignments', async () => {
+    const { agent, other, ids, patch } = await setUp()
+
+    const res = await patch({ name: 'Renamed' })
+
+    expect(res.status).toBe(200)
+    expect(await assigneesOf(...ids)).toEqual([agent.id, agent.id, other.id, null])
+  })
+
+  test('a deactivation that fails keeps the assignments', async () => {
+    const { agent, other, ids, patch } = await setUp()
+
+    // The email is taken, so the user update fails and the transaction with it.
+    const res = await patch({ isActive: false, email: 'other@example.com' })
+
+    expect(res.status).toBe(409)
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: agent.id } })).isActive).toBe(true)
+    expect(await assigneesOf(...ids)).toEqual([agent.id, agent.id, other.id, null])
   })
 })
 

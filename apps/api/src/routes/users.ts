@@ -161,6 +161,14 @@ usersRouter.patch('/:id', userWriteRateLimit, async (req, res) => {
         })
       }
 
+      // Someone who cannot sign in cannot work a ticket, so theirs go back to
+      // nobody in the same transaction rather than sitting with them unseen.
+      // Only on deactivation: reactivating does not hand them back, because
+      // whoever picked the tickets up since may be working them.
+      if (isActive === false) {
+        await tx.ticket.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } })
+      }
+
       return updated
     })
 
