@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test'
 import { cleanup, screen, waitFor } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
-import type { TicketDetail, UpdateTicketRequest } from '@helpdesk/shared'
+import type { Assignee, TicketDetail, UpdateTicketRequest } from '@helpdesk/shared'
 import {
   renderRoute,
   responds,
+  signedInUser,
   stubApi,
   ticketDetail,
   ticketMessage,
@@ -19,6 +20,13 @@ const open = ticketDetail({
   messages: [ticketMessage({ id: 1, body: 'Cannot sign in' })],
 })
 
+/** Who the API would let the ticket go to: the signed-in admin and two agents. */
+const people: Assignee[] = [
+  { id: signedInUser.id, name: signedInUser.name },
+  { id: 'fay', name: 'Fay Agent' },
+  { id: 'gil', name: 'Gil Agent' },
+]
+
 /**
  * Answers the detail, and applies a PATCH to it the way the API would, so a
  * test can read the change back the way the page does.
@@ -30,14 +38,20 @@ function stubTicket(initial: TicketDetail = open) {
 
   stubApi({
     '/auth/me': responds.currentUser,
+    '/tickets/assignees': () => Response.json(people),
     [path]: async (request) => {
       if (request.method !== 'PATCH') return Response.json(ticket)
-      const changes = (await request.clone().json()) as UpdateTicketRequest
-      patches.push(changes)
+      const body = (await request.clone().json()) as UpdateTicketRequest
+      patches.push(body)
+      const { assigneeId, ...changes } = body
       ticket = {
         ...ticket,
         ...changes,
         ...(changes.needsAgent === false && { needsAgent: false, escalationReason: null }),
+        // The API answers with the assignee's name, not the id it was sent.
+        ...(assigneeId !== undefined && {
+          assignee: people.find((each) => each.id === assigneeId) ?? null,
+        }),
       }
       return Response.json(ticket)
     },
@@ -274,4 +288,111 @@ test('a changed ticket does not sit stale in the list behind it', async () => {
   // showing the status it had cached.
   expect(listCalls.length).toBeGreaterThan(before)
   expect(await screen.findByRole('cell', { name: 'closed' })).toBeTruthy()
+})
+
+test('an agent hands the ticket to someone, and the select names who the API stored', async () => {
+  const user = userEvent.setup()
+  const { patches, current } = stubTicket()
+
+  renderRoute('/tickets/26')
+  await waitFor(() => {
+    expect(trigger('Assignee').textContent).toContain('Unassigned')
+  })
+
+  await user.click(trigger('Assignee'))
+  await user.click(await screen.findByRole('option', { name: 'Gil Agent' }))
+
+  await waitFor(() => {
+    expect(patches).toEqual([{ assigneeId: 'gil' }])
+  })
+  expect(current().assignee).toEqual({ id: 'gil', name: 'Gil Agent' })
+  await waitFor(() => {
+    expect(trigger('Assignee').textContent).toContain('Gil Agent')
+  })
+})
+
+test('offers every active user the API lists, and Unassigned', async () => {
+  const user = userEvent.setup()
+  stubTicket()
+
+  renderRoute('/tickets/26')
+  await screen.findByRole('button', { name: 'Assign to me' })
+
+  await user.click(trigger('Assignee'))
+
+  await waitFor(() => {
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Unassigned',
+      signedInUser.name,
+      'Fay Agent',
+      'Gil Agent',
+    ])
+  })
+})
+
+test('Assign to me hands the ticket to whoever is signed in, then steps aside', async () => {
+  const user = userEvent.setup()
+  const { patches } = stubTicket()
+
+  renderRoute('/tickets/26')
+  await user.click(await screen.findByRole('button', { name: 'Assign to me' }))
+
+  await waitFor(() => {
+    expect(patches).toEqual([{ assigneeId: signedInUser.id }])
+  })
+  await waitFor(() => {
+    expect(trigger('Assignee').textContent).toContain(signedInUser.name)
+  })
+  // Already theirs: taking it again would change nothing.
+  expect(screen.queryByRole('button', { name: 'Assign to me' })).toBeNull()
+})
+
+test('choosing Unassigned hands the ticket back to nobody', async () => {
+  const user = userEvent.setup()
+  const { patches } = stubTicket({ ...open, assignee: { id: 'gil', name: 'Gil Agent' } })
+
+  renderRoute('/tickets/26')
+  await waitFor(() => {
+    expect(trigger('Assignee').textContent).toContain('Gil Agent')
+  })
+
+  await user.click(trigger('Assignee'))
+  await user.click(await screen.findByRole('option', { name: 'Unassigned' }))
+
+  await waitFor(() => {
+    expect(patches).toEqual([{ assigneeId: null }])
+  })
+  await waitFor(() => {
+    expect(trigger('Assignee').textContent).toContain('Unassigned')
+  })
+})
+
+test('an assignment survives a reload, because the API kept it', async () => {
+  const user = userEvent.setup()
+  const { current } = stubTicket()
+
+  renderRoute('/tickets/26')
+  await user.click(await screen.findByRole('button', { name: 'Assign to me' }))
+  await waitFor(() => {
+    expect(current().assignee?.id).toBe(signedInUser.id)
+  })
+
+  // A fresh mount with a fresh cache is what a reload gives the page.
+  cleanup()
+  renderRoute('/tickets/26')
+
+  await waitFor(() => {
+    expect(trigger('Assignee').textContent).toContain(signedInUser.name)
+  })
+})
+
+test('names the assignee even when the list of choices does not have them', async () => {
+  // Deactivated since, or the list not loaded: the ticket still says who holds it.
+  stubTicket({ ...open, assignee: { id: 'gone', name: 'Gone Agent' } })
+
+  renderRoute('/tickets/26')
+
+  await waitFor(() => {
+    expect(trigger('Assignee').textContent).toContain('Gone Agent')
+  })
 })

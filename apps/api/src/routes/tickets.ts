@@ -1,5 +1,6 @@
 import { Router, type Response } from 'express'
 import {
+  type Assignee,
   MESSAGE_PAGE_SIZE,
   type TicketDetail,
   type TicketListResponse,
@@ -153,6 +154,20 @@ ticketsRouter.get('/', async (req, res) => {
     total,
   }
   res.json(body)
+})
+
+// Before /:id, which would otherwise take "assignees" for a malformed id.
+// Here rather than on /api/users: that list is admin only and carries whole
+// user rows, while anyone working a ticket needs to know who can take it.
+ticketsRouter.get('/assignees', async (_req, res) => {
+  const assignees: Assignee[] = await prisma.user.findMany({
+    // The same users PATCH accepts: a deactivated one is refused there.
+    where: { isActive: true },
+    select: { id: true, name: true },
+    // id breaks ties, so two people with one name keep their order.
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  })
+  res.json(assignees)
 })
 
 ticketsRouter.get('/:id', async (req, res) => {

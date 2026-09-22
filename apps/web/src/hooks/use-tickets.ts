@@ -6,7 +6,9 @@ import type {
   UpdateTicketRequest,
 } from '@helpdesk/shared'
 import {
+  assigneesQueryKey,
   createReply,
+  fetchAssignees,
   fetchTicket,
   fetchTickets,
   ticketQueryKey,
@@ -36,8 +38,13 @@ export function useTicket(id: number) {
   })
 }
 
+/** The active agents and admins a ticket can be handed to, by name. */
+export function useAssignees() {
+  return useQuery({ queryKey: assigneesQueryKey, queryFn: fetchAssignees })
+}
+
 /**
- * Changes a ticket's status, category or escalation. The API answers with the
+ * Changes a ticket's status, category, escalation or assignee. The API answers with the
  * whole ticket, so the detail cache takes that answer rather than refetching;
  * the lists are only invalidated, since the change may move the ticket between
  * filters and pages, which is the API's to decide.
