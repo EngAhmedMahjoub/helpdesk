@@ -8,6 +8,12 @@ export type TicketStatus = (typeof TICKET_STATUSES)[number]
 export type TicketCategory = (typeof TICKET_CATEGORIES)[number]
 export type EscalationReason = (typeof ESCALATION_REASONS)[number]
 
+/**
+ * Someone a ticket can be assigned to: an active agent or admin, by id and
+ * name only. The body of `GET /api/tickets/assignees` is a list of these.
+ */
+export type Assignee = { id: string; name: string }
+
 /** A ticket as the list shows it: no messages, summary or auto-close date. */
 export type TicketSummary = {
   id: number
@@ -18,8 +24,8 @@ export type TicketSummary = {
   category: TicketCategory | null
   needsAgent: boolean
   escalationReason: EscalationReason | null
-  /** Who is responsible for the ticket, by id and name only; null while nobody is. */
-  assignee: { id: string; name: string } | null
+  /** Who is responsible for the ticket; null while nobody is. */
+  assignee: Assignee | null
   createdAt: string
   updatedAt: string
 }

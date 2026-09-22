@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
 import {
+  type Assignee,
   MESSAGE_PAGE_SIZE,
   type TicketDetail,
   type TicketListResponse,
@@ -298,6 +299,34 @@ describe('GET /api/tickets with an invalid query', () => {
       expect(res.body).toEqual({ error: 'Invalid query' })
     })
   }
+})
+
+describe('GET /api/tickets/assignees', () => {
+  const assignees = () => request(app).get('/api/tickets/assignees').set('Cookie', agentCookie)
+
+  // Asked as the top-level agent throughout: an agent needs this list as much
+  // as an admin, since either can assign.
+  test('lists every active agent and admin by name, with id and name only', async () => {
+    // The top-level agent is named "agent"; these sort around it.
+    const zed = await createUser({ email: 'zed@example.com', name: 'Zed Agent' })
+    const ada = await createUser({ role: 'admin', email: 'ada@example.com', name: 'Ada Admin' })
+    await createUser({ email: 'gone@example.com', name: 'Gone Agent', isActive: false })
+
+    const res = await assignees()
+
+    expect(res.status).toBe(200)
+    const body = res.body as Assignee[]
+    // Sorted as Postgres collates, which puts "agent" between the two.
+    expect(body.map((a) => a.name)).toEqual(['Ada Admin', 'agent', 'Zed Agent'])
+    expect(body[0]).toEqual({ id: ada.id, name: 'Ada Admin' })
+    expect(body[2]).toEqual({ id: zed.id, name: 'Zed Agent' })
+  })
+
+  test('gives an unauthenticated caller 401', async () => {
+    const res = await request(app).get('/api/tickets/assignees')
+
+    expect(res.status).toBe(401)
+  })
 })
 
 describe('GET /api/tickets/:id', () => {
