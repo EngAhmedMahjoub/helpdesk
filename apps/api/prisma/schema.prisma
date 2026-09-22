@@ -16,20 +16,21 @@ enum Role {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  name         String
-  passwordHash String
-  role         Role      @default(agent)
-  isActive     Boolean   @default(true)
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String
+  passwordHash    String
+  role            Role      @default(agent)
+  isActive        Boolean   @default(true)
   // Set by the seed on the admin it creates. Nobody can deactivate a protected
   // user: with no admin left active, nobody could manage users through the app,
   // and the seed would not bring them back.
-  isProtected  Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  sessions     Session[]
-  messages     Message[]
+  isProtected     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sessions        Session[]
+  messages        Message[]
+  assignedTickets Ticket[]
 }
 
 model Session {
@@ -76,9 +77,20 @@ model Ticket {
   escalationReason EscalationReason?
   // Only a Resolved ticket has one: when auto-close will set it Closed.
   autoCloseAt      DateTime?
+  // Who is responsible for the ticket; null while nobody is. A label, not a
+  // permission: anyone can still reply or change status. SetNull rather than
+  // Restrict, unlike Message.agentId, because an assignment is not a record
+  // worth keeping a user row for.
+  assigneeId       String?
+  assignee         User?             @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   messages         Message[]
+
+  // Postgres does not index a foreign key by itself, and this one is read from
+  // both ends: the "Assigned to me" filter (task 3.15), and the SET NULL that
+  // deleting a user runs across every ticket.
+  @@index([assigneeId])
 }
 
 enum MessageDirection {
