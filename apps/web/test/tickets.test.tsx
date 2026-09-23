@@ -1,8 +1,18 @@
 import { expect, test } from 'bun:test'
-import { screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import type { TicketListResponse, TicketSummary } from '@helpdesk/shared'
-import { renderRoute, responds, stubApi, ticketSummary } from './helpers.tsx'
+import { currentUserQueryKey } from '../src/lib/auth.ts'
+import { createQueryClient } from '../src/lib/query-client.ts'
+import { ticketsQueryKey } from '../src/lib/tickets.ts'
+import {
+  agentUser,
+  renderRoute,
+  responds,
+  signedInUser,
+  stubApi,
+  ticketSummary,
+} from './helpers.tsx'
 
 const tickets: TicketSummary[] = [
   ticketSummary({
@@ -103,6 +113,32 @@ test('names who holds each ticket, and says so when nobody does', async () => {
   expect(held.getByRole('cell', { name: 'Gil Agent' })).toBeTruthy()
   const loose = within(screen.getByRole('cell', { name: 'Loose one' }).closest('tr')!)
   expect(loose.getByRole('cell', { name: 'Unassigned' })).toBeTruthy()
+})
+
+test('one agent’s assignee=me list is not served to the next', async () => {
+  // The cache is cleared on sign-in and sign-out, so this cannot happen today.
+  // The key carries the viewer so that it stays impossible if some later way
+  // of changing user skips that clearing.
+  const client = createQueryClient()
+  const mine = (subject: string) => listOf([ticketSummary({ id: 1, subject })])
+
+  stubApi({ '/auth/me': responds.currentUser, '/tickets': () => Response.json(mine('Ada’s own')) })
+  renderRoute('/tickets?assignee=me', client)
+  expect(await screen.findByRole('cell', { name: 'Ada’s own' })).toBeTruthy()
+
+  cleanup()
+  stubApi({ '/auth/me': responds.currentAgent, '/tickets': () => Response.json(mine('Gil’s own')) })
+  // The case this key guards: the viewer changes and nothing clears the cache.
+  client.setQueryData(currentUserQueryKey, agentUser)
+  renderRoute('/tickets?assignee=me', client)
+  expect(await screen.findByRole('cell', { name: 'Gil’s own' })).toBeTruthy()
+
+  const query = { assignee: 'me', sort: 'updatedAt', order: 'desc', page: 1, pageSize: 20 } as const
+  const entry = (id: string) =>
+    client.getQueryData<TicketListResponse>(ticketsQueryKey(query, id))?.tickets[0]?.subject
+  // Two entries, each holding its own agent's list.
+  expect(entry(signedInUser.id)).toBe('Ada’s own')
+  expect(entry(agentUser.id)).toBe('Gil’s own')
 })
 
 test('asks for the filters, sort and page in the URL', async () => {

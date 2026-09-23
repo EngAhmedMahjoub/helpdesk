@@ -185,7 +185,10 @@ ticketsRouter.get('/:id', async (req, res) => {
   res.json(toDetail(ticket))
 })
 
-ticketsRouter.patch('/:id', async (req, res) => {
+// Rate limited like a reply, and out of the same budget: since 3.13a a change
+// costs a locked read and a write, and this is the route an assignment storm
+// from one stolen session would use.
+ticketsRouter.patch('/:id', ticketWriteRateLimit, async (req, res) => {
   // Body first, as on PATCH /api/users/:id: a malformed body is a 400 whatever
   // the id names.
   const body = parseBody(updateTicketSchema, req, res)
