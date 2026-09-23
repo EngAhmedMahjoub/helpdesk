@@ -142,23 +142,63 @@ describe('GET /api/tickets filters', () => {
 describe('GET /api/tickets by assignee', () => {
   let gilCookie: string
 
+  // Concurrently, because it is the heaviest setup in the file and the rows do
+  // not depend on each other: run one after another it spent over Bun's 5s hook
+  // budget whenever the web suite was running beside it (#196). Concurrent
+  // inserts land in no particular order, so each ticket carries the timestamp
+  // that puts it where these tests expect it rather than relying on the order
+  // the rows happened to be written in.
   beforeEach(async () => {
-    const gil = await createUser({ email: 'gil@example.com', name: 'Gil Agent' })
-    const fay = await createUser({ email: 'fay@example.com', name: 'Fay Agent' })
-    gilCookie = await sessionCookieFor(gil.id)
+    const [gil, fay] = await Promise.all([
+      createUser({ email: 'gil@example.com', name: 'Gil Agent' }),
+      createUser({ email: 'fay@example.com', name: 'Fay Agent' }),
+    ])
 
-    const ticket = (subject: string, data: Parameters<typeof createTicket>[0]) =>
-      createTicket({ subject, ...data })
-    await ticket('Gil open refund', { assigneeId: gil.id, status: 'open', category: 'refund' })
-    await ticket('Gil open general', { assigneeId: gil.id, status: 'open', category: 'general' })
-    await ticket('Gil resolved refund', {
-      assigneeId: gil.id,
-      status: 'resolved',
-      category: 'refund',
-    })
-    await ticket('Fay open refund', { assigneeId: fay.id, status: 'open', category: 'refund' })
-    await ticket('Nobody open refund', { status: 'open', category: 'refund' })
-    await ticket('Nobody resolved general', { status: 'resolved', category: 'general' })
+    await Promise.all([
+      sessionCookieFor(gil.id).then((cookie) => {
+        gilCookie = cookie
+      }),
+      createTicket({
+        subject: 'Gil open refund',
+        createdAt: day(1),
+        assigneeId: gil.id,
+        status: 'open',
+        category: 'refund',
+      }),
+      createTicket({
+        subject: 'Gil open general',
+        createdAt: day(2),
+        assigneeId: gil.id,
+        status: 'open',
+        category: 'general',
+      }),
+      createTicket({
+        subject: 'Gil resolved refund',
+        createdAt: day(3),
+        assigneeId: gil.id,
+        status: 'resolved',
+        category: 'refund',
+      }),
+      createTicket({
+        subject: 'Fay open refund',
+        createdAt: day(4),
+        assigneeId: fay.id,
+        status: 'open',
+        category: 'refund',
+      }),
+      createTicket({
+        subject: 'Nobody open refund',
+        createdAt: day(5),
+        status: 'open',
+        category: 'refund',
+      }),
+      createTicket({
+        subject: 'Nobody resolved general',
+        createdAt: day(6),
+        status: 'resolved',
+        category: 'general',
+      }),
+    ])
   })
 
   const listAs = (cookie: string, query: string) =>
