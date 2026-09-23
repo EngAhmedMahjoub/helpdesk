@@ -214,15 +214,22 @@ describe('which environments enforce the user-management write limit', () => {
 })
 
 describe('ticket write limit', () => {
-  /** A stand-in for POST /api/tickets/:id/replies behind an enforcing limiter. */
+  /**
+   * Stand-ins for the two ticket writes behind one enforcing limiter, mounted
+   * the way the router mounts it: a single instance, so both draw on one budget.
+   */
   function appWithTicketLimiter() {
     const app = express()
     app.use((req, _res, next) => {
       req.user = { id: String(req.headers['x-agent']), email: '', name: '', role: 'agent' }
       next()
     })
-    app.post('/replies', createTicketWriteRateLimit(), (_req, res) => {
+    const limiter = createTicketWriteRateLimit()
+    app.post('/replies', limiter, (_req, res) => {
       res.status(201).end()
+    })
+    app.patch('/tickets/1', limiter, (_req, res) => {
+      res.status(200).end()
     })
     return app
   }
@@ -239,7 +246,39 @@ describe('ticket write limit', () => {
     const blocked = await reply(app, 'agent-1')
 
     expect(blocked.status).toBe(429)
-    expect(blocked.body).toEqual({ error: 'Too many replies, please try again later' })
+    expect(blocked.body).toEqual({ error: 'Too many changes to tickets, please try again later' })
+  })
+
+  test('refuses a change once the budget is spent, and never reaches the handler', async () => {
+    const app = appWithTicketLimiter()
+    let changed = 0
+    const change = (agent: string) =>
+      request(app)
+        .patch('/tickets/1')
+        .set('x-agent', agent)
+        .then((res) => {
+          if (res.status === 200) changed += 1
+          return res
+        })
+
+    for (let i = 0; i < 120; i += 1) {
+      expect((await change('agent-1')).status).toBe(200)
+    }
+
+    const blocked = await change('agent-1')
+
+    expect(blocked.status).toBe(429)
+    // The handler that would write the ticket never ran on the refused request.
+    expect(changed).toBe(120)
+  })
+
+  test('replies and changes share one budget, since one agent makes both', async () => {
+    const app = appWithTicketLimiter()
+    for (let i = 0; i < 120; i += 1) await reply(app, 'agent-1')
+
+    const blocked = await request(app).patch('/tickets/1').set('x-agent', 'agent-1')
+
+    expect(blocked.status).toBe(429)
   })
 
   test('budgets each agent separately, so a busy colleague costs nothing', async () => {

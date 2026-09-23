@@ -98,21 +98,22 @@ export const userWriteRateLimit = createUserWriteRateLimit({
 })
 
 /**
- * Caps writes to a ticket — replies today, and whatever else agents post to one
- * later — per acting user.
+ * Caps writes to a ticket — replies and changes alike — per acting user, on one
+ * shared budget: both are the same agent working the same queue.
  *
  * A reply may carry 10,000 characters, and a thread is read back whole. One
  * agent session, stolen or scripted, could otherwise grow a single ticket until
- * every later read of it is expensive. Higher than the user-management limit:
- * answering tickets is the job, and a busy agent working through a queue should
- * never meet this.
+ * every later read of it is expensive. A change is cheaper, but not free: since
+ * the assignment lock it takes a locked read and a write each time. Higher than
+ * the user-management limit: answering tickets is the job, and a busy agent
+ * working through a queue should never meet this.
  *
  * Keyed and gated like the user-management limit: the acting user's id behind
- * requireAuth, and production only, so the end-to-end suite can reply freely.
+ * requireAuth, and production only, so the end-to-end suite can work freely.
  */
 export const createTicketWriteRateLimit = perUserRateLimit(
   120,
-  'Too many replies, please try again later',
+  'Too many changes to tickets, please try again later',
 )
 
 export const ticketWriteRateLimit = createTicketWriteRateLimit({
