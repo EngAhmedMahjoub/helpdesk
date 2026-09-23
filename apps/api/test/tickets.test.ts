@@ -810,6 +810,42 @@ describe('PATCH /api/tickets/:id', () => {
       expect(res.status).toBe(404)
       expect(res.body).toEqual({ error: 'Ticket not found' })
     })
+
+    test('refuses an assignee deactivated while the request was in flight', async () => {
+      const gil = await agent()
+      const ticket = await createTicket()
+
+      // The interleaving the lock exists for, made deterministic: this
+      // transaction holds the user row the way a deactivation does, so the
+      // request cannot read it until the deactivation has committed.
+      let assigning: Promise<request.Response> | undefined
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${gil.id} FOR UPDATE`
+
+        // .end(), not the promise supertest returns: that one sends nothing
+        // until it is awaited, so the request would start after this
+        // transaction had already committed and the race would never be run.
+        assigning = new Promise<request.Response>((resolve, reject) => {
+          void patch(ticket.id, { assigneeId: gil.id }).end((err, res) => {
+            if (err) reject(err as Error)
+            else resolve(res)
+          })
+        })
+        // Long enough for the request to reach the lock and block on it.
+        await Bun.sleep(150)
+
+        await tx.user.update({ where: { id: gil.id }, data: { isActive: false } })
+        // What PATCH /api/users/:id does in the same transaction, and what the
+        // assignment must not undo by landing after it.
+        await tx.ticket.updateMany({ where: { assigneeId: gil.id }, data: { assigneeId: null } })
+      })
+
+      const res = await assigning!
+
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'Assign the ticket to an active user' })
+      expect((await stored(ticket.id)).assigneeId).toBeNull()
+    })
   })
 })
 
