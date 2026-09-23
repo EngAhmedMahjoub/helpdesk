@@ -194,34 +194,46 @@ ticketsRouter.patch('/:id', async (req, res) => {
   const id = parseId(ticketIdSchema, req, res, TICKET_NOT_FOUND)
   if (id === undefined) return
 
-  // null clears the assignee and needs no user; only a named one is checked.
-  if (body.assigneeId) {
-    const assignee = await prisma.user.findFirst({
-      where: { id: body.assigneeId, isActive: true },
-      select: { id: true },
+  try {
+    const ticket = await prisma.$transaction(async (tx) => {
+      // null clears the assignee and needs no user; only a named one is checked.
+      if (body.assigneeId) {
+        // Raw, and the only raw SQL in this app, because Prisma cannot ask for
+        // FOR UPDATE. Checking without the lock left a window: a deactivation
+        // committing between the check and the update had already cleared the
+        // user's tickets, so this write handed the ticket to someone who can no
+        // longer sign in and who matches neither assignee filter — a ticket
+        // nobody could find. A plain transaction does not close it either; at
+        // READ COMMITTED the unlocked read still sees the pre-deactivation row.
+        // The id is a UUID by updateTicketSchema, and the template parameterises
+        // it rather than pasting it into the statement.
+        const active = await tx.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "User" WHERE id = ${body.assigneeId} AND "isActive" FOR UPDATE
+        `
+        if (active.length === 0) return null
+      }
+
+      return tx.ticket.update({
+        where: { id },
+        data: {
+          // undefined leaves the assignee as it is; null takes it away.
+          assigneeId: body.assigneeId,
+          // autoCloseAt moves only with a status in the request: a category
+          // change alone must not start or stop a Resolved ticket's timer.
+          ...(body.status && statusChange(body.status)),
+          category: body.category,
+          // The reason only explains a set flag, so clearing the flag clears it:
+          // a ticket no longer waiting for an agent has nothing to be escalated for.
+          ...(body.needsAgent === false && { needsAgent: false, escalationReason: null }),
+        },
+        select: detailFields,
+      })
     })
-    if (!assignee) {
+
+    if (!ticket) {
       res.status(400).json({ error: ASSIGNEE_UNAVAILABLE })
       return
     }
-  }
-
-  try {
-    const ticket = await prisma.ticket.update({
-      where: { id },
-      data: {
-        // undefined leaves the assignee as it is; null takes it away.
-        assigneeId: body.assigneeId,
-        // autoCloseAt moves only with a status in the request: a category
-        // change alone must not start or stop a Resolved ticket's timer.
-        ...(body.status && statusChange(body.status)),
-        category: body.category,
-        // The reason only explains a set flag, so clearing the flag clears it:
-        // a ticket no longer waiting for an agent has nothing to be escalated for.
-        ...(body.needsAgent === false && { needsAgent: false, escalationReason: null }),
-      },
-      select: detailFields,
-    })
     res.json(toDetail(ticket))
   } catch (err) {
     if (answered404(err, res)) return
