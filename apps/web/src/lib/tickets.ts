@@ -20,9 +20,16 @@ export const ticketsQueryKeyPrefix = ['tickets'] as const
  * The key one page is cached under. The query is part of it, so each
  * combination of filters, sort and page is its own entry and going back to one
  * already seen shows it at once.
+ *
+ * Who is asking is part of it too, because `assignee=me` is a different list
+ * for each of them. Signing in and out both clear the cache today, so nothing
+ * shares it across a session boundary — but that makes this key's correctness
+ * rest on those two calls, and anything that ever changes user without a full
+ * page load would serve one agent's tickets to the next. Keyed, it defends
+ * itself.
  */
-export const ticketsQueryKey = (query: ListTicketsQuery) =>
-  [...ticketsQueryKeyPrefix, query] as const
+export const ticketsQueryKey = (query: ListTicketsQuery, viewerId: string | undefined) =>
+  [...ticketsQueryKeyPrefix, viewerId ?? 'nobody', query] as const
 
 export function fetchTickets(query: ListTicketsQuery): Promise<TicketListResponse> {
   // params, not a hand-built query string: axios encodes the values, and

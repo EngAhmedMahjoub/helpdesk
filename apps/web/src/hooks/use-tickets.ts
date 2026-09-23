@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCurrentUser } from '@/hooks/use-auth'
 import type {
   CreateReplyRequest,
   ListTicketsQuery,
@@ -23,8 +24,12 @@ import {
  * page back to the top.
  */
 export function useTickets(query: ListTicketsQuery) {
+  // RequireAuth holds this page until the session check answers, so the id is
+  // there by the time the list mounts.
+  const viewerId = useCurrentUser().data?.id
+
   return useQuery({
-    queryKey: ticketsQueryKey(query),
+    queryKey: ticketsQueryKey(query, viewerId),
     queryFn: () => fetchTickets(query),
     placeholderData: keepPreviousData,
   })
