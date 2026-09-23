@@ -94,6 +94,7 @@ None.
 | 3.15 | `GET /api/tickets?assignee=me\|none` filter | Tests for each value, alone and with status and category | Done |
 | 3.16 | Frontend: assignee select and **Assign to me** on the ticket detail page | Assignment persists after reload | Done |
 | 3.17 | Frontend: Assignee column and filter on the ticket list | Filter narrows the list and lives in the URL | Done |
+| 3.18 | End-to-end specs for ticket assignment | `bun run test:e2e` covers assigning, handing over and deactivation | Done |
 
 ## Phase 4 — Email
 
