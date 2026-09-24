@@ -4,6 +4,7 @@ import cors from 'cors'
 import type { HealthResponse } from '@helpdesk/shared'
 import { prisma } from './db.ts'
 import { env } from './env.ts'
+import { type SendEmail, sendEmail as resendSendEmail } from './email/outbound.ts'
 import { authRouter } from './routes/auth.ts'
 import { ticketsRouter } from './routes/tickets.ts'
 import { usersRouter } from './routes/users.ts'
@@ -35,8 +36,26 @@ function describe(err: unknown): string {
   return 'unknown'
 }
 
-export function createApp() {
+// Typed on Express.Locals, the open interface Express offers for app.locals. It
+// types res.locals too, where nothing sets it; only req.app.locals is read.
+declare global {
+  namespace Express {
+    interface Locals {
+      sendEmail: SendEmail
+    }
+  }
+}
+
+type AppOptions = {
+  /** Replaced in tests, which must never reach Resend. */
+  sendEmail?: SendEmail
+}
+
+export function createApp({ sendEmail = resendSendEmail }: AppOptions = {}) {
   const app = express()
+  // On app.locals rather than imported by the routes, so a test can hand the
+  // app a fake without mocking modules.
+  app.locals.sendEmail = sendEmail
 
   // credentials: true is what lets the session cookie cross from app.<domain>
   // to api.<domain> in production. Without it the browser sends the cookie on

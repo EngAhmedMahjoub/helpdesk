@@ -8,6 +8,7 @@ import {
   type TicketMessage,
 } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
+import { EmailSendError, type OutboundEmail } from '../src/email/outbound.ts'
 import { prisma, resetDatabase } from './db.ts'
 import {
   createMessage,
@@ -17,11 +18,24 @@ import {
   sessionCookieFor,
 } from './fixtures.ts'
 
-const app = createApp()
+// Records what the app emails instead of sending it. With `refuse` set, a send
+// fails the way a refusal from Resend does.
+const outbox: OutboundEmail[] = []
+let refuse = false
+
+const app = createApp({
+  sendEmail: async (email) => {
+    if (refuse) throw new EmailSendError('Resend refused the email: validation_error')
+    outbox.push(email)
+    return { resendId: 'resend-1' }
+  },
+})
 
 let agentCookie: string
 
 beforeEach(async () => {
+  outbox.length = 0
+  refuse = false
   await resetDatabase()
   agentCookie = await sessionCookieFor((await createUser()).id)
 })
@@ -921,9 +935,68 @@ describe('POST /api/tickets/:id/replies', () => {
       direction: 'outbound',
       author: 'agent',
       agentId: gil.id,
-      // Not emailed until Phase 4.
+      // Amazon SES sets the sent email's Message-ID and never reports it.
       emailMessageId: null,
     })
+  })
+
+  test('emails the reply to the student', async () => {
+    const ticket = await createTicket({ subject: 'Cannot log in', studentEmail: 'maya@uni.edu' })
+
+    await reply(ticket.id, { body: '  Try clearing your cookies.\n' })
+
+    expect(outbox).toEqual([
+      {
+        to: 'maya@uni.edu',
+        subject: 'Re: Cannot log in',
+        text: 'Try clearing your cookies.',
+        thread: [],
+      },
+    ])
+  })
+
+  test('does not stack a second "Re:" on the subject', async () => {
+    const ticket = await createTicket({ subject: 'RE: Cannot log in' })
+
+    await reply(ticket.id, { body: 'On it.' })
+
+    expect(outbox[0]?.subject).toBe('RE: Cannot log in')
+  })
+
+  test("threads onto the student's emails, oldest first", async () => {
+    const ticket = await createTicket()
+    const other = await createTicket()
+    await createMessage({ ticketId: ticket.id, emailMessageId: '<second@mail>', createdAt: day(2) })
+    await createMessage({ ticketId: ticket.id, emailMessageId: '<first@mail>', createdAt: day(1) })
+    // None of these belong in the chain: an outbound message, a message with
+    // no Message-ID, and another ticket's email.
+    await createMessage({
+      ticketId: ticket.id,
+      direction: 'outbound',
+      author: 'agent',
+      createdAt: day(3),
+    })
+    await createMessage({ ticketId: ticket.id, createdAt: day(4) })
+    await createMessage({ ticketId: other.id, emailMessageId: '<elsewhere@mail>' })
+
+    await reply(ticket.id, { body: 'On it.' })
+
+    expect(outbox[0]?.thread).toEqual(['<first@mail>', '<second@mail>'])
+  })
+
+  test('answers 502 and saves nothing when the email is refused', async () => {
+    const ticket = await createTicket({ updatedAt: day(1) })
+    refuse = true
+
+    const res = await reply(ticket.id, { body: 'On it.' })
+
+    expect(res.status).toBe(502)
+    expect(res.body).toEqual({
+      error: 'The reply could not be emailed. Nothing was saved; try again.',
+    })
+    expect(await prisma.message.count()).toBe(0)
+    const after = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })
+    expect(after.updatedAt).toEqual(day(1))
   })
 
   test("appears at the end of the ticket's thread", async () => {
@@ -996,9 +1069,10 @@ describe('POST /api/tickets/:id/replies', () => {
 
     expect(res.status).toBe(401)
     expect(await prisma.message.count()).toBe(0)
+    expect(outbox).toHaveLength(0)
   })
 
-  test('answers 404 for an id with no ticket, and for a malformed one, saving nothing', async () => {
+  test('answers 404 for an id with no ticket, and for a malformed one, sending and saving nothing', async () => {
     const ticket = await createTicket()
 
     for (const id of [String(ticket.id + 1), 'abc', '1e2', '2147483648']) {
@@ -1007,6 +1081,7 @@ describe('POST /api/tickets/:id/replies', () => {
       expect(res.body).toEqual({ error: 'Ticket not found' })
     }
     expect(await prisma.message.count()).toBe(0)
+    expect(outbox).toHaveLength(0)
   })
 
   const invalid: [string, object][] = [

@@ -17,6 +17,7 @@ import { requireAuth } from '../auth/middleware.ts'
 import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
 import { parseBody, parseId, parseQuery } from '../http.ts'
 import { statusChange } from '../tickets/status.ts'
+import { EmailSendError } from '../email/outbound.ts'
 
 /** The columns the list exposes. Explicit, so a column added later stays out until chosen. */
 const summaryFields = {
@@ -91,6 +92,13 @@ function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields 
 }
 
 const TICKET_NOT_FOUND = 'Ticket not found'
+
+const REPLY_NOT_SENT = 'The reply could not be emailed. Nothing was saved; try again.'
+
+/** The ticket's subject as a reply's, without stacking a second "Re:". */
+function replySubject(subject: string): string {
+  return /^re:/i.test(subject.trim()) ? subject : `Re: ${subject}`
+}
 
 // One answer for a user who does not exist and one who is deactivated: either
 // way there is nobody to hand the ticket to, and the ticket screen shows the
@@ -260,11 +268,49 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
     return
   }
 
+  const ticket = await prisma.ticket.findUnique({
+    where: { id },
+    select: {
+      subject: true,
+      studentEmail: true,
+      // The student's emails, oldest first: the chain the reply threads onto.
+      // Our own outbound messages have no Message-ID to add (see below).
+      messages: {
+        where: { direction: 'inbound', emailMessageId: { not: null } },
+        select: { emailMessageId: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      },
+    },
+  })
+  if (!ticket) {
+    res.status(404).json({ error: TICKET_NOT_FOUND })
+    return
+  }
+
+  // Emailed before it is saved (task 4.3). The other order can leave a reply in
+  // the thread that the student never received, with nothing to show it; this
+  // way a failed send saves nothing, and the agent sees the error and resends.
+  try {
+    await req.app.locals.sendEmail({
+      to: ticket.studentEmail,
+      subject: replySubject(ticket.subject),
+      text: body.body,
+      thread: ticket.messages.flatMap((m) => (m.emailMessageId ? [m.emailMessageId] : [])),
+    })
+  } catch (err) {
+    // Only a refusal from Resend is a 502. Anything else is a fault of ours,
+    // and the error handler's 500 is the honest answer for it.
+    if (!(err instanceof EmailSendError)) throw err
+    console.error(err.message)
+    res.status(502).json({ error: REPLY_NOT_SENT })
+    return
+  }
+
   try {
     const message = await prisma.$transaction(async (tx) => {
       // A reply is activity on the ticket, so it moves up a list sorted by
       // updatedAt. Inserting a message does not touch the ticket row by itself.
-      // The update also answers P2025 for a ticket that is not there.
+      // The update also answers P2025 for a ticket deleted since the lookup.
       await tx.ticket.update({ where: { id }, data: { updatedAt: new Date() } })
 
       return tx.message.create({
@@ -274,8 +320,9 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
           author: 'agent',
           agentId,
           body: body.body,
-          // Null until Phase 4 sends it: the Message-ID is the email's, and
-          // there is no email yet.
+          // Stays null: Resend sends through Amazon SES, which sets its own
+          // Message-ID and does not report it back. A student's reply is matched
+          // to the ticket by the References it carries, not by this.
           emailMessageId: null,
         },
         select: messageFields,

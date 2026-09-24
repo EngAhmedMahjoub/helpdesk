@@ -115,9 +115,10 @@ model Message {
   agentId        String?
   agent          User?            @relation(fields: [agentId], references: [id], onDelete: Restrict)
   body           String
-  // The email's Message-ID. Null until the message has been emailed: agent
-  // replies are only saved until Phase 4 sends them. Unique, so the same
-  // inbound email delivered twice cannot become two messages.
+  // The email's Message-ID, set on inbound messages. Null on outbound ones:
+  // Resend sends through Amazon SES, which sets its own Message-ID and does not
+  // report it back. Unique, so the same inbound email delivered twice cannot
+  // become two messages.
   emailMessageId String?          @unique
   createdAt      DateTime         @default(now())
 
