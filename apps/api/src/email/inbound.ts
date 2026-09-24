@@ -60,6 +60,30 @@ function displayName(from: string | undefined): string | null {
   return name || null
 }
 
+// The local parts delivery-status notifications (bounces) are sent from, per
+// RFC 3464 and every major mail server.
+const BOUNCE_SENDERS = ['mailer-daemon', 'postmaster']
+
+/**
+ * Whether a machine sent this rather than a person: an out-of-office or other
+ * auto-reply, or a bounce (task 4.7). Such an email opens no ticket. An agent's
+ * reply to a student away on holiday would otherwise come back as a new one,
+ * and once the AI answers tickets, the two auto-responders could answer each
+ * other without end.
+ */
+export function isAutomatedEmail(email: ReceivedEmail): boolean {
+  // RFC 3834: any value but "no" (auto-replied, auto-generated, auto-notified),
+  // possibly followed by parameters.
+  const autoSubmitted = header(email, 'auto-submitted')?.split(';')[0]?.trim().toLowerCase()
+  if (autoSubmitted && autoSubmitted !== 'no') return true
+
+  // Not standard, but set by autoresponders that predate RFC 3834.
+  if (header(email, 'x-autoreply') !== undefined) return true
+
+  const sender = address(email.from).toLowerCase()
+  return BOUNCE_SENDERS.includes(sender.slice(0, sender.lastIndexOf('@')))
+}
+
 export function parseInboundEmail(email: ReceivedEmail): InboundEmail {
   return {
     fromAddress: address(email.from),

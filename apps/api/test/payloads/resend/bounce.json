@@ -1,0 +1,31 @@
+{
+  "object": "email",
+  "id": "8c4d2e1f-3a6b-4c7d-9e0f-1a2b3c4d5e6f",
+  "to": ["support@helpdesk.example.com"],
+  "from": "mailer-daemon@googlemail.com",
+  "created_at": "2026-09-24T09:05:31.000Z",
+  "subject": "Delivery Status Notification (Failure)",
+  "bcc": [],
+  "cc": [],
+  "reply_to": [],
+  "received_for": ["support@helpdesk.example.com"],
+  "html": null,
+  "text": "Address not found\n\nYour message wasn't delivered to maya.chen@uni.edu because the address couldn't be found.\n",
+  "headers": {
+    "return-path": "<>",
+    "received": "[\"from mail-sor-f69.google.com (mail-sor-f69.google.com [209.85.220.69]) by inbound-smtp.ap-northeast-1.amazonaws.com\"]",
+    "mime-version": "1.0",
+    "from": "Mail Delivery Subsystem <mailer-daemon@googlemail.com>",
+    "to": "support@helpdesk.example.com",
+    "auto-submitted": "auto-replied",
+    "subject": "Delivery Status Notification (Failure)",
+    "references": "<010601a0d24197b2-04e91003-8ec7-4ef0-bf17-7169979f798e-000000@ap-northeast-1.amazonses.com>",
+    "in-reply-to": "<010601a0d24197b2-04e91003-8ec7-4ef0-bf17-7169979f798e-000000@ap-northeast-1.amazonses.com>",
+    "message-id": "<bounce0001@mx.google.com>",
+    "date": "Thu, 24 Sep 2026 02:05:30 -0700",
+    "content-type": "multipart/report; report-type=delivery-status"
+  },
+  "message_id": "<bounce0001@mx.google.com>",
+  "raw": null,
+  "attachments": []
+}
