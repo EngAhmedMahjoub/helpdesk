@@ -5,7 +5,8 @@ import { createEmailSender, EmailSendError, type EmailClient } from '../src/emai
 type SendResult = Awaited<ReturnType<EmailClient['emails']['send']>>
 
 const from = 'Helpdesk Support <support@helpdesk.example.com>'
-const email = { to: 'student@example.com', subject: 'Your ticket', text: 'Hello' }
+// Not a reserved domain, or sendEmail would skip it. Safe: the client is a fake.
+const email = { to: 'student@university.edu', subject: 'Your ticket', text: 'Hello' }
 const accepted: SendResult = { data: { id: 'resend-1' }, error: null, headers: null }
 
 /**
@@ -66,6 +67,31 @@ describe('sendEmail', () => {
       'In-Reply-To': '<second@helpdesk.example.com>',
       References: '<first@mail.example.com> <second@helpdesk.example.com>',
     })
+  })
+
+  test.each([
+    'student@helpdesk.test',
+    'maya@student.example',
+    'x@nowhere.invalid',
+    'dev@localhost',
+    'student@example.com',
+    'student@mail.example.org',
+    'Student@EXAMPLE.NET',
+  ])('sends nothing to the reserved address %s', async (to) => {
+    const { send, sent } = fakeSender()
+
+    const result = await send({ ...email, to })
+
+    expect(sent).toHaveLength(0)
+    expect(result).toEqual({ resendId: null })
+  })
+
+  test('still sends to a real domain that merely contains a reserved name', async () => {
+    const { send, sent } = fakeSender()
+
+    await send({ ...email, to: 'student@myexample.com' })
+
+    expect(sent).toHaveLength(1)
   })
 
   test('throws when Resend refuses the email', async () => {

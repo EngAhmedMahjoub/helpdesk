@@ -20,9 +20,14 @@ export type OutboundEmail = {
  * student's original Message-ID.
  */
 export type SentEmail = {
-  /** Resend's id for the email, for looking it up in their dashboard or API. */
-  resendId: string
+  /**
+   * Resend's id for the email, for looking it up in their dashboard or API.
+   * Null when the recipient was on a reserved domain and nothing was sent.
+   */
+  resendId: string | null
 }
+
+export type SendEmail = (email: OutboundEmail) => Promise<SentEmail>
 
 /** The part of the Resend client this module uses, so tests can pass a fake. */
 export type EmailClient = Pick<Resend, 'emails'>
@@ -31,8 +36,26 @@ export class EmailSendError extends Error {
   override name = 'EmailSendError'
 }
 
-export function createEmailSender(client: EmailClient, from: string) {
-  return async function sendEmail(email: OutboundEmail): Promise<SentEmail> {
+// RFC 2606 reserves these, so no real student can have an address on one. The
+// seeded sample tickets and the end-to-end students live on them: mailing those
+// would bounce, and bounces count against the Resend account, or, with the
+// test env's fake key, fail every reply the e2e suite sends.
+const RESERVED_TLDS = ['test', 'example', 'invalid', 'localhost']
+const RESERVED_DOMAINS = ['example.com', 'example.net', 'example.org']
+
+function isReservedAddress(address: string): boolean {
+  const domain = address.slice(address.lastIndexOf('@') + 1).toLowerCase()
+  const tld = domain.slice(domain.lastIndexOf('.') + 1)
+  return (
+    RESERVED_TLDS.includes(tld) ||
+    RESERVED_DOMAINS.some((reserved) => domain === reserved || domain.endsWith(`.${reserved}`))
+  )
+}
+
+export function createEmailSender(client: EmailClient, from: string): SendEmail {
+  return async function sendEmail(email) {
+    if (isReservedAddress(email.to)) return { resendId: null }
+
     const headers: Record<string, string> = {}
     const thread = email.thread ?? []
     const parent = thread.at(-1)
@@ -63,4 +86,7 @@ export function createEmailSender(client: EmailClient, from: string) {
   }
 }
 
-export const sendEmail = createEmailSender(new Resend(env.RESEND_API_KEY), env.EMAIL_FROM)
+export const sendEmail: SendEmail = createEmailSender(
+  new Resend(env.RESEND_API_KEY),
+  env.EMAIL_FROM,
+)
