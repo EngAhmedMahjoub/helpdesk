@@ -146,7 +146,9 @@ Database sessions.
 | Provider | Resend (free tier includes receiving) |
 | Inbound | Resend receiving webhook → Express creates or updates ticket and queues a job |
 | Outbound | Resend, with `In-Reply-To` set so replies stay in the student's thread |
-| Domain | Receiving via MX record on a subdomain of `<domain>` |
+| Domain | `helpdesk.mahjoub.io`, one Resend domain for sending and receiving, in region `ap-northeast-1`. A subdomain because Resend receives every address on a domain whose MX points at it, so the root `mahjoub.io` stays free for a personal inbox |
+| Address | `support@helpdesk.mahjoub.io`. Resend registers no individual addresses: the local part is whatever `from` says when sending, and any address on the domain reaches the webhook when receiving |
+| DNS | Cloudflare, all records DNS only: a proxied CNAME fails Resend's verification, and MX records cannot be proxied |
 
 Free tier limits (from search results, not verified on Resend's pricing page): 3,000 emails/month and 100/day, shared between sent and received.
 
