@@ -80,6 +80,8 @@ async function lastStatusIs429(source: string, nodeEnv: string): Promise<boolean
       NODE_ENV: nodeEnv,
       DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
       WEB_ORIGIN: 'https://app.example.com',
+      RESEND_API_KEY: 're_test_not_a_real_key',
+      EMAIL_FROM: 'Helpdesk Support <support@helpdesk.example.com>',
     },
     stdout: 'pipe',
     stderr: 'pipe',

@@ -145,7 +145,7 @@ Database sessions.
 |---|---|
 | Provider | Resend (free tier includes receiving) |
 | Inbound | Resend receiving webhook → Express creates or updates ticket and queues a job |
-| Outbound | Resend, with `In-Reply-To` set so replies stay in the student's thread |
+| Outbound | Resend SDK, plain text, through `sendEmail` in `apps/api/src/email/outbound.ts`. Sets `In-Reply-To` to the parent and `References` to the whole chain so replies stay in the student's thread. Sets no `Message-ID`: Resend sends through Amazon SES, which replaced one the API set with its own (seen in a delivered email's headers), and the send response returns only Resend's id. A student's reply is therefore matched to its ticket by `References`, which carries the student's original Message-ID, not by the Message-ID of our reply. `RESEND_API_KEY` and `EMAIL_FROM` are required at boot |
 | Domain | `helpdesk.mahjoub.io`, one Resend domain for sending and receiving, in region `ap-northeast-1`. A subdomain because Resend receives every address on a domain whose MX points at it, so the root `mahjoub.io` stays free for a personal inbox |
 | Address | `support@helpdesk.mahjoub.io`. Resend registers no individual addresses: the local part is whatever `from` says when sending, and any address on the domain reaches the webhook when receiving |
 | DNS | Cloudflare, all records DNS only: a proxied CNAME fails Resend's verification, and MX records cannot be proxied |
