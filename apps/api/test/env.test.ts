@@ -26,6 +26,8 @@ const valid = {
   NODE_ENV: 'production',
   DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
   WEB_ORIGIN: 'https://app.example.com',
+  RESEND_API_KEY: 're_test_not_a_real_key',
+  EMAIL_FROM: 'Helpdesk Support <support@helpdesk.example.com>',
 }
 
 describe('environment validation', () => {
@@ -58,5 +60,28 @@ describe('environment validation', () => {
 
     expect(exitCode).not.toBe(0)
     expect(stderr).toContain('DATABASE_URL')
+  })
+
+  test('refuses to boot without RESEND_API_KEY', async () => {
+    // Without it the API would run normally and fail only when a reply is sent.
+    const { exitCode, stderr } = await bootWith({ ...valid, RESEND_API_KEY: undefined })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('RESEND_API_KEY')
+  })
+
+  test('refuses to boot without EMAIL_FROM', async () => {
+    const { exitCode, stderr } = await bootWith({ ...valid, EMAIL_FROM: undefined })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('EMAIL_FROM')
+  })
+
+  test('refuses an EMAIL_FROM with no address in it', async () => {
+    // The Message-ID domain is read from this address, so it has to have one.
+    const { exitCode, stderr } = await bootWith({ ...valid, EMAIL_FROM: 'Helpdesk Support' })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('EMAIL_FROM')
   })
 })

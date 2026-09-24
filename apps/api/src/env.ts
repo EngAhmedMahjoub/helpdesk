@@ -15,6 +15,14 @@ const envSchema = z.object({
   WEB_ORIGIN: z
     .url({ protocol: /^https?$/ })
     .describe('Origin allowed to call the API with credentials, e.g. https://app.example.com'),
+  // Required rather than optional: an API that boots without them answers
+  // agents normally and only fails when a reply goes out, long after the
+  // deploy that forgot them.
+  RESEND_API_KEY: z.string().startsWith('re_').describe('Resend API key, e.g. re_123'),
+  EMAIL_FROM: z
+    .string()
+    .regex(/^(?:[^<>]*<[^<>\s@]+@[^<>\s@]+>|[^<>\s@]+@[^<>\s@]+)$/)
+    .describe('Sender, e.g. Helpdesk Support <support@helpdesk.example.com>'),
 })
 
 type Env = z.infer<typeof envSchema>
