@@ -10,6 +10,10 @@ export const SUBJECT_MAX_LENGTH = 200
 // Above the 10,000 an agent reply may hold: inbound text carries the quoted
 // history of the messages before it.
 export const INBOUND_TEXT_MAX_LENGTH = 20_000
+// RFC 5322's line limit, which a Message-ID header cannot exceed. Far longer
+// would also overflow the unique index's row size, failing the insert on every
+// retry Resend makes.
+export const MESSAGE_ID_MAX_LENGTH = 998
 
 export const NO_SUBJECT = '(no subject)'
 export const NO_TEXT = '(This email had no plain-text content.)'
@@ -21,6 +25,13 @@ export type InboundTicketFields = {
   studentName: string | null
   subject: string
   body: string
+  /**
+   * What duplicates are recognised and threads matched by. Null when the email
+   * had none or one too long to be real: it is still saved, just not deduped.
+   * Never an empty string, which the unique column would treat as one ID shared
+   * by every email lacking one, dropping all but the first.
+   */
+  emailMessageId: string | null
 }
 
 /**
@@ -46,6 +57,7 @@ export function inboundTicketFields(email: InboundEmail): InboundTicketFields | 
   const subject = email.subject.trim()
   const name = email.fromName?.trim()
   const text = email.text.trim()
+  const messageId = email.messageId.trim()
 
   return {
     studentEmail: studentEmail.data,
@@ -56,5 +68,6 @@ export function inboundTicketFields(email: InboundEmail): InboundTicketFields | 
     // The beginning is kept: it holds the student's new words, and what gets cut
     // is mostly quoted history the thread already has.
     body: text ? shorten(text, INBOUND_TEXT_MAX_LENGTH, TEXT_SHORTENED) : NO_TEXT,
+    emailMessageId: messageId && messageId.length <= MESSAGE_ID_MAX_LENGTH ? messageId : null,
   }
 }

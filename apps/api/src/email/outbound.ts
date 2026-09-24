@@ -1,5 +1,6 @@
-import { Resend } from 'resend'
+import type { Resend } from 'resend'
 import { env } from '../env.ts'
+import { resend } from './resend.ts'
 
 export type OutboundEmail = {
   to: string
@@ -86,7 +87,4 @@ export function createEmailSender(client: EmailClient, from: string): SendEmail 
   }
 }
 
-export const sendEmail: SendEmail = createEmailSender(
-  new Resend(env.RESEND_API_KEY),
-  env.EMAIL_FROM,
-)
+export const sendEmail: SendEmail = createEmailSender(resend, env.EMAIL_FROM)

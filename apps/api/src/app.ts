@@ -5,6 +5,10 @@ import type { HealthResponse } from '@helpdesk/shared'
 import { prisma } from './db.ts'
 import { env } from './env.ts'
 import { type SendEmail, sendEmail as resendSendEmail } from './email/outbound.ts'
+import {
+  type FetchReceivedEmail,
+  fetchReceivedEmail as resendFetchReceivedEmail,
+} from './email/receiving.ts'
 import { authRouter } from './routes/auth.ts'
 import { ticketsRouter } from './routes/tickets.ts'
 import { usersRouter } from './routes/users.ts'
@@ -43,20 +47,26 @@ declare global {
   namespace Express {
     interface Locals {
       sendEmail: SendEmail
+      fetchReceivedEmail: FetchReceivedEmail
     }
   }
 }
 
+/** Both replaced in tests, which must never reach Resend. */
 type AppOptions = {
-  /** Replaced in tests, which must never reach Resend. */
   sendEmail?: SendEmail
+  fetchReceivedEmail?: FetchReceivedEmail
 }
 
-export function createApp({ sendEmail = resendSendEmail }: AppOptions = {}) {
+export function createApp({
+  sendEmail = resendSendEmail,
+  fetchReceivedEmail = resendFetchReceivedEmail,
+}: AppOptions = {}) {
   const app = express()
   // On app.locals rather than imported by the routes, so a test can hand the
   // app a fake without mocking modules.
   app.locals.sendEmail = sendEmail
+  app.locals.fetchReceivedEmail = fetchReceivedEmail
 
   // credentials: true is what lets the session cookie cross from app.<domain>
   // to api.<domain> in production. Without it the browser sends the cookie on
