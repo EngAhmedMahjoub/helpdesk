@@ -8,6 +8,7 @@ import { type SendEmail, sendEmail as resendSendEmail } from './email/outbound.t
 import { authRouter } from './routes/auth.ts'
 import { ticketsRouter } from './routes/tickets.ts'
 import { usersRouter } from './routes/users.ts'
+import { webhooksRouter } from './routes/webhooks.ts'
 
 /**
  * The status a malformed request deserves, or undefined when the error is ours.
@@ -63,6 +64,10 @@ export function createApp({ sendEmail = resendSendEmail }: AppOptions = {}) {
   // tries. Locally the Vite proxy makes /api same-origin, so this only bites
   // when the frontend talks to the API directly.
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }))
+  // Before express.json(): a webhook's signature is checked against its raw
+  // body, which the JSON parser would consume first. No session either: Resend
+  // proves itself by the signature.
+  app.use('/api/webhooks', webhooksRouter)
   app.use(express.json())
   app.use(cookieParser())
 
