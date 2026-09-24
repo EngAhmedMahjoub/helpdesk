@@ -3,6 +3,7 @@ import { EMAIL_MAX_LENGTH, NAME_MAX_LENGTH } from '@helpdesk/shared'
 import type { InboundEmail } from '../src/email/inbound.ts'
 import {
   INBOUND_TEXT_MAX_LENGTH,
+  MESSAGE_ID_MAX_LENGTH,
   NO_SUBJECT,
   NO_TEXT,
   SUBJECT_MAX_LENGTH,
@@ -30,6 +31,7 @@ describe('inboundTicketFields', () => {
       studentName: 'Maya Chen',
       subject: 'Cannot log in',
       body: 'I reset my password but the portal still says it is wrong.',
+      emailMessageId: '<first@mail.uni.edu>',
     })
   })
 
@@ -97,6 +99,24 @@ describe('inboundTicketFields', () => {
 
     test('does not refuse the email when dropped', () => {
       expect(fields({ fromName: 'n'.repeat(10_000) })).not.toBeNull()
+    })
+  })
+
+  describe('Message-ID', () => {
+    test(`is kept at ${String(MESSAGE_ID_MAX_LENGTH)} characters`, () => {
+      const messageId = `<${'m'.repeat(MESSAGE_ID_MAX_LENGTH - 2)}>`
+
+      expect(fields({ messageId })?.emailMessageId).toBe(messageId)
+    })
+
+    test('is none, never an empty string, when missing or too long', () => {
+      expect(fields({ messageId: '' })?.emailMessageId).toBeNull()
+      expect(fields({ messageId: '  ' })?.emailMessageId).toBeNull()
+      expect(fields({ messageId: `<${'m'.repeat(10_000)}>` })?.emailMessageId).toBeNull()
+    })
+
+    test('does not refuse the email when none', () => {
+      expect(fields({ messageId: '' })).not.toBeNull()
     })
   })
 
