@@ -13,7 +13,7 @@ const accepted: SendResult = { data: { id: 'resend-1' }, error: null, headers: n
  * send. Never the real client: a test that sent mail would need a live key and
  * a mailbox.
  */
-function fakeSender(result: SendResult = accepted, sender = from) {
+function fakeSender(result: SendResult = accepted) {
   const sent: CreateEmailOptions[] = []
   const client = {
     emails: {
@@ -23,7 +23,7 @@ function fakeSender(result: SendResult = accepted, sender = from) {
       },
     },
   } as unknown as EmailClient
-  return { send: createEmailSender(client, sender), sent }
+  return { send: createEmailSender(client, from), sent }
 }
 
 describe('sendEmail', () => {
@@ -36,30 +36,12 @@ describe('sendEmail', () => {
     expect(sent[0]).toMatchObject({ from, ...email })
   })
 
-  test('returns the Message-ID it sent, on the sender domain', async () => {
-    const { send, sent } = fakeSender()
-
-    const result = await send(email)
-
-    expect(result.resendId).toBe('resend-1')
-    expect(result.messageId).toMatch(/^<[0-9a-f-]{36}@helpdesk\.example\.com>$/)
-    expect(sent[0]?.headers?.['Message-ID']).toBe(result.messageId)
-  })
-
-  test('gives each email its own Message-ID', async () => {
+  test("returns Resend's id for the email", async () => {
     const { send } = fakeSender()
 
-    const [first, second] = await Promise.all([send(email), send(email)])
-
-    expect(first.messageId).not.toBe(second.messageId)
-  })
-
-  test('takes the domain from a bare address too', async () => {
-    const { send } = fakeSender(accepted, 'support@helpdesk.example.com')
-
     const result = await send(email)
 
-    expect(result.messageId).toEndWith('@helpdesk.example.com>')
+    expect(result).toEqual({ resendId: 'resend-1' })
   })
 
   test('starts a new thread without In-Reply-To or References', async () => {

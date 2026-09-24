@@ -12,11 +12,16 @@ export type OutboundEmail = {
   thread?: string[]
 }
 
+/**
+ * No Message-ID here: Resend's mail goes out through Amazon SES, which replaces
+ * any Message-ID the request sets with its own (seen in a delivered email's
+ * headers), and the send response does not report the one it used. A reply is
+ * matched to its ticket through References instead, which carries the
+ * student's original Message-ID.
+ */
 export type SentEmail = {
   /** Resend's id for the email, for looking it up in their dashboard or API. */
   resendId: string
-  /** The Message-ID header it went out with, angle brackets included. */
-  messageId: string
 }
 
 /** The part of the Resend client this module uses, so tests can pass a fake. */
@@ -26,22 +31,9 @@ export class EmailSendError extends Error {
   override name = 'EmailSendError'
 }
 
-/** The domain of the address in `Name <user@domain>` or `user@domain`. */
-function senderDomain(from: string): string {
-  const address = /<([^>]+)>/.exec(from)?.[1] ?? from
-  return address.slice(address.lastIndexOf('@') + 1)
-}
-
 export function createEmailSender(client: EmailClient, from: string) {
-  const domain = senderDomain(from)
-
   return async function sendEmail(email: OutboundEmail): Promise<SentEmail> {
-    // Generated here rather than left to Resend: its send response carries only
-    // its own id, and a student's reply points back at the Message-ID, so it
-    // has to be known before sending for the reply to find its ticket.
-    const messageId = `<${crypto.randomUUID()}@${domain}>`
-    const headers: Record<string, string> = { 'Message-ID': messageId }
-
+    const headers: Record<string, string> = {}
     const thread = email.thread ?? []
     const parent = thread.at(-1)
     if (parent) {
@@ -67,7 +59,7 @@ export function createEmailSender(client: EmailClient, from: string) {
       })
     }
 
-    return { resendId: data.id, messageId }
+    return { resendId: data.id }
   }
 }
 

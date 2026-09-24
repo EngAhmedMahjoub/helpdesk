@@ -78,7 +78,7 @@ describe('environment validation', () => {
   })
 
   test('refuses an EMAIL_FROM with no address in it', async () => {
-    // The Message-ID domain is read from this address, so it has to have one.
+    // Caught at boot rather than by Resend refusing the first reply.
     const { exitCode, stderr } = await bootWith({ ...valid, EMAIL_FROM: 'Helpdesk Support' })
 
     expect(exitCode).not.toBe(0)
