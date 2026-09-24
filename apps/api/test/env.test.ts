@@ -28,6 +28,7 @@ const valid = {
   WEB_ORIGIN: 'https://app.example.com',
   RESEND_API_KEY: 're_test_not_a_real_key',
   EMAIL_FROM: 'Helpdesk Support <support@helpdesk.example.com>',
+  RESEND_WEBHOOK_SECRET: 'whsec_dGVzdA==',
 }
 
 describe('environment validation', () => {
@@ -75,6 +76,14 @@ describe('environment validation', () => {
 
     expect(exitCode).not.toBe(0)
     expect(stderr).toContain('EMAIL_FROM')
+  })
+
+  test('refuses to boot without RESEND_WEBHOOK_SECRET', async () => {
+    // Without it every inbound email would be refused while the API looked fine.
+    const { exitCode, stderr } = await bootWith({ ...valid, RESEND_WEBHOOK_SECRET: undefined })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('RESEND_WEBHOOK_SECRET')
   })
 
   test('refuses an EMAIL_FROM with no address in it', async () => {

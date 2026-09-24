@@ -82,6 +82,7 @@ async function lastStatusIs429(source: string, nodeEnv: string): Promise<boolean
       WEB_ORIGIN: 'https://app.example.com',
       RESEND_API_KEY: 're_test_not_a_real_key',
       EMAIL_FROM: 'Helpdesk Support <support@helpdesk.example.com>',
+      RESEND_WEBHOOK_SECRET: 'whsec_dGVzdA==',
     },
     stdout: 'pipe',
     stderr: 'pipe',
