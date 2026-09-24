@@ -1,0 +1,30 @@
+{
+  "object": "email",
+  "id": "1e260a0d-171c-4ebb-94ae-6e22cc569fab",
+  "to": ["support@helpdesk.example.com"],
+  "from": "maya.chen@uni.edu",
+  "created_at": "2026-09-24T06:48:44.000Z",
+  "subject": "Re: Cannot log in",
+  "bcc": [],
+  "cc": [],
+  "reply_to": [],
+  "received_for": ["support@helpdesk.example.com"],
+  "html": null,
+  "text": "It happens on my phone too.\n\nOn Thu, 24 Sept 2026 at 16:18, Maya Chen <maya.chen@uni.edu> wrote:\n>\n> I reset my password but the portal still says it is wrong.\n",
+  "headers": {
+    "return-path": "<maya.chen@uni.edu>",
+    "received": "[\"from mail-pl1-f171.google.com (mail-pl1-f171.google.com [209.85.214.171]) by inbound-smtp.ap-northeast-1.amazonaws.com\",\"by mail-pl1-f171.google.com with SMTP id d9443c01a7336-2b0c7ab5f1bso2\"]",
+    "mime-version": "1.0",
+    "references": "<CAMaya01first@mail.gmail.com>",
+    "in-reply-to": "<CAMaya01first@mail.gmail.com>",
+    "from": "Maya Chen <maya.chen@uni.edu>",
+    "date": "Thu, 24 Sep 2026 16:48:43 +1000",
+    "message-id": "<CAMaya02second@mail.gmail.com>",
+    "subject": "Re: Cannot log in",
+    "to": "support@helpdesk.example.com",
+    "content-type": "text/plain; charset=\"UTF-8\""
+  },
+  "message_id": "<CAMaya02second@mail.gmail.com>",
+  "raw": null,
+  "attachments": []
+}

@@ -104,7 +104,7 @@ None.
 | 4.2 | Outbound email service wrapping the Resend SDK, sets `In-Reply-To` and `References` | Test email received in a real inbox, threaded | Done |
 | 4.3 | Send agent replies (3.7) by email | Student inbox receives agent reply in the same thread | Done |
 | 4.4 | `POST /api/webhooks/resend` with webhook signature verification (per Resend docs) | Unsigned or tampered request returns 401 | Done |
-| 4.5 | Parse inbound email per Resend receiving docs: sender, subject, text body, Message-ID, In-Reply-To | Unit tests with saved Resend payloads |  |
+| 4.5 | Parse inbound email per Resend receiving docs: sender, subject, text body, Message-ID, In-Reply-To | Unit tests with saved Resend payloads | Done |
 | 4.5a | Bound what the webhook writes to a ticket: a `createTicketSchema` in `packages/shared` capping `subject`, `studentEmail` and `studentName`, applied where inbound email creates or updates one. From the Phase 3 security review (#164): the columns are unbounded `TEXT`, and nothing could write them until this webhook | Over-long or malformed values are refused before the insert, with a test per field |  |
 | 4.6 | Ignore duplicates by Message-ID | Same payload posted twice creates one message |  |
 | 4.7 | Ignore auto-replies and bounces (`Auto-Submitted`, `X-Autoreply`, mailer-daemon senders) | Out-of-office payload creates nothing |  |
