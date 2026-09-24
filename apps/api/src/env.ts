@@ -23,6 +23,12 @@ const envSchema = z.object({
     .string()
     .regex(/^(?:[^<>]*<[^<>\s@]+@[^<>\s@]+>|[^<>\s@]+@[^<>\s@]+)$/)
     .describe('Sender, e.g. Helpdesk Support <support@helpdesk.example.com>'),
+  // Required for the same reason: without it no inbound email could ever be
+  // verified, and every one would be refused while the API looked healthy.
+  RESEND_WEBHOOK_SECRET: z
+    .string()
+    .startsWith('whsec_')
+    .describe("Signing secret from the webhook's page in Resend, e.g. whsec_abc123"),
 })
 
 type Env = z.infer<typeof envSchema>
