@@ -1,0 +1,30 @@
+{
+  "object": "email",
+  "id": "21400e22-7463-4e96-8c1e-608eb566f6bd",
+  "to": ["support@helpdesk.example.com"],
+  "from": "maya.chen@uni.edu",
+  "created_at": "2026-09-24T08:19:13.000Z",
+  "subject": "Re: Cannot log in",
+  "bcc": [],
+  "cc": [],
+  "reply_to": [],
+  "received_for": ["support@helpdesk.example.com"],
+  "html": null,
+  "text": "That worked, thank you.\n\nOn Thu, 24 Sept 2026 at 17:11, <support@helpdesk.example.com> wrote:\n>\n> Try clearing your cookies, then sign in again.\n",
+  "headers": {
+    "return-path": "<maya.chen@uni.edu>",
+    "received": "[\"from mail-pl1-f171.google.com (mail-pl1-f171.google.com [209.85.214.171]) by inbound-smtp.ap-northeast-1.amazonaws.com\",\"by mail-pl1-f171.google.com with SMTP id d9443c01a7336-2b0c7ab5f1bso3\"]",
+    "mime-version": "1.0",
+    "references": "[\"<CAMaya01first@mail.gmail.com>\",\"<CAMaya02second@mail.gmail.com>\",\"<010601a0d24197b2-04e91003-8ec7-4ef0-bf17-7169979f798e-000000@ap-northeast-1.amazonses.com>\"]",
+    "in-reply-to": "<010601a0d24197b2-04e91003-8ec7-4ef0-bf17-7169979f798e-000000@ap-northeast-1.amazonses.com>",
+    "from": "Maya Chen <maya.chen@uni.edu>",
+    "date": "Thu, 24 Sep 2026 18:19:12 +1000",
+    "message-id": "<CAMaya03third@mail.gmail.com>",
+    "subject": "Re: Cannot log in",
+    "to": "support@helpdesk.example.com",
+    "content-type": "text/plain; charset=\"UTF-8\""
+  },
+  "message_id": "<CAMaya03third@mail.gmail.com>",
+  "raw": null,
+  "attachments": []
+}
