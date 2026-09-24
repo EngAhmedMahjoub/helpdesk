@@ -1,15 +1,21 @@
 import { describe, expect, test } from 'bun:test'
-import { parseInboundEmail, type ReceivedEmail } from '../src/email/inbound.ts'
+import { isAutomatedEmail, parseInboundEmail, type ReceivedEmail } from '../src/email/inbound.ts'
+import bounce from './payloads/resend/bounce.json'
 import newEmail from './payloads/resend/new-email.json'
+import outOfOffice from './payloads/resend/out-of-office.json'
 import replyOneReference from './payloads/resend/reply-one-reference.json'
 import replySeveralReferences from './payloads/resend/reply-several-references.json'
 
 // Saved from Resend's received-emails API: the structure and header formats of
-// real Gmail emails to the helpdesk, with the people and words replaced.
+// real Gmail emails to the helpdesk, with the people and words replaced. The
+// out-of-office and bounce payloads follow the formats of Gmail's vacation
+// responder and delivery-failure notices, not a captured email.
 const saved = {
   newEmail: newEmail as ReceivedEmail,
   replyOneReference: replyOneReference as ReceivedEmail,
   replySeveralReferences: replySeveralReferences as ReceivedEmail,
+  outOfOffice: outOfOffice as ReceivedEmail,
+  bounce: bounce as ReceivedEmail,
 }
 
 /** A saved payload with some headers replaced, for the cases no saved one covers. */
@@ -103,5 +109,57 @@ describe('parseInboundEmail', () => {
     const email = parseInboundEmail({ ...saved.newEmail, text: null, html: '<p>Hello</p>' })
 
     expect(email.text).toBe('')
+  })
+})
+
+describe('isAutomatedEmail', () => {
+  /** A saved person-written email, with only the sender and these headers changed. */
+  const email = (headers: Record<string, string>, from = 'maya.chen@uni.edu') =>
+    ({ ...withHeaders(headers), from }) as ReceivedEmail
+
+  test('knows an out-of-office reply', () => {
+    expect(isAutomatedEmail(saved.outOfOffice)).toBe(true)
+  })
+
+  test('knows a bounce', () => {
+    expect(isAutomatedEmail(saved.bounce)).toBe(true)
+  })
+
+  test('lets the emails a person wrote through', () => {
+    expect(isAutomatedEmail(saved.newEmail)).toBe(false)
+    expect(isAutomatedEmail(saved.replyOneReference)).toBe(false)
+    expect(isAutomatedEmail(saved.replySeveralReferences)).toBe(false)
+  })
+
+  test.each([
+    'auto-replied',
+    'auto-generated',
+    'auto-notified',
+    'Auto-Replied; owner-email="m@uni.edu"',
+  ])('knows Auto-Submitted: %s', (value) => {
+    expect(isAutomatedEmail(email({ 'auto-submitted': value }))).toBe(true)
+  })
+
+  test('lets Auto-Submitted: no through, which a person-sent email may carry', () => {
+    expect(isAutomatedEmail(email({ 'auto-submitted': 'no' }))).toBe(false)
+    expect(isAutomatedEmail(email({ 'Auto-Submitted': ' No ' }))).toBe(false)
+  })
+
+  test('knows X-Autoreply, whatever its value', () => {
+    expect(isAutomatedEmail(email({ 'x-autoreply': 'yes' }))).toBe(true)
+    expect(isAutomatedEmail(email({ 'X-Autoreply': '' }))).toBe(true)
+  })
+
+  test.each(['mailer-daemon@googlemail.com', 'MAILER-DAEMON@uni.edu', 'postmaster@uni.edu'])(
+    'knows a bounce from %s by its sender alone',
+    (from) => {
+      // No Auto-Submitted header: the saved new email's, with only the sender changed.
+      expect(isAutomatedEmail(email({}, from))).toBe(true)
+    },
+  )
+
+  test('lets a person through whose address merely contains a bounce sender', () => {
+    expect(isAutomatedEmail(email({}, 'postmaster.jones@uni.edu'))).toBe(false)
+    expect(isAutomatedEmail(email({}, 'maya@mailer-daemon.edu'))).toBe(false)
   })
 })

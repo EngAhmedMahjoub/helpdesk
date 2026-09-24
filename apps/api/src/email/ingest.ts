@@ -1,12 +1,12 @@
 import { isPrismaError, prisma } from '../db.ts'
-import { parseInboundEmail, type ReceivedEmail } from './inbound.ts'
+import { isAutomatedEmail, parseInboundEmail, type ReceivedEmail } from './inbound.ts'
 import { inboundTicketFields } from './inbound-fields.ts'
 
 /**
  * What became of a received email. Every outcome is final: none is worth
  * Resend delivering the email again.
  */
-export type IngestOutcome = 'created' | 'duplicate' | 'refused'
+export type IngestOutcome = 'created' | 'duplicate' | 'refused' | 'automated'
 
 /**
  * Saves a received email as a new ticket holding it as the first message.
@@ -15,6 +15,8 @@ export type IngestOutcome = 'created' | 'duplicate' | 'refused'
  * answers comes before this in task 4.8.
  */
 export async function ingestInboundEmail(received: ReceivedEmail): Promise<IngestOutcome> {
+  if (isAutomatedEmail(received)) return 'automated'
+
   const fields = inboundTicketFields(parseInboundEmail(received))
   if (!fields) return 'refused'
 

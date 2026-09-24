@@ -6,7 +6,9 @@ import type { ReceivedEmail } from '../src/email/inbound.ts'
 import { EmailFetchError } from '../src/email/receiving.ts'
 import { env } from '../src/env.ts'
 import { prisma, resetDatabase } from './db.ts'
+import bounce from './payloads/resend/bounce.json'
 import newEmail from './payloads/resend/new-email.json'
+import outOfOffice from './payloads/resend/out-of-office.json'
 
 const saved = newEmail as ReceivedEmail
 
@@ -232,6 +234,20 @@ describe('POST /api/webhooks/resend: inbound email', () => {
     await deliverSigned(eventFor(other), 'msg_2')
 
     expect(await prisma.ticket.count()).toBe(2)
+  })
+
+  test.each([
+    ['an out-of-office reply', outOfOffice],
+    ['a bounce', bounce],
+  ])('acknowledges %s and saves nothing', async (_, payload) => {
+    const emailId = receive(payload as ReceivedEmail)
+
+    const res = await deliverSigned(eventFor(emailId))
+
+    // Acknowledged, or Resend would keep delivering it.
+    expect(res.status).toBe(204)
+    expect(await prisma.ticket.count()).toBe(0)
+    expect(await prisma.message.count()).toBe(0)
   })
 
   test('acknowledges other events without reading or saving anything', async () => {
