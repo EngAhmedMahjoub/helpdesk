@@ -108,7 +108,7 @@ None.
 | 4.5a | Bound what inbound email writes, applied where it creates or updates a ticket (#203). From the Phase 3 security review (#164): the columns are unbounded `TEXT`, and nothing could write them until this webhook; the message text is unbounded too. Refuse only an unusable sender (malformed or over 254). Cut the rest down so no student message is dropped over something cosmetic: `subject` over 200 ends in "…", empty is "(no subject)"; `studentName` over 100 or empty is stored as none; message text over 20,000 keeps its beginning then "[Message shortened]", empty is "(This email had no plain-text content.)" | Every field refused or cut down before the insert, with a test per field, message text included | Done |
 | 4.6 | Ignore duplicates by Message-ID | Same payload posted twice creates one message | Done |
 | 4.7 | Ignore auto-replies and bounces (`Auto-Submitted`, `X-Autoreply`, mailer-daemon senders) | Out-of-office payload creates nothing | Done |
-| 4.8 | Threading: match `In-Reply-To`/`References` to an existing ticket, else create a new ticket | Student reply appends to the original ticket |  |
+| 4.8 | Threading: match `In-Reply-To`/`References` to an existing ticket, else create a new ticket | Student reply appends to the original ticket | Done |
 | 4.9 | Reply to a Resolved or Closed ticket: add the message, keep the status; on Resolved, reset `autoCloseAt` to now + 14 days | Tests: status unchanged; timer reset only on Resolved |  |
 | 4.10 | End-to-end local test using a tunnel to the local API | Real email creates a ticket visible in the UI |  |
 
