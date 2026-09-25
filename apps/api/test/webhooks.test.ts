@@ -4,6 +4,7 @@ import request from 'supertest'
 import { createApp } from '../src/app.ts'
 import type { ReceivedEmail } from '../src/email/inbound.ts'
 import { EmailFetchError } from '../src/email/receiving.ts'
+import { AUTO_CLOSE_AFTER_MS, statusChange } from '../src/tickets/status.ts'
 import { env } from '../src/env.ts'
 import { prisma, resetDatabase } from './db.ts'
 import bounce from './payloads/resend/bounce.json'
@@ -342,6 +343,65 @@ describe('POST /api/webhooks/resend: threading', () => {
     expect(after.subject).toBe('Cannot log in')
     expect(after.status).toBe('open')
     expect(after.updatedAt.getTime()).toBeGreaterThan(before.getTime())
+  })
+
+  describe('on a Resolved or Closed ticket', () => {
+    const longAgo = new Date(Date.UTC(2026, 0, 1))
+
+    test('keeps a Resolved ticket Resolved and starts its auto-close timer over', async () => {
+      const ticket = await opened()
+      // Resolved long ago, so the timer is nearly out.
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: statusChange('resolved', longAgo),
+      })
+
+      const before = Date.now()
+      await deliverReply(replyOne)
+      const after = Date.now()
+
+      const stored = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })
+      expect(stored.status).toBe('resolved')
+      const timer = stored.autoCloseAt?.getTime() ?? 0
+      expect(timer).toBeGreaterThanOrEqual(before + AUTO_CLOSE_AFTER_MS)
+      expect(timer).toBeLessThanOrEqual(after + AUTO_CLOSE_AFTER_MS)
+      expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(2)
+    })
+
+    test('keeps a Closed ticket Closed, with no timer', async () => {
+      const ticket = await opened()
+      await prisma.ticket.update({ where: { id: ticket.id }, data: statusChange('closed') })
+
+      await deliverReply(replyOne)
+
+      const stored = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })
+      expect(stored.status).toBe('closed')
+      expect(stored.autoCloseAt).toBeNull()
+      expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(2)
+    })
+
+    test('keeps an Open ticket Open, with no timer', async () => {
+      const ticket = await opened()
+
+      await deliverReply(replyOne)
+
+      const stored = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })
+      expect(stored.status).toBe('open')
+      expect(stored.autoCloseAt).toBeNull()
+    })
+
+    test('resets no timer when the reply is a duplicate', async () => {
+      const ticket = await opened()
+      const emailId = receive(replyOne)
+      await deliverSigned(eventFor(emailId), 'msg_reply')
+      const resolved = statusChange('resolved', longAgo)
+      await prisma.ticket.update({ where: { id: ticket.id }, data: resolved })
+
+      await deliverSigned(eventFor(emailId), 'msg_reply')
+
+      const stored = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })
+      expect(stored.autoCloseAt).toEqual(resolved.autoCloseAt)
+    })
   })
 
   test('starts a new ticket when the IDs match nothing stored', async () => {
