@@ -110,7 +110,7 @@ None.
 | 4.7 | Ignore auto-replies and bounces (`Auto-Submitted`, `X-Autoreply`, mailer-daemon senders) | Out-of-office payload creates nothing | Done |
 | 4.8 | Threading: match `In-Reply-To`/`References` to an existing ticket, else create a new ticket | Student reply appends to the original ticket | Done |
 | 4.9 | Reply to a Resolved or Closed ticket: add the message, keep the status; on Resolved, reset `autoCloseAt` to now + 14 days | Tests: status unchanged; timer reset only on Resolved | Done |
-| 4.10 | End-to-end local test using a tunnel to the local API | Real email creates a ticket visible in the UI |  |
+| 4.10 | End-to-end local test using a tunnel to the local API | Real email creates a ticket visible in the UI | Done |
 
 ## Phase 5 — AI Pipeline
 
