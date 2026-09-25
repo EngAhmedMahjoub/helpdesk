@@ -1,4 +1,5 @@
 import { isPrismaError, prisma } from '../db.ts'
+import { AUTO_CLOSE_AFTER_MS } from '../tickets/status.ts'
 import { isAutomatedEmail, parseInboundEmail, type ReceivedEmail } from './inbound.ts'
 import { MESSAGE_ID_MAX_LENGTH, inboundTicketFields } from './inbound-fields.ts'
 
@@ -90,12 +91,24 @@ export async function ingestInboundEmail(received: ReceivedEmail): Promise<Inges
 
   try {
     if (ticketId !== null) {
-      // The reply adds to the thread and nothing else: the subject stays the
-      // ticket's own, and what a reply does to the status is task 4.9.
+      const now = new Date()
+      // The reply adds to the thread; the subject stays the ticket's own and the
+      // status is never changed (task 4.9). A student writing back to a Resolved
+      // or Closed ticket has not reopened it: what happens next is decided
+      // later, by the AI or an agent.
       await prisma.$transaction([
         prisma.message.create({ data: { ...message, ticketId } }),
         // Activity, like an agent's reply: the ticket rises in a list by updatedAt.
-        prisma.ticket.update({ where: { id: ticketId }, data: { updatedAt: new Date() } }),
+        prisma.ticket.update({ where: { id: ticketId }, data: { updatedAt: now } }),
+        // A Resolved ticket the student is still writing on should not close
+        // under them, so its timer starts over. The status is the statement's
+        // own condition rather than read beforehand, so an agent changing it at
+        // the same moment cannot leave a timer on a ticket that is no longer
+        // Resolved. Closed and Open tickets have no timer to reset.
+        prisma.ticket.updateMany({
+          where: { id: ticketId, status: 'resolved' },
+          data: { autoCloseAt: new Date(now.getTime() + AUTO_CLOSE_AFTER_MS) },
+        }),
       ])
       return 'appended'
     }
