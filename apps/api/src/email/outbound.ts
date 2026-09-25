@@ -1,5 +1,6 @@
 import type { Resend } from 'resend'
 import { env } from '../env.ts'
+import { isStorableMessageId } from './message-id.ts'
 import { resend } from './resend.ts'
 
 export type OutboundEmail = {
@@ -58,7 +59,9 @@ export function createEmailSender(client: EmailClient, from: string): SendEmail 
     if (isReservedAddress(email.to)) return { resendId: null }
 
     const headers: Record<string, string> = {}
-    const thread = email.thread ?? []
+    // Checked again here, not only where IDs are stored: these become raw header
+    // values, and an ID with a CR/LF in it could add headers of its own (#210).
+    const thread = (email.thread ?? []).filter(isStorableMessageId)
     const parent = thread.at(-1)
     if (parent) {
       // RFC 5322 §3.6.4: In-Reply-To names the parent; References carries the

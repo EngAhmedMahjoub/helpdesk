@@ -1,5 +1,6 @@
 import { NAME_MAX_LENGTH, emailField } from '@helpdesk/shared'
 import type { InboundEmail } from './inbound.ts'
+import { isStorableMessageId } from './message-id.ts'
 
 // Task 4.5a. The ticket and message columns are unbounded TEXT, and the webhook
 // is the first writer anyone can reach by sending an email. An email is refused
@@ -10,10 +11,6 @@ export const SUBJECT_MAX_LENGTH = 200
 // Above the 10,000 an agent reply may hold: inbound text carries the quoted
 // history of the messages before it.
 export const INBOUND_TEXT_MAX_LENGTH = 20_000
-// RFC 5322's line limit, which a Message-ID header cannot exceed. Far longer
-// would also overflow the unique index's row size, failing the insert on every
-// retry Resend makes.
-export const MESSAGE_ID_MAX_LENGTH = 998
 
 export const NO_SUBJECT = '(no subject)'
 export const NO_TEXT = '(This email had no plain-text content.)'
@@ -27,7 +24,8 @@ export type InboundTicketFields = {
   body: string
   /**
    * What duplicates are recognised and threads matched by. Null when the email
-   * had none or one too long to be real: it is still saved, just not deduped.
+   * had none, or one failing the rule in message-id.ts: it is still saved, just
+   * not deduped.
    * Never an empty string, which the unique column would treat as one ID shared
    * by every email lacking one, dropping all but the first.
    */
@@ -46,6 +44,14 @@ function shorten(value: string, max: number, marker: string): string {
 }
 
 /**
+ * `value` without NUL characters. Postgres refuses NUL in a text column, so one
+ * in an email would fail the insert on every redelivery Resend makes (#210).
+ */
+function withoutNul(value: string): string {
+  return value.replaceAll('\u0000', '')
+}
+
+/**
  * The fields an inbound email writes, bounded, or null when it must be refused:
  * a sender that is malformed or too long to be a deliverable address, whom no
  * reply could reach.
@@ -54,9 +60,9 @@ export function inboundTicketFields(email: InboundEmail): InboundTicketFields | 
   const studentEmail = emailField.safeParse(email.fromAddress.trim())
   if (!studentEmail.success) return null
 
-  const subject = email.subject.trim()
-  const name = email.fromName?.trim()
-  const text = email.text.trim()
+  const subject = withoutNul(email.subject).trim()
+  const name = email.fromName && withoutNul(email.fromName).trim()
+  const text = withoutNul(email.text).trim()
   const messageId = email.messageId.trim()
 
   return {
@@ -68,6 +74,6 @@ export function inboundTicketFields(email: InboundEmail): InboundTicketFields | 
     // The beginning is kept: it holds the student's new words, and what gets cut
     // is mostly quoted history the thread already has.
     body: text ? shorten(text, INBOUND_TEXT_MAX_LENGTH, TEXT_SHORTENED) : NO_TEXT,
-    emailMessageId: messageId && messageId.length <= MESSAGE_ID_MAX_LENGTH ? messageId : null,
+    emailMessageId: isStorableMessageId(messageId) ? messageId : null,
   }
 }

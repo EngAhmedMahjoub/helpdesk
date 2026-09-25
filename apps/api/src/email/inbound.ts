@@ -88,9 +88,11 @@ export function parseInboundEmail(email: ReceivedEmail): InboundEmail {
   return {
     fromAddress: address(email.from),
     fromName: displayName(header(email, 'from')),
-    subject: email.subject.trim(),
+    // Typed as strings, but an email can lack either header, and a null here
+    // would throw on every redelivery (#210).
+    subject: (email.subject ?? '').trim(),
     text: email.text ?? '',
-    messageId: email.message_id,
+    messageId: email.message_id ?? '',
     inReplyTo: messageIds(header(email, 'in-reply-to'))[0] ?? null,
     references: messageIds(header(email, 'references')),
   }

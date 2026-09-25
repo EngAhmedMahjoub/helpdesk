@@ -105,6 +105,18 @@ describe('parseInboundEmail', () => {
     expect(email.fromAddress).toBe('maya.chen@uni.edu')
   })
 
+  test('reads an email that lacks a Subject or Message-ID header without throwing', () => {
+    // Typed as strings by the SDK, but not promised for every email.
+    const email = parseInboundEmail({
+      ...saved.newEmail,
+      subject: null,
+      message_id: null,
+    } as unknown as ReceivedEmail)
+
+    expect(email.subject).toBe('')
+    expect(email.messageId).toBe('')
+  })
+
   test('gives an empty text for an email with no plain-text part', () => {
     const email = parseInboundEmail({ ...saved.newEmail, text: null, html: '<p>Hello</p>' })
 

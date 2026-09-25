@@ -984,6 +984,37 @@ describe('POST /api/tickets/:id/replies', () => {
     expect(outbox[0]?.thread).toEqual(['<first@mail>', '<second@mail>'])
   })
 
+  test("names only the student's first email and latest 20, however long the ticket", async () => {
+    // Every ID lands in one References header, which must stay bounded (#210).
+    const ticket = await createTicket()
+    await prisma.message.createMany({
+      data: Array.from({ length: 30 }, (_, index) => ({
+        ticketId: ticket.id,
+        direction: 'inbound' as const,
+        author: 'student' as const,
+        body: `Message ${String(index)}`,
+        emailMessageId: `<m${String(index)}@mail>`,
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+      })),
+    })
+
+    await reply(ticket.id, { body: 'On it.' })
+
+    expect(outbox[0]?.thread).toEqual([
+      '<m0@mail>',
+      ...Array.from({ length: 20 }, (_, index) => `<m${String(index + 10)}@mail>`),
+    ])
+  })
+
+  test('names the first email once when the ticket has fewer than 20', async () => {
+    const ticket = await createTicket()
+    await createMessage({ ticketId: ticket.id, emailMessageId: '<only@mail>' })
+
+    await reply(ticket.id, { body: 'On it.' })
+
+    expect(outbox[0]?.thread).toEqual(['<only@mail>'])
+  })
+
   test('answers 502 and saves nothing when the email is refused', async () => {
     const ticket = await createTicket({ updatedAt: day(1) })
     refuse = true

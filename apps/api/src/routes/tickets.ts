@@ -95,6 +95,38 @@ const TICKET_NOT_FOUND = 'Ticket not found'
 
 const REPLY_NOT_SENT = 'The reply could not be emailed. Nothing was saved; try again.'
 
+// How many of the student's latest emails a reply's References names, besides
+// their first. The IDs become one header, so a ticket that runs to hundreds of
+// messages must not make it hundreds of KB, which Resend could refuse on every
+// reply (#210). Mail clients thread on the first ID and the latest few.
+const REPLY_THREAD_RECENT = 20
+
+/**
+ * The Message-IDs a reply threads onto, oldest first: the student's first
+ * email and their latest REPLY_THREAD_RECENT. Our own outbound messages have no
+ * Message-ID to add: Amazon SES sets one and does not report it.
+ */
+async function replyThread(ticketId: number): Promise<string[]> {
+  const where = {
+    ticketId,
+    direction: 'inbound',
+    emailMessageId: { not: null },
+  } satisfies Prisma.MessageWhereInput
+  const select = { id: true, emailMessageId: true } as const
+  const orderBy = [
+    { createdAt: 'asc' },
+    { id: 'asc' },
+  ] satisfies Prisma.MessageOrderByWithRelationInput[]
+
+  const [first, recent] = await Promise.all([
+    prisma.message.findFirst({ where, select, orderBy }),
+    // A negative take counts from the end: the latest, still oldest first.
+    prisma.message.findMany({ where, select, orderBy, take: -REPLY_THREAD_RECENT }),
+  ])
+  const messages = first && !recent.some((m) => m.id === first.id) ? [first, ...recent] : recent
+  return messages.flatMap((m) => (m.emailMessageId ? [m.emailMessageId] : []))
+}
+
 /** The ticket's subject as a reply's, without stacking a second "Re:". */
 function replySubject(subject: string): string {
   return /^re:/i.test(subject.trim()) ? subject : `Re: ${subject}`
@@ -270,17 +302,7 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
 
   const ticket = await prisma.ticket.findUnique({
     where: { id },
-    select: {
-      subject: true,
-      studentEmail: true,
-      // The student's emails, oldest first: the chain the reply threads onto.
-      // Our own outbound messages have no Message-ID to add (see below).
-      messages: {
-        where: { direction: 'inbound', emailMessageId: { not: null } },
-        select: { emailMessageId: true },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      },
-    },
+    select: { subject: true, studentEmail: true },
   })
   if (!ticket) {
     res.status(404).json({ error: TICKET_NOT_FOUND })
@@ -295,7 +317,7 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
       to: ticket.studentEmail,
       subject: replySubject(ticket.subject),
       text: body.body,
-      thread: ticket.messages.flatMap((m) => (m.emailMessageId ? [m.emailMessageId] : [])),
+      thread: await replyThread(id),
     })
   } catch (err) {
     // Only a refusal from Resend is a 502. Anything else is a fault of ours,

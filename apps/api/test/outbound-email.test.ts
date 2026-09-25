@@ -94,6 +94,28 @@ describe('sendEmail', () => {
     expect(sent).toHaveLength(1)
   })
 
+  test('drops a thread ID that could inject a header, keeping the rest', async () => {
+    const { send, sent } = fakeSender()
+
+    await send({
+      ...email,
+      thread: ['<first@mail>', '<x@y>\r\nBcc: attacker@evil.test', '<second@mail>', 'not-an-id'],
+    })
+
+    expect(sent[0]?.headers).toEqual({
+      'In-Reply-To': '<second@mail>',
+      References: '<first@mail> <second@mail>',
+    })
+  })
+
+  test('starts a new thread when no thread ID is usable', async () => {
+    const { send, sent } = fakeSender()
+
+    await send({ ...email, thread: ['<x@y>\r\nBcc: attacker@evil.test'] })
+
+    expect(sent[0]?.headers).toEqual({})
+  })
+
   test('throws when Resend refuses the email', async () => {
     const { send } = fakeSender({
       data: null,
