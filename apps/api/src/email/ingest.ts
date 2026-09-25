@@ -1,7 +1,8 @@
 import { isPrismaError, prisma } from '../db.ts'
 import { AUTO_CLOSE_AFTER_MS } from '../tickets/status.ts'
 import { isAutomatedEmail, parseInboundEmail, type ReceivedEmail } from './inbound.ts'
-import { MESSAGE_ID_MAX_LENGTH, inboundTicketFields } from './inbound-fields.ts'
+import { inboundTicketFields } from './inbound-fields.ts'
+import { isStorableMessageId } from './message-id.ts'
 
 /**
  * What became of a received email. Every outcome is final: none is worth
@@ -27,7 +28,8 @@ const THREAD_IDS_MAX = 100
 function threadIds(inReplyTo: string | null, references: string[]): string[] {
   const recent = references.slice(-(THREAD_IDS_MAX - 2)).toReversed()
   const ids = [inReplyTo, ...recent, references[0]].filter(
-    (id): id is string => !!id && id.length <= MESSAGE_ID_MAX_LENGTH,
+    // Only IDs that could have been stored can match one.
+    (id): id is string => !!id && isStorableMessageId(id),
   )
   return [...new Set(ids)]
 }

@@ -253,6 +253,53 @@ describe('POST /api/webhooks/resend: inbound email', () => {
     expect(await prisma.message.count()).toBe(0)
   })
 
+  describe('input that used to make saving throw (#210)', () => {
+    test('saves an email whose long non-ASCII Message-ID would overflow the unique index', async () => {
+      // 998 such characters made a 3008-byte index row, over btree's 2704-byte
+      // limit, so the insert failed on every redelivery.
+      const res = await deliverSigned(eventFor(receive({ message_id: `<${'文'.repeat(996)}>` })))
+
+      expect(res.status).toBe(204)
+      const message = await prisma.message.findFirstOrThrow()
+      expect(message.emailMessageId).toBeNull()
+    })
+
+    test('saves an email with a NUL in its subject, name and text', async () => {
+      const res = await deliverSigned(
+        eventFor(
+          receive({
+            subject: 'Cannot\u0000 log in',
+            text: 'Help\u0000 me',
+            headers: { ...saved.headers, from: 'Maya\u0000 Chen <maya.chen@uni.edu>' },
+          }),
+        ),
+      )
+
+      expect(res.status).toBe(204)
+      const ticket = await prisma.ticket.findFirstOrThrow({ include: { messages: true } })
+      expect(ticket).toMatchObject({ subject: 'Cannot log in', studentName: 'Maya Chen' })
+      expect(ticket.messages[0]?.body).toBe('Help me')
+    })
+
+    test('saves an email that lacks a Subject or Message-ID', async () => {
+      const res = await deliverSigned(
+        eventFor(receive({ subject: null, message_id: null } as unknown as ReceivedEmail)),
+      )
+
+      expect(res.status).toBe(204)
+      const ticket = await prisma.ticket.findFirstOrThrow({ include: { messages: true } })
+      expect(ticket.subject).toBe('(no subject)')
+      expect(ticket.messages[0]?.emailMessageId).toBeNull()
+    })
+
+    test('stores a Message-ID carrying a CR/LF as none, so it never reaches a reply', async () => {
+      await deliverSigned(eventFor(receive({ message_id: '<x@y>\r\nBcc: attacker@evil.test' })))
+
+      const message = await prisma.message.findFirstOrThrow()
+      expect(message.emailMessageId).toBeNull()
+    })
+  })
+
   test('acknowledges other events without reading or saving anything', async () => {
     const res = await deliverSigned(eventFor(saved.id, 'email.delivered'))
 
