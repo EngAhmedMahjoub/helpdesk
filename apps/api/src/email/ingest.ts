@@ -1,23 +1,73 @@
 import { isPrismaError, prisma } from '../db.ts'
 import { isAutomatedEmail, parseInboundEmail, type ReceivedEmail } from './inbound.ts'
-import { inboundTicketFields } from './inbound-fields.ts'
+import { MESSAGE_ID_MAX_LENGTH, inboundTicketFields } from './inbound-fields.ts'
 
 /**
  * What became of a received email. Every outcome is final: none is worth
  * Resend delivering the email again.
  */
-export type IngestOutcome = 'created' | 'duplicate' | 'refused' | 'automated'
+export type IngestOutcome = 'created' | 'appended' | 'duplicate' | 'refused' | 'automated'
+
+// Enough for any real thread. The IDs come from the sender, and without a cap a
+// crafted References header could make one lookup ask for thousands.
+const THREAD_IDS_MAX = 100
 
 /**
- * Saves a received email as a new ticket holding it as the first message.
+ * The Message-IDs a reply points at, nearest first: In-Reply-To, then
+ * References newest to oldest. References is what matches in practice: our
+ * replies go out with a Message-ID Amazon SES sets and never reports, so a
+ * student's In-Reply-To names one we do not have, while References still
+ * carries the student's own earlier IDs.
  *
- * Every email starts a ticket for now; matching a reply to the ticket it
- * answers comes before this in task 4.8.
+ * Over the cap, the middle of the chain goes. The first reference always stays:
+ * it is the student's opening email, the one surest to be stored, and the one
+ * RFC 5322 has mail clients keep when they trim a long chain themselves.
+ */
+function threadIds(inReplyTo: string | null, references: string[]): string[] {
+  const recent = references.slice(-(THREAD_IDS_MAX - 2)).toReversed()
+  const ids = [inReplyTo, ...recent, references[0]].filter(
+    (id): id is string => !!id && id.length <= MESSAGE_ID_MAX_LENGTH,
+  )
+  return [...new Set(ids)]
+}
+
+/**
+ * The ticket a reply belongs to (task 4.8), or null to start a new one.
+ *
+ * Only the ticket's own student can add to it. Message-IDs are not secret:
+ * anyone copied on the thread has seen them, and matching on them alone would
+ * let that person write into another student's ticket. A student writing from
+ * a second address gets a new ticket instead.
+ */
+async function ticketForReply(ids: string[], sender: string): Promise<number | null> {
+  if (ids.length === 0) return null
+
+  const matches = await prisma.message.findMany({
+    where: {
+      emailMessageId: { in: ids },
+      ticket: { studentEmail: { equals: sender, mode: 'insensitive' } },
+    },
+    select: { emailMessageId: true, ticketId: true },
+  })
+
+  // Nearest first: when the IDs reach more than one ticket, the one the email
+  // answers directly wins over one further back in the chain.
+  for (const id of ids) {
+    const match = matches.find((message) => message.emailMessageId === id)
+    if (match) return match.ticketId
+  }
+  return null
+}
+
+/**
+ * Saves a received email: appended to the ticket it replies to, or as a new
+ * ticket holding it as the first message.
  */
 export async function ingestInboundEmail(received: ReceivedEmail): Promise<IngestOutcome> {
   if (isAutomatedEmail(received)) return 'automated'
 
-  const fields = inboundTicketFields(parseInboundEmail(received))
+  const email = parseInboundEmail(received)
+  const fields = inboundTicketFields(email)
   if (!fields) return 'refused'
 
   const { emailMessageId, body, ...ticket } = fields
@@ -32,13 +82,30 @@ export async function ingestInboundEmail(received: ReceivedEmail): Promise<Inges
     if (seen) return 'duplicate'
   }
 
+  const message = { direction: 'inbound', author: 'student', body, emailMessageId } as const
+  const ticketId = await ticketForReply(
+    threadIds(email.inReplyTo, email.references),
+    ticket.studentEmail,
+  )
+
   try {
+    if (ticketId !== null) {
+      // The reply adds to the thread and nothing else: the subject stays the
+      // ticket's own, and what a reply does to the status is task 4.9.
+      await prisma.$transaction([
+        prisma.message.create({ data: { ...message, ticketId } }),
+        // Activity, like an agent's reply: the ticket rises in a list by updatedAt.
+        prisma.ticket.update({ where: { id: ticketId }, data: { updatedAt: new Date() } }),
+      ])
+      return 'appended'
+    }
+
     // One statement, so the ticket and its message land together or not at all:
     // a duplicate caught by the unique index below leaves no empty ticket.
     await prisma.ticket.create({
       data: {
         ...ticket,
-        messages: { create: { direction: 'inbound', author: 'student', body, emailMessageId } },
+        messages: { create: message },
       },
     })
   } catch (err) {

@@ -9,6 +9,8 @@ import { prisma, resetDatabase } from './db.ts'
 import bounce from './payloads/resend/bounce.json'
 import newEmail from './payloads/resend/new-email.json'
 import outOfOffice from './payloads/resend/out-of-office.json'
+import replyOneReference from './payloads/resend/reply-one-reference.json'
+import replySeveralReferences from './payloads/resend/reply-several-references.json'
 
 const saved = newEmail as ReceivedEmail
 
@@ -273,5 +275,156 @@ describe('POST /api/webhooks/resend: inbound email', () => {
     // Not acknowledged, so Resend delivers the event again later.
     expect(res.status).toBe(502)
     expect(await prisma.ticket.count()).toBe(0)
+  })
+})
+
+describe('POST /api/webhooks/resend: threading', () => {
+  // The saved new email is Maya's opening message, <CAMaya01first@mail.gmail.com>.
+  // Her replies name it in In-Reply-To or References, as Gmail wrote them.
+  const replyOne = replyOneReference as ReceivedEmail
+  const replySeveral = replySeveralReferences as ReceivedEmail
+
+  /** Delivers the opening email and answers the ticket it made. */
+  async function opened() {
+    await deliverSigned(eventFor(saved.id), 'msg_open')
+    return prisma.ticket.findFirstOrThrow({ include: { messages: true } })
+  }
+
+  const deliverReply = (reply: Partial<ReceivedEmail>, svixId = 'msg_reply') =>
+    deliverSigned(eventFor(receive(reply)), svixId)
+
+  test("appends a student's reply to the original ticket", async () => {
+    const ticket = await opened()
+
+    const res = await deliverReply(replyOne)
+
+    expect(res.status).toBe(204)
+    expect(await prisma.ticket.count()).toBe(1)
+    const thread = await prisma.message.findMany({
+      where: { ticketId: ticket.id },
+      orderBy: { id: 'asc' },
+    })
+    expect(thread.map((message) => [message.author, message.emailMessageId])).toEqual([
+      ['student', '<CAMaya01first@mail.gmail.com>'],
+      ['student', '<CAMaya02second@mail.gmail.com>'],
+    ])
+    expect(thread[1]?.body).toStartWith('It happens on my phone too.')
+  })
+
+  test('matches a reply to our email through References, since its In-Reply-To names our reply', async () => {
+    // In-Reply-To is the Message-ID Amazon SES gave our reply, which nothing
+    // stores; only References still names Maya's opening email.
+    const ticket = await opened()
+
+    await deliverReply(replySeveral)
+
+    expect(await prisma.ticket.count()).toBe(1)
+    expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(2)
+  })
+
+  test('matches on In-Reply-To alone when a client sends no References', async () => {
+    const ticket = await opened()
+    const { references: _, ...headers } = replyOne.headers ?? {}
+
+    await deliverReply({ ...replyOne, headers })
+
+    expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(2)
+  })
+
+  test("leaves the ticket's subject and status alone and moves its updatedAt", async () => {
+    const ticket = await opened()
+    const before = new Date(Date.UTC(2026, 0, 1))
+    await prisma.ticket.update({ where: { id: ticket.id }, data: { updatedAt: before } })
+
+    await deliverReply({ ...replyOne, subject: 'Re: Cannot log in (still broken!)' })
+
+    const after = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })
+    expect(after.subject).toBe('Cannot log in')
+    expect(after.status).toBe('open')
+    expect(after.updatedAt.getTime()).toBeGreaterThan(before.getTime())
+  })
+
+  test('starts a new ticket when the IDs match nothing stored', async () => {
+    await opened()
+    const headers = {
+      ...replyOne.headers,
+      'in-reply-to': '<unknown@mail.gmail.com>',
+      references: '<unknown@mail.gmail.com>',
+    }
+
+    await deliverReply({ ...replyOne, headers })
+
+    expect(await prisma.ticket.count()).toBe(2)
+  })
+
+  test("starts a new ticket when someone else replies with the thread's IDs", async () => {
+    // Copied on the thread, they have seen its Message-IDs, but may not write
+    // into Maya's ticket.
+    const ticket = await opened()
+    const headers = { ...replyOne.headers, from: 'Sam Lee <sam.lee@uni.edu>' }
+
+    await deliverReply({ ...replyOne, from: 'sam.lee@uni.edu', headers })
+
+    expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(1)
+    const other = await prisma.ticket.findFirstOrThrow({ where: { NOT: { id: ticket.id } } })
+    expect(other.studentEmail).toBe('sam.lee@uni.edu')
+  })
+
+  test("matches the student's address whatever its case", async () => {
+    const ticket = await opened()
+
+    await deliverReply({ ...replyOne, from: 'Maya.Chen@UNI.edu' })
+
+    expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(2)
+  })
+
+  test('appends a redelivered reply once', async () => {
+    const ticket = await opened()
+    const emailId = receive(replyOne)
+
+    await deliverSigned(eventFor(emailId), 'msg_reply')
+    await deliverSigned(eventFor(emailId), 'msg_reply')
+
+    expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(2)
+  })
+
+  test('picks the ticket the email answers most directly when its IDs reach two', async () => {
+    // Maya's opening email is on one ticket and her second message, somehow, on
+    // another. References names both; the nearer one, the second, wins.
+    const first = await opened()
+    const second = await prisma.ticket.create({
+      data: {
+        subject: 'Another question',
+        studentEmail: 'maya.chen@uni.edu',
+        messages: {
+          create: {
+            direction: 'inbound',
+            author: 'student',
+            body: 'Hi',
+            emailMessageId: '<CAMaya02second@mail.gmail.com>',
+          },
+        },
+      },
+    })
+
+    await deliverReply(replySeveral)
+
+    expect(await prisma.message.count({ where: { ticketId: second.id } })).toBe(2)
+    expect(await prisma.message.count({ where: { ticketId: first.id } })).toBe(1)
+  })
+
+  test('still finds the opening email at the start of a References thousands long', async () => {
+    const ticket = await opened()
+    const filler = Array.from({ length: 5_000 }, (_, i) => `"<filler${String(i)}@mail>"`)
+    const headers = {
+      ...replyOne.headers,
+      'in-reply-to': '<filler4999@mail>',
+      references: `["<CAMaya01first@mail.gmail.com>",${filler.join(',')}]`,
+    }
+
+    const res = await deliverReply({ ...replyOne, headers })
+
+    expect(res.status).toBe(204)
+    expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(2)
   })
 })
