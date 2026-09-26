@@ -9,6 +9,7 @@ import {
   type FetchReceivedEmail,
   fetchReceivedEmail as resendFetchReceivedEmail,
 } from './email/receiving.ts'
+import type { QueueProcessTicket } from './jobs/process-ticket.ts'
 import { authRouter } from './routes/auth.ts'
 import { ticketsRouter } from './routes/tickets.ts'
 import { usersRouter } from './routes/users.ts'
@@ -48,25 +49,38 @@ declare global {
     interface Locals {
       sendEmail: SendEmail
       fetchReceivedEmail: FetchReceivedEmail
+      queueProcessTicket: QueueProcessTicket
     }
   }
 }
 
-/** Both replaced in tests, which must never reach Resend. */
+/** The Resend pair are replaced in tests, which must never reach Resend. */
 type AppOptions = {
   sendEmail?: SendEmail
   fetchReceivedEmail?: FetchReceivedEmail
+  /**
+   * The job queue lives on a started pg-boss, which src/index.ts owns and
+   * passes in. No default queue: left out, an inbound email fails with a 500,
+   * and Resend redelivers it, rather than being saved with no job to answer it.
+   */
+  queueProcessTicket?: QueueProcessTicket
+}
+
+const noJobQueue: QueueProcessTicket = () => {
+  throw new Error('No job queue: createApp was not given queueProcessTicket')
 }
 
 export function createApp({
   sendEmail = resendSendEmail,
   fetchReceivedEmail = resendFetchReceivedEmail,
+  queueProcessTicket = noJobQueue,
 }: AppOptions = {}) {
   const app = express()
   // On app.locals rather than imported by the routes, so a test can hand the
   // app a fake without mocking modules.
   app.locals.sendEmail = sendEmail
   app.locals.fetchReceivedEmail = fetchReceivedEmail
+  app.locals.queueProcessTicket = queueProcessTicket
 
   // credentials: true is what lets the session cookie cross from app.<domain>
   // to api.<domain> in production. Without it the browser sends the cookie on
