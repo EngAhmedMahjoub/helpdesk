@@ -14,6 +14,7 @@
   "headers": {
     "return-path": "<maya.chen@uni.edu>",
     "received": "[\"from mail-pl1-f171.google.com (mail-pl1-f171.google.com [209.85.214.171]) by inbound-smtp.ap-northeast-1.amazonaws.com\",\"by mail-pl1-f171.google.com with SMTP id d9443c01a7336-2b0c7ab5f1bso3\"]",
+    "authentication-results": "amazonses.com; spf=pass (spfCheck: domain of _spf.uni.edu designates 209.85.214.171 as permitted sender) client-ip=209.85.214.171; envelope-from=maya.chen@uni.edu; helo=mail-pl1-f171.google.com; dkim=pass header.i=@uni.edu; dmarc=pass header.from=uni.edu;",
     "mime-version": "1.0",
     "references": "[\"<CAMaya01first@mail.gmail.com>\",\"<CAMaya02second@mail.gmail.com>\",\"<010601a0d24197b2-04e91003-8ec7-4ef0-bf17-7169979f798e-000000@ap-northeast-1.amazonses.com>\"]",
     "in-reply-to": "<010601a0d24197b2-04e91003-8ec7-4ef0-bf17-7169979f798e-000000@ap-northeast-1.amazonses.com>",

@@ -84,6 +84,53 @@ export function isAutomatedEmail(email: ReceivedEmail): boolean {
   return BOUNCE_SENDERS.includes(sender.slice(0, sender.lastIndexOf('@')))
 }
 
+// The authserv-id Resend's receiving (Amazon SES) stamps on the
+// Authentication-Results header it adds, as seen on every real received email.
+const RECEIVING_AUTHSERV_ID = 'amazonses.com'
+
+/**
+ * Every value of a header, however Resend hands it over: a repeated header
+ * arrives as a JSON array string, a single one as the bare value.
+ */
+function headerValues(email: ReceivedEmail, name: string): string[] {
+  const value = header(email, name)
+  if (value === undefined) return []
+  if (value.trimStart().startsWith('[')) {
+    try {
+      const values: unknown = JSON.parse(value)
+      if (Array.isArray(values)) return values.filter((v): v is string => typeof v === 'string')
+    } catch {
+      // Not a JSON array after all: one value that happens to start with "[".
+    }
+  }
+  return [value]
+}
+
+/**
+ * Whether the email passed DMARC, as Resend's receiving judged it (task 5.2a).
+ * Only a reply that passes may join a ticket: the thread's Message-IDs are
+ * known to anyone copied on it, so the From is all that stands between them
+ * and the student's ticket, and the AI reads what is appended as the
+ * student's own words.
+ *
+ * A pass must be proven, not merely unrefuted. Anything else (fail, none, a
+ * temporary error, no header) is not a pass, so a reply from a domain without
+ * a DMARC policy opens a new ticket rather than joining one: that domain's From
+ * can be forged freely. Only Authentication-Results headers stamped
+ * `amazonses.com` count, and every `dmarc=` result among them must be `pass`.
+ * A sender can add a header of their own claiming `amazonses.com; dmarc=pass`,
+ * and plant `dmarc=pass` text in fields SES copies into its own, such as the
+ * HELO name, but cannot remove SES's real verdict; beside a real fail or none,
+ * a planted pass decides nothing.
+ */
+export function passedDmarc(email: ReceivedEmail): boolean {
+  const results = headerValues(email, 'authentication-results')
+    .filter((value) => /^\s*([^;\s]+)/.exec(value)?.[1]?.toLowerCase() === RECEIVING_AUTHSERV_ID)
+    .flatMap((value) => [...value.matchAll(/\bdmarc\s*=\s*([a-z]+)/gi)])
+    .map(([, result]) => result?.toLowerCase())
+  return results.length > 0 && results.every((result) => result === 'pass')
+}
+
 export function parseInboundEmail(email: ReceivedEmail): InboundEmail {
   return {
     fromAddress: address(email.from),

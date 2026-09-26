@@ -573,6 +573,45 @@ describe('POST /api/webhooks/resend: threading', () => {
     })
   })
 
+  describe('only after a DMARC pass (5.2a)', () => {
+    /** The saved reply with SES's verdict replaced, or its Authentication-Results removed. */
+    const replyWithDmarc = (dmarc: string | undefined) => {
+      const { 'authentication-results': auth, ...headers } = replyOne.headers ?? {}
+      return {
+        ...replyOne,
+        headers:
+          dmarc === undefined
+            ? headers
+            : { ...headers, 'authentication-results': (auth ?? '').replace('dmarc=pass', dmarc) },
+      }
+    }
+
+    test('appends a reply that passed DMARC', async () => {
+      const ticket = await opened()
+
+      await deliverReply(replyWithDmarc('dmarc=pass'))
+
+      expect(await prisma.ticket.count()).toBe(1)
+      expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(2)
+    })
+
+    test.each([
+      ['failed DMARC', 'dmarc=fail'],
+      ['has no DMARC verdict, from a domain without a policy', 'dmarc=none'],
+      ['carries no Authentication-Results', undefined],
+    ])('opens a new ticket for a reply that %s, rather than append it', async (_, dmarc) => {
+      const ticket = await opened()
+
+      const res = await deliverReply(replyWithDmarc(dmarc))
+
+      // Acknowledged and saved, just not on the student's ticket.
+      expect(res.status).toBe(204)
+      expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(1)
+      const other = await prisma.ticket.findFirstOrThrow({ where: { NOT: { id: ticket.id } } })
+      expect(other.studentEmail).toBe('maya.chen@uni.edu')
+    })
+  })
+
   test('starts a new ticket when the IDs match nothing stored', async () => {
     await opened()
     const headers = {

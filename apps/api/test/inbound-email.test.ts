@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { isAutomatedEmail, parseInboundEmail, type ReceivedEmail } from '../src/email/inbound.ts'
+import {
+  isAutomatedEmail,
+  parseInboundEmail,
+  passedDmarc,
+  type ReceivedEmail,
+} from '../src/email/inbound.ts'
 import bounce from './payloads/resend/bounce.json'
 import newEmail from './payloads/resend/new-email.json'
 import outOfOffice from './payloads/resend/out-of-office.json'
@@ -173,5 +178,78 @@ describe('isAutomatedEmail', () => {
   test('lets a person through whose address merely contains a bounce sender', () => {
     expect(isAutomatedEmail(email({}, 'postmaster.jones@uni.edu'))).toBe(false)
     expect(isAutomatedEmail(email({}, 'maya@mailer-daemon.edu'))).toBe(false)
+  })
+})
+
+describe('passedDmarc', () => {
+  // SES's header as it arrives on real received mail, with the verdict swapped.
+  const ses = (dmarc: string) =>
+    `amazonses.com; spf=pass (spfCheck: domain of _spf.uni.edu designates 209.85.214.171 as permitted sender) client-ip=209.85.214.171; envelope-from=maya.chen@uni.edu; helo=mail-pl1-f171.google.com; dkim=pass header.i=@uni.edu; ${dmarc};`
+
+  const withAuth = (value: string | undefined) => {
+    const { 'authentication-results': _, ...headers } = saved.newEmail.headers ?? {}
+    return {
+      ...saved.newEmail,
+      headers: value === undefined ? headers : { ...headers, 'authentication-results': value },
+    } as ReceivedEmail
+  }
+
+  test("passes the saved emails a person wrote, which carry SES's dmarc=pass", () => {
+    expect(passedDmarc(saved.newEmail)).toBe(true)
+    expect(passedDmarc(saved.replyOneReference)).toBe(true)
+    expect(passedDmarc(saved.replySeveralReferences)).toBe(true)
+  })
+
+  test.each([
+    ['dmarc=fail', ses('dmarc=fail header.from=uni.edu')],
+    ['dmarc=none, a domain with no DMARC policy', ses('dmarc=none header.from=uni.edu')],
+    ['dmarc=temperror', ses('dmarc=temperror header.from=uni.edu')],
+    [
+      'no DMARC result at all',
+      'amazonses.com; spf=pass client-ip=209.85.214.171; dkim=pass header.i=@uni.edu;',
+    ],
+  ])('does not pass %s', (_, value) => {
+    expect(passedDmarc(withAuth(value))).toBe(false)
+  })
+
+  test('does not pass an email with no Authentication-Results', () => {
+    expect(passedDmarc(withAuth(undefined))).toBe(false)
+    expect(passedDmarc({ ...saved.newEmail, headers: null })).toBe(false)
+  })
+
+  test("ignores a pass stamped by any server but Resend's receiving", () => {
+    // Anyone can add this header to the mail they send.
+    expect(passedDmarc(withAuth('mx.evil.test; dmarc=pass header.from=uni.edu;'))).toBe(false)
+  })
+
+  test("does not pass when a forged header claims a pass beside SES's real fail", () => {
+    const headers = JSON.stringify([
+      'amazonses.com; dmarc=pass header.from=uni.edu;',
+      ses('dmarc=fail header.from=uni.edu'),
+    ])
+
+    expect(passedDmarc(withAuth(headers))).toBe(false)
+  })
+
+  test('does not pass when a pass is planted in a field SES copies, ahead of its real verdict', () => {
+    const planted = ses('dmarc=none header.from=uni.edu').replace(
+      'helo=mail-pl1-f171.google.com',
+      'helo=x dmarc=pass',
+    )
+
+    expect(passedDmarc(withAuth(planted))).toBe(false)
+  })
+
+  test('passes when every SES result is a pass, whatever the case', () => {
+    const headers = JSON.stringify([
+      ses('dmarc=pass header.from=uni.edu'),
+      'AmazonSES.com; DMARC=Pass;',
+    ])
+
+    expect(passedDmarc(withAuth(headers))).toBe(true)
+  })
+
+  test('reads a lone value that merely starts with "[" as one header', () => {
+    expect(passedDmarc(withAuth('[amazonses.com; dmarc=pass]'))).toBe(false)
   })
 })
