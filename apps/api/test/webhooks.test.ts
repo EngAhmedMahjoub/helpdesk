@@ -7,6 +7,7 @@ import { EmailFetchError } from '../src/email/receiving.ts'
 import { AUTO_CLOSE_AFTER_MS, statusChange } from '../src/tickets/status.ts'
 import { env } from '../src/env.ts'
 import { prisma, resetDatabase } from './db.ts'
+import { createMessage, createTicket } from './fixtures.ts'
 import bounce from './payloads/resend/bounce.json'
 import newEmail from './payloads/resend/new-email.json'
 import outOfOffice from './payloads/resend/out-of-office.json'
@@ -499,20 +500,11 @@ describe('POST /api/webhooks/resend: threading', () => {
     // Maya's opening email is on one ticket and her second message, somehow, on
     // another. References names both; the nearer one, the second, wins.
     const first = await opened()
-    const second = await prisma.ticket.create({
-      data: {
-        subject: 'Another question',
-        studentEmail: 'maya.chen@uni.edu',
-        messages: {
-          create: {
-            direction: 'inbound',
-            author: 'student',
-            body: 'Hi',
-            emailMessageId: '<CAMaya02second@mail.gmail.com>',
-          },
-        },
-      },
+    const second = await createTicket({
+      subject: 'Another question',
+      studentEmail: 'maya.chen@uni.edu',
     })
+    await createMessage({ ticketId: second.id, emailMessageId: '<CAMaya02second@mail.gmail.com>' })
 
     await deliverReply(replySeveral)
 

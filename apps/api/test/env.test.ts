@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { VALID_BOOT_ENV } from './boot-env.ts'
 
 /**
  * Loads src/env.ts in a fresh process with a chosen environment, and reports
@@ -22,14 +23,7 @@ async function bootWith(env: Record<string, string | undefined>) {
   return { exitCode, stderr }
 }
 
-const valid = {
-  NODE_ENV: 'production',
-  DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
-  WEB_ORIGIN: 'https://app.example.com',
-  RESEND_API_KEY: 're_test_not_a_real_key',
-  EMAIL_FROM: 'Helpdesk Support <support@helpdesk.example.com>',
-  RESEND_WEBHOOK_SECRET: 'whsec_dGVzdA==',
-}
+const valid = { ...VALID_BOOT_ENV, NODE_ENV: 'production' }
 
 describe('environment validation', () => {
   test('accepts a complete environment', async () => {
