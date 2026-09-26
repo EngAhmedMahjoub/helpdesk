@@ -87,15 +87,17 @@ export async function createMessage(overrides: NewMessage) {
 
 /**
  * `count` student messages a minute apart, oldest first, for the tests that
- * care how many a thread holds rather than what any one of them says.
+ * care how many a thread holds rather than what any one of them says. With
+ * `messageIds`, each carries the Message-ID `<m{index}@mail>`, as emailed ones do.
  */
-export async function createThread(ticketId: number, count: number) {
+export async function createThread(ticketId: number, count: number, { messageIds = false } = {}) {
   await prisma.message.createMany({
     data: Array.from({ length: count }, (_, index) => ({
       ticketId,
       direction: 'inbound' as const,
       author: 'student' as const,
       body: `Message ${String(index)}`,
+      emailMessageId: messageIds ? `<m${String(index)}@mail>` : null,
       createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
     })),
   })

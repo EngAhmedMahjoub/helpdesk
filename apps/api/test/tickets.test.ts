@@ -987,16 +987,7 @@ describe('POST /api/tickets/:id/replies', () => {
   test("names only the student's first email and latest 20, however long the ticket", async () => {
     // Every ID lands in one References header, which must stay bounded (#210).
     const ticket = await createTicket()
-    await prisma.message.createMany({
-      data: Array.from({ length: 30 }, (_, index) => ({
-        ticketId: ticket.id,
-        direction: 'inbound' as const,
-        author: 'student' as const,
-        body: `Message ${String(index)}`,
-        emailMessageId: `<m${String(index)}@mail>`,
-        createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
-      })),
-    })
+    await createThread(ticket.id, 30, { messageIds: true })
 
     await reply(ticket.id, { body: 'On it.' })
 
