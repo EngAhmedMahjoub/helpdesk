@@ -1,7 +1,7 @@
 import { isPrismaError, prisma } from '../db.ts'
 import type { QueueProcessTicket } from '../jobs/process-ticket.ts'
 import { AUTO_CLOSE_AFTER_MS } from '../tickets/status.ts'
-import { isAutomatedEmail, parseInboundEmail, type ReceivedEmail } from './inbound.ts'
+import { isAutomatedEmail, parseInboundEmail, passedDmarc, type ReceivedEmail } from './inbound.ts'
 import { inboundTicketFields } from './inbound-fields.ts'
 import { isStorableMessageId } from './message-id.ts'
 
@@ -92,10 +92,12 @@ export async function ingestInboundEmail(
   }
 
   const message = { direction: 'inbound', author: 'student', body, emailMessageId } as const
-  const ticketId = await ticketForReply(
-    threadIds(email.inReplyTo, email.references),
-    ticket.studentEmail,
-  )
+  // Only a reply that passed DMARC may join a ticket (task 5.2a): the address
+  // check in ticketForReply is only as good as the From it compares. Any other
+  // reply still opens a ticket of its own, so no student's mail is dropped.
+  const ticketId = passedDmarc(received)
+    ? await ticketForReply(threadIds(email.inReplyTo, email.references), ticket.studentEmail)
+    : null
 
   try {
     if (ticketId !== null) {
