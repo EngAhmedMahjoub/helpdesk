@@ -73,7 +73,7 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 | ORM | Prisma |
 | Database | PostgreSQL |
 | Local database | `docker compose up -d --wait` at the repo root starts Postgres 18 on `localhost:5432` (user, password, and database `helpdesk`); copy `apps/api/.env.example` to `apps/api/.env` |
-| Background jobs | pg-boss, running inside the API process (Koyeb's free instance cannot run a separate worker) |
+| Background jobs | pg-boss 12, running inside the API process (Koyeb's free instance cannot run a separate worker). `createBoss` in `apps/api/src/jobs/boss.ts`: its own `pgboss` schema in the same database, created on start (Prisma migrates `public` only); a pool of 3 beside Prisma's, labelled `helpdesk-jobs`; an `error` listener, since an unhandled one would crash the process. `src/index.ts` starts it before the API listens and stops it gracefully on SIGTERM, giving a running job 10 seconds. Verified on Bun 1.4.2, with Prisma's `?schema=public` left on the connection string |
 | Scheduled tasks | GitHub Actions scheduled workflow calls protected endpoints (the API sleeps when idle, so in-process schedules are unreliable) |
 | CORS | `cors` package, single origin from `WEB_ORIGIN` (`https://app.<domain>` in production, `http://localhost:5173` locally), `credentials: true` |
 | Error handling | A body-parser failure answers its own status (400 unparseable, 413 over the 100KB default) and logs only the error type. The error object is never logged for a client error: `express.json()` attaches the raw body, which for a truncated login POST means a cleartext password in the log |
@@ -229,6 +229,6 @@ Checked with Context7 docs and a running scaffold: Bun workspaces, Express on Bu
 Not checked against current documentation:
 
 - Library versions and APIs: React Router, TanStack Query, Tailwind CSS, shadcn/ui, Zod, pg-boss, Resend SDK.
-- Bun compatibility: pg-boss. Prisma (client and `migrate dev`), Supertest, and `Bun.password` are confirmed working on Bun; `bun test` replaced Vitest, and `Bun.password` removed the need for an argon2 or bcrypt dependency.
+- Bun compatibility: Prisma (client and `migrate dev`), Supertest, `Bun.password` and pg-boss are confirmed working on Bun; `bun test` replaced Vitest, and `Bun.password` removed the need for an argon2 or bcrypt dependency.
 - Free tier limits for Koyeb, Neon, and Resend on their pricing pages.
 - Cross-subdomain session cookie between Vercel and Koyeb — test a real login early.
