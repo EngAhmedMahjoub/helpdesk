@@ -6,6 +6,7 @@ import {
   createTicketWriteRateLimit,
   createUserWriteRateLimit,
 } from '../src/auth/rate-limit.ts'
+import { VALID_BOOT_ENV } from './boot-env.ts'
 
 /**
  * A stand-in for the login route, carrying a limiter that actually enforces.
@@ -69,27 +70,33 @@ describe('login rate limit', () => {
 /**
  * Runs `source` in a fresh Bun process under `nodeEnv` and reports whether the
  * last status it printed was 429.
+ *
+ * Throws when the process did not get as far as printing one. Returning false
+ * then would pass every "does not enforce" case without the limiter ever
+ * running, which is how a variable newly required at boot once went unnoticed.
  */
 async function lastStatusIs429(source: string, nodeEnv: string): Promise<boolean> {
-  const proc = Bun.spawn(['bun', '-e', source], {
-    // Inside apps/api so express resolves. Bun auto-loads the .env here, but
-    // an explicit variable beats it, so the values below are what take effect.
+  // --no-env-file: inside apps/api Bun would otherwise load its .env files, and
+  // fill anything missing from the list below with the developer's own values,
+  // real keys included. The child sees exactly this environment and no other.
+  const proc = Bun.spawn(['bun', '--no-env-file', '-e', source], {
+    // Inside apps/api so express resolves.
     cwd: `${import.meta.dir}/..`,
-    env: {
-      PATH: process.env.PATH ?? '',
-      NODE_ENV: nodeEnv,
-      DATABASE_URL: 'postgresql://user:pw@localhost:5432/db',
-      WEB_ORIGIN: 'https://app.example.com',
-      RESEND_API_KEY: 're_test_not_a_real_key',
-      EMAIL_FROM: 'Helpdesk Support <support@helpdesk.example.com>',
-      RESEND_WEBHOOK_SECRET: 'whsec_dGVzdA==',
-    },
+    env: { PATH: process.env.PATH ?? '', ...VALID_BOOT_ENV, NODE_ENV: nodeEnv },
     stdout: 'pipe',
     stderr: 'pipe',
   })
 
-  const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
-  return stdout.trim().endsWith('429')
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  const status = /(\d{3})\s*$/.exec(stdout)?.[1]
+  if (exitCode !== 0 || !status) {
+    throw new Error(`The ${nodeEnv} child printed no status (exit ${String(exitCode)}):\n${stderr}`)
+  }
+  return status === '429'
 }
 
 describe('which environments enforce it', () => {
