@@ -114,29 +114,29 @@ None.
 
 ## Phase 5 — AI Pipeline
 
-| ID | Task | Done when |
-|---|---|---|
-| 5.1 | pg-boss setup, started inside the API process | API processes a test job |
-| 5.2 | Webhook queues a `process-ticket` job after saving an inbound message | Job appears for each new inbound email |
-| 5.2a | Check the sender is authentic before appending a reply to a ticket. From the Phase 4 security review (#210, finding 3): inbound DMARC is not checked, so someone copied on a thread can forge the student's `From:` and add text to their ticket, which from here on the AI reads as the student's words. Read the `Authentication-Results` header Resend passes through, and on a DMARC fail open a new ticket rather than append | Test: a reply with the ticket's IDs and a DMARC fail opens a new ticket; a DMARC pass appends |
-| 5.2b | Cap how many tickets one sender can open per time window. From the Phase 4 security review (#210, finding 5): nothing limits inbound volume, and from here on each email costs an Anthropic call as well as a Resend one. Keyed on the sender address inside ingest, not an IP limit on the webhook: every legitimate webhook call comes from Resend's own servers | Test: past the cap, a sender's new email is acknowledged and opens no ticket; replies to existing tickets still append |
-| 5.3 | Define the organization the knowledge base describes: courses, learning platform, account and login help, refund policy | One-page brief agreed |
-| 5.4 | Write knowledge base articles with Claude Code from the brief (general, technical, refund topics) | Articles cover every category |
-| 5.5 | Knowledge base folder of markdown files and loader | Loader returns combined content; test with sample files |
-| 5.6 | Anthropic client with `claude-opus-5`, API key from env | Test call succeeds |
-| 5.7 | Zod schema for AI output: category, summary, reply | Schema shared from `packages/shared` |
-| 5.8 | Prompt: knowledge base in cached system prompt, ticket thread as user message, structured JSON output | Returns valid output for sample emails |
-| 5.9 | Handle refusals and invalid output (check `stop_reason`, validate with Zod) | Tests for each failure path |
-| 5.10 | Save category and summary on the ticket | Values shown on ticket detail |
-| 5.11 | Refund safeguard: keyword check on email and draft forces refund handling | Test: "technical question, refund me" is routed to an agent |
-| 5.12 | `ReplyDraft` model: ticketId, body, status (pending/approved/rejected), reviewedBy, reviewedAt | Migration applied |
-| 5.13 | Routing: general/technical → send reply as AI outbound message and set status Resolved; refund → save pending draft, set `needsAgent` with reason `refund_approval` | Tests for both paths |
-| 5.14 | Follow-ups on Resolved or Closed tickets: same routing (reply or refund draft) and category/summary update, but status never changes | Tests: reply sent, summary updated, status unchanged |
-| 5.15 | Job retries; after final failure set `needsAgent` with reason `ai_failed`, status stays Open | Test: failing AI call escalates the ticket |
-| 5.16 | `POST /api/tasks/auto-close` (shared-secret protected): Resolved tickets with `autoCloseAt` in the past become Closed | Test with an expired and a non-expired Resolved ticket |
-| 5.16a | `POST /api/tasks/cleanup-sessions` (shared-secret protected): delete expired sessions | Test passes |
-| 5.17 | Log token usage and prompt-cache hits per job | Usage visible in logs |
-| 5.18 | Evaluation set: 20–30 sample emails written from the knowledge base brief, with expected category; script reports accuracy | Script runs and reports a score |
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 5.1 | pg-boss setup, started inside the API process | API processes a test job | Done |
+| 5.2 | Webhook queues a `process-ticket` job after saving an inbound message | Job appears for each new inbound email |  |
+| 5.2a | Check the sender is authentic before appending a reply to a ticket. From the Phase 4 security review (#210, finding 3): inbound DMARC is not checked, so someone copied on a thread can forge the student's `From:` and add text to their ticket, which from here on the AI reads as the student's words. Read the `Authentication-Results` header Resend passes through, and on a DMARC fail open a new ticket rather than append | Test: a reply with the ticket's IDs and a DMARC fail opens a new ticket; a DMARC pass appends |  |
+| 5.2b | Cap how many tickets one sender can open per time window. From the Phase 4 security review (#210, finding 5): nothing limits inbound volume, and from here on each email costs an Anthropic call as well as a Resend one. Keyed on the sender address inside ingest, not an IP limit on the webhook: every legitimate webhook call comes from Resend's own servers | Test: past the cap, a sender's new email is acknowledged and opens no ticket; replies to existing tickets still append |  |
+| 5.3 | Define the organization the knowledge base describes: courses, learning platform, account and login help, refund policy | One-page brief agreed |  |
+| 5.4 | Write knowledge base articles with Claude Code from the brief (general, technical, refund topics) | Articles cover every category |  |
+| 5.5 | Knowledge base folder of markdown files and loader | Loader returns combined content; test with sample files |  |
+| 5.6 | Anthropic client with `claude-opus-5`, API key from env | Test call succeeds |  |
+| 5.7 | Zod schema for AI output: category, summary, reply | Schema shared from `packages/shared` |  |
+| 5.8 | Prompt: knowledge base in cached system prompt, ticket thread as user message, structured JSON output | Returns valid output for sample emails |  |
+| 5.9 | Handle refusals and invalid output (check `stop_reason`, validate with Zod) | Tests for each failure path |  |
+| 5.10 | Save category and summary on the ticket | Values shown on ticket detail |  |
+| 5.11 | Refund safeguard: keyword check on email and draft forces refund handling | Test: "technical question, refund me" is routed to an agent |  |
+| 5.12 | `ReplyDraft` model: ticketId, body, status (pending/approved/rejected), reviewedBy, reviewedAt | Migration applied |  |
+| 5.13 | Routing: general/technical → send reply as AI outbound message and set status Resolved; refund → save pending draft, set `needsAgent` with reason `refund_approval` | Tests for both paths |  |
+| 5.14 | Follow-ups on Resolved or Closed tickets: same routing (reply or refund draft) and category/summary update, but status never changes | Tests: reply sent, summary updated, status unchanged |  |
+| 5.15 | Job retries; after final failure set `needsAgent` with reason `ai_failed`, status stays Open | Test: failing AI call escalates the ticket |  |
+| 5.16 | `POST /api/tasks/auto-close` (shared-secret protected): Resolved tickets with `autoCloseAt` in the past become Closed | Test with an expired and a non-expired Resolved ticket |  |
+| 5.16a | `POST /api/tasks/cleanup-sessions` (shared-secret protected): delete expired sessions | Test passes |  |
+| 5.17 | Log token usage and prompt-cache hits per job | Usage visible in logs |  |
+| 5.18 | Evaluation set: 20–30 sample emails written from the knowledge base brief, with expected category; script reports accuracy | Script runs and reports a score |  |
 
 ## Phase 6 — Agent Review of AI Output
 
