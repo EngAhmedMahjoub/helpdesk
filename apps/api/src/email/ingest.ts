@@ -1,4 +1,5 @@
 import { isPrismaError, prisma } from '../db.ts'
+import type { QueueProcessTicket } from '../jobs/process-ticket.ts'
 import { AUTO_CLOSE_AFTER_MS } from '../tickets/status.ts'
 import { isAutomatedEmail, parseInboundEmail, type ReceivedEmail } from './inbound.ts'
 import { inboundTicketFields } from './inbound-fields.ts'
@@ -64,9 +65,14 @@ async function ticketForReply(ids: string[], sender: string): Promise<number | n
 
 /**
  * Saves a received email: appended to the ticket it replies to, or as a new
- * ticket holding it as the first message.
+ * ticket holding it as the first message. Either way a process-ticket job is
+ * queued for it in the same transaction (task 5.2), so a saved message always
+ * has a job and a rolled-back one never does.
  */
-export async function ingestInboundEmail(received: ReceivedEmail): Promise<IngestOutcome> {
+export async function ingestInboundEmail(
+  received: ReceivedEmail,
+  queueProcessTicket: QueueProcessTicket,
+): Promise<IngestOutcome> {
   if (isAutomatedEmail(received)) return 'automated'
 
   const email = parseInboundEmail(received)
@@ -98,30 +104,38 @@ export async function ingestInboundEmail(received: ReceivedEmail): Promise<Inges
       // status is never changed (task 4.9). A student writing back to a Resolved
       // or Closed ticket has not reopened it: what happens next is decided
       // later, by the AI or an agent.
-      await prisma.$transaction([
-        prisma.message.create({ data: { ...message, ticketId } }),
+      await prisma.$transaction(async (tx) => {
+        const saved = await tx.message.create({
+          data: { ...message, ticketId },
+          select: { id: true },
+        })
         // Activity, like an agent's reply: the ticket rises in a list by updatedAt.
-        prisma.ticket.update({ where: { id: ticketId }, data: { updatedAt: now } }),
+        await tx.ticket.update({ where: { id: ticketId }, data: { updatedAt: now } })
         // A Resolved ticket the student is still writing on should not close
         // under them, so its timer starts over. The status is the statement's
         // own condition rather than read beforehand, so an agent changing it at
         // the same moment cannot leave a timer on a ticket that is no longer
         // Resolved. Closed and Open tickets have no timer to reset.
-        prisma.ticket.updateMany({
+        await tx.ticket.updateMany({
           where: { id: ticketId, status: 'resolved' },
           data: { autoCloseAt: new Date(now.getTime() + AUTO_CLOSE_AFTER_MS) },
-        }),
-      ])
+        })
+        await queueProcessTicket({ ticketId, messageId: saved.id }, tx)
+      })
       return 'appended'
     }
 
-    // One statement, so the ticket and its message land together or not at all:
-    // a duplicate caught by the unique index below leaves no empty ticket.
-    await prisma.ticket.create({
-      data: {
-        ...ticket,
-        messages: { create: message },
-      },
+    // One transaction, so the ticket, its message and the job land together or
+    // not at all: a duplicate caught by the unique index below leaves no empty
+    // ticket and no job.
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.ticket.create({
+        data: { ...ticket, messages: { create: message } },
+        select: { id: true, messages: { select: { id: true } } },
+      })
+      const [first] = created.messages
+      if (!first) throw new Error('A new ticket was saved without its message')
+      await queueProcessTicket({ ticketId: created.id, messageId: first.id }, tx)
     })
   } catch (err) {
     // Two deliveries of the same email racing past the check above: the

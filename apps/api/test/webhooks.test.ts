@@ -1,9 +1,17 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { createHmac } from 'node:crypto'
 import request from 'supertest'
 import { createApp } from '../src/app.ts'
 import type { ReceivedEmail } from '../src/email/inbound.ts'
 import { EmailFetchError } from '../src/email/receiving.ts'
+import { createBoss } from '../src/jobs/boss.ts'
+import {
+  PROCESS_TICKET,
+  type ProcessTicketJob,
+  type QueueProcessTicket,
+  createQueues,
+  processTicketQueue,
+} from '../src/jobs/process-ticket.ts'
 import { AUTO_CLOSE_AFTER_MS, statusChange } from '../src/tickets/status.ts'
 import { env } from '../src/env.ts'
 import { prisma, resetDatabase } from './db.ts'
@@ -23,19 +31,49 @@ const inbox = new Map<string, ReceivedEmail>()
 const fetched: string[] = []
 let fetchFails = false
 
-const app = createApp({
-  fetchReceivedEmail: async (emailId) => {
-    fetched.push(emailId)
-    const email = inbox.get(emailId)
-    if (fetchFails || !email)
-      throw new EmailFetchError('Resend did not return the email: not_found')
-    return email
-  },
-  sendEmail: async () => ({ resendId: null }),
+const fetchReceivedEmail = async (emailId: string) => {
+  fetched.push(emailId)
+  const email = inbox.get(emailId)
+  if (fetchFails || !email) throw new EmailFetchError('Resend did not return the email: not_found')
+  return email
+}
+
+// A real pg-boss on the test database, not a fake: the point of queuing inside
+// the save's transaction is what the database does with it, so the tests read
+// pg-boss's own job table.
+const boss = createBoss()
+
+/** The app as src/index.ts builds it, with Resend faked; `queue` swaps the job queue. */
+const appWith = (queue: QueueProcessTicket = processTicketQueue(boss)) =>
+  createApp({
+    fetchReceivedEmail,
+    sendEmail: async () => ({ resendId: null }),
+    queueProcessTicket: queue,
+  })
+
+const app = appWith()
+
+/** The process-ticket jobs pg-boss holds, oldest first. */
+async function queuedJobs(): Promise<ProcessTicketJob[]> {
+  const rows = await prisma.$queryRaw<{ data: ProcessTicketJob }[]>`
+    SELECT data FROM pgboss.job WHERE name = ${PROCESS_TICKET} ORDER BY created_on, id
+  `
+  return rows.map((row) => row.data)
+}
+
+beforeAll(async () => {
+  await boss.start()
+  await createQueues(boss)
+})
+
+afterAll(async () => {
+  await boss.stop({ graceful: true, timeout: 5_000 })
 })
 
 beforeEach(async () => {
   await resetDatabase()
+  // resetDatabase leaves the pgboss schema alone.
+  await boss.deleteAllJobs(PROCESS_TICKET)
   inbox.clear()
   inbox.set(saved.id, saved)
   fetched.length = 0
@@ -323,6 +361,89 @@ describe('POST /api/webhooks/resend: inbound email', () => {
 
     // Not acknowledged, so Resend delivers the event again later.
     expect(res.status).toBe(502)
+    expect(await prisma.ticket.count()).toBe(0)
+  })
+})
+
+describe('POST /api/webhooks/resend: process-ticket jobs', () => {
+  test('queues a job for a new email, naming its ticket and message', async () => {
+    await deliverSigned()
+
+    const message = await prisma.message.findFirstOrThrow()
+    expect(await queuedJobs()).toEqual([{ ticketId: message.ticketId, messageId: message.id }])
+  })
+
+  test('queues a job for a reply appended to its ticket', async () => {
+    await deliverSigned(eventFor(saved.id), 'msg_open')
+    const reply = receive(replyOneReference as ReceivedEmail)
+
+    await deliverSigned(eventFor(reply), 'msg_reply')
+
+    const messages = await prisma.message.findMany({ orderBy: { id: 'asc' } })
+    // Both on the one ticket: the reply was appended, not given a ticket of its own.
+    expect(new Set(messages.map((m) => m.ticketId)).size).toBe(1)
+    expect(await queuedJobs()).toEqual(
+      messages.map((m) => ({ ticketId: m.ticketId, messageId: m.id })),
+    )
+  })
+
+  test('queues one job when the same email is delivered twice, or twice at once', async () => {
+    await deliverSigned()
+    await deliverSigned()
+    const again = receive({})
+    await Promise.all([
+      deliverSigned(eventFor(saved.id), 'msg_a'),
+      deliverSigned(eventFor(again), 'msg_b'),
+    ])
+
+    expect(await prisma.message.count()).toBe(1)
+    expect(await queuedJobs()).toHaveLength(1)
+  })
+
+  test.each([
+    [
+      'an out-of-office reply',
+      () => deliverSigned(eventFor(receive(outOfOffice as ReceivedEmail))),
+    ],
+    ['a refused sender', () => deliverSigned(eventFor(receive({ from: 'not-an-address' })))],
+    ['another event type', () => deliverSigned(eventFor(saved.id, 'email.delivered'))],
+  ])('queues nothing for %s', async (_, deliverIt) => {
+    await deliverIt()
+
+    expect(await queuedJobs()).toHaveLength(0)
+  })
+
+  test('saves nothing and queues nothing when the transaction fails after queuing', async () => {
+    // The job goes into the table, then the transaction fails: both must go.
+    const failing = appWith(async (job, tx) => {
+      await processTicketQueue(boss)(job, tx)
+      throw new Error('failed after queuing')
+    })
+    const body = eventFor()
+
+    const res = await request(failing)
+      .post('/api/webhooks/resend')
+      .set('Content-Type', 'application/json')
+      .set(signed(body))
+      .send(body)
+
+    // Not acknowledged, so Resend redelivers, and the redelivery is no duplicate.
+    expect(res.status).toBe(500)
+    expect(await prisma.ticket.count()).toBe(0)
+    expect(await queuedJobs()).toHaveLength(0)
+  })
+
+  test('fails the delivery, saving nothing, when the app was given no job queue', async () => {
+    const body = eventFor()
+    const res = await request(
+      createApp({ fetchReceivedEmail, sendEmail: async () => ({ resendId: null }) }),
+    )
+      .post('/api/webhooks/resend')
+      .set('Content-Type', 'application/json')
+      .set(signed(body))
+      .send(body)
+
+    expect(res.status).toBe(500)
     expect(await prisma.ticket.count()).toBe(0)
   })
 })

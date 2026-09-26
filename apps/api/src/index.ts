@@ -1,15 +1,17 @@
 import { createApp } from './app.ts'
 import { env } from './env.ts'
 import { createBoss } from './jobs/boss.ts'
+import { createQueues, processTicketQueue } from './jobs/process-ticket.ts'
 
 // Jobs start before the API listens: an API that took requests while its queue
 // was down would accept work it could not do. If the database is unreachable,
 // start() throws and the process exits, as it would on the first query anyway.
 const boss = createBoss()
 await boss.start()
+await createQueues(boss)
 console.log('Background jobs started')
 
-const server = createApp().listen(env.PORT, () => {
+const server = createApp({ queueProcessTicket: processTicketQueue(boss) }).listen(env.PORT, () => {
   console.log(`API listening on http://localhost:${env.PORT}`)
 })
 

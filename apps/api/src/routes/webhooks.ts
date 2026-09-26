@@ -68,7 +68,7 @@ webhooksRouter.post(
     // Acknowledged whatever the outcome: a duplicate or a refused sender would
     // come out the same way on every redelivery. A database failure throws
     // instead, and its 500 has Resend try again.
-    const outcome = await ingestInboundEmail(received)
+    const outcome = await ingestInboundEmail(received, req.app.locals.queueProcessTicket)
     console.log(`Inbound email ${received.id}: ${outcome}`)
     res.status(204).end()
   },
