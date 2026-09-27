@@ -122,7 +122,7 @@ None.
 | 5.2b | Cap how many tickets one sender can open per time window (#217): 4 per rolling hour. From the Phase 4 security review (#210, finding 5): nothing limits inbound volume, and from here on each email costs an Anthropic call as well as a Resend one. Keyed on the sender address inside ingest, not an IP limit on the webhook: every legitimate webhook call comes from Resend's own servers | Test: past the cap, a sender's new email is acknowledged and opens no ticket; replies to existing tickets still append | Done |
 | 5.3 | Define the organization the knowledge base describes: courses, learning platform, account and login help, refund policy | One-page brief agreed | Done |
 | 5.4 | Write knowledge base articles with Claude Code from the brief (general, technical, refund topics) | Articles cover every category | Done |
-| 5.5 | Knowledge base folder of markdown files and loader | Loader returns combined content; test with sample files |  |
+| 5.5 | Knowledge base folder of markdown files and loader | Loader returns combined content; test with sample files | Done |
 | 5.6 | Anthropic client with `claude-opus-5`, API key from env | Test call succeeds |  |
 | 5.7 | Zod schema for AI output: category, summary, reply | Schema shared from `packages/shared` |  |
 | 5.8 | Prompt: knowledge base in cached system prompt, ticket thread as user message, structured JSON output | Returns valid output for sample emails |  |
