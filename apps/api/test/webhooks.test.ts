@@ -448,6 +448,67 @@ describe('POST /api/webhooks/resend: process-ticket jobs', () => {
   })
 })
 
+describe('POST /api/webhooks/resend: new tickets per sender (5.2b)', () => {
+  /** Delivers a new email, a fresh Message-ID each, from `from`. */
+  const deliverNew = (n: number, from = saved.from) =>
+    deliverSigned(
+      eventFor(receive({ from, message_id: `<new${String(n)}@mail.uni.edu>` })),
+      `msg_new_${String(n)}`,
+    )
+
+  test('opens at most 4 tickets an hour for one sender, acknowledging the rest', async () => {
+    const statuses = []
+    for (const n of [1, 2, 3, 4, 5, 6]) statuses.push((await deliverNew(n)).status)
+
+    // Acknowledged all the same, or Resend would keep redelivering the capped ones.
+    expect(statuses).toEqual([204, 204, 204, 204, 204, 204])
+    expect(await prisma.ticket.count()).toBe(4)
+    expect(await queuedJobs()).toHaveLength(4)
+  })
+
+  test('counts the sender whatever the case of their address', async () => {
+    for (const n of [1, 2, 3, 4]) await deliverNew(n)
+
+    await deliverNew(5, 'MAYA.Chen@Uni.EDU')
+
+    expect(await prisma.ticket.count()).toBe(4)
+  })
+
+  test("does not count another sender's tickets", async () => {
+    for (const n of [1, 2, 3, 4]) await deliverNew(n)
+
+    await deliverNew(5, 'sam.lee@uni.edu')
+
+    expect(await prisma.ticket.count({ where: { studentEmail: 'sam.lee@uni.edu' } })).toBe(1)
+  })
+
+  test('counts only the last hour', async () => {
+    for (const n of [1, 2, 3, 4]) await deliverNew(n)
+    // Opened an hour and a minute ago: out of the window.
+    await prisma.ticket.updateMany({ data: { createdAt: new Date(Date.now() - 61 * 60 * 1000) } })
+
+    await deliverNew(5)
+
+    expect(await prisma.ticket.count()).toBe(5)
+  })
+
+  test('still appends a reply to a ticket the sender has, once capped', async () => {
+    // The opening email the saved reply answers, then three more new tickets.
+    await deliverSigned(eventFor(saved.id), 'msg_open')
+    for (const n of [1, 2, 3]) await deliverNew(n)
+    await deliverNew(4)
+    expect(await prisma.ticket.count()).toBe(4)
+
+    await deliverSigned(eventFor(receive(replyOneReference as ReceivedEmail)), 'msg_reply')
+
+    const opening = await prisma.message.findFirstOrThrow({
+      where: { emailMessageId: '<CAMaya01first@mail.gmail.com>' },
+    })
+    expect(await prisma.message.count({ where: { ticketId: opening.ticketId } })).toBe(2)
+    expect(await prisma.ticket.count()).toBe(4)
+  })
+})
+
 describe('POST /api/webhooks/resend: threading', () => {
   // The saved new email is Maya's opening message, <CAMaya01first@mail.gmail.com>.
   // Her replies name it in In-Reply-To or References, as Gmail wrote them.

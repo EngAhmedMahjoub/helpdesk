@@ -9,7 +9,35 @@ import { isStorableMessageId } from './message-id.ts'
  * What became of a received email. Every outcome is final: none is worth
  * Resend delivering the email again.
  */
-export type IngestOutcome = 'created' | 'appended' | 'duplicate' | 'refused' | 'automated'
+export type IngestOutcome =
+  'created' | 'appended' | 'duplicate' | 'refused' | 'automated' | 'capped'
+
+// Task 5.2b. Each new ticket costs a Resend fetch now and an Anthropic call
+// once the AI answers it, and nothing else limits inbound volume. A student
+// rarely opens more than one or two an hour; four still leaves room for a few
+// separate questions while a flood from one address stops there.
+const NEW_TICKETS_PER_SENDER = 4
+const NEW_TICKET_WINDOW_MS = 60 * 60 * 1000
+
+/**
+ * Whether `sender` has already opened as many tickets as the cap allows in the
+ * last hour. Counted from the tickets themselves, ignoring the address's case
+ * as reply matching does, so there is no second store to keep in step. The
+ * count and the insert are not one step, so emails arriving together can pass
+ * it by one or two; for a flood guard that is close enough.
+ *
+ * Keyed on the sender, not an IP limit on the webhook: every legitimate webhook
+ * call comes from Resend's own servers.
+ */
+async function overNewTicketCap(sender: string, now: Date): Promise<boolean> {
+  const opened = await prisma.ticket.count({
+    where: {
+      studentEmail: { equals: sender, mode: 'insensitive' },
+      createdAt: { gt: new Date(now.getTime() - NEW_TICKET_WINDOW_MS) },
+    },
+  })
+  return opened >= NEW_TICKETS_PER_SENDER
+}
 
 // Enough for any real thread. The IDs come from the sender, and without a cap a
 // crafted References header could make one lookup ask for thousands.
@@ -126,6 +154,10 @@ export async function ingestInboundEmail(
       })
       return 'appended'
     }
+
+    // Only a new ticket is capped: a reply joining one the student already has
+    // costs no new ticket and is never held back.
+    if (await overNewTicketCap(ticket.studentEmail, new Date())) return 'capped'
 
     // One transaction, so the ticket, its message and the job land together or
     // not at all: a duplicate caught by the unique index below leaves no empty
