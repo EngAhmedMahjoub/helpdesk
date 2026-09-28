@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import type Anthropic from '@anthropic-ai/sdk'
 import { AI_MODEL } from '../src/ai/client.ts'
 import {
   type TicketForPrompt,
@@ -7,6 +6,7 @@ import {
   buildSystemPrompt,
   buildTicketMessage,
 } from '../src/ai/prompt.ts'
+import { message, stubAnthropic, usage } from './ai-stub.ts'
 
 const knowledgeBase =
   '<article file="refunds.md" category="refund">\nRefunds within 30 days.\n</article>'
@@ -108,21 +108,6 @@ describe('the ticket message', () => {
   })
 })
 
-/** A stand-in for the SDK client: records the request and answers with `response`. */
-function stubClient(response: Partial<Awaited<ReturnType<Anthropic['messages']['parse']>>>) {
-  const requests: Record<string, unknown>[] = []
-  const client = {
-    messages: {
-      parse: (params: Record<string, unknown>) => {
-        requests.push(params)
-        return Promise.resolve(response)
-      },
-    },
-  } as unknown as Anthropic
-  return { client, requests }
-}
-
-const usage = { input_tokens: 1450, output_tokens: 220 } as Anthropic.Usage
 const answer = {
   category: 'refund' as const,
   summary: 'Wants a refund after videos kept failing.',
@@ -130,12 +115,10 @@ const answer = {
 }
 
 describe('analysing a ticket', () => {
+  const answered = () => stubAnthropic(() => message(JSON.stringify(answer)))
+
   test('asks the pinned model, with the system prompt marked for caching', async () => {
-    const { client, requests } = stubClient({
-      parsed_output: answer,
-      usage,
-      stop_reason: 'end_turn',
-    })
+    const { client, requests } = answered()
 
     await analyseTicket(client, knowledgeBase, ticket)
 
@@ -152,11 +135,7 @@ describe('analysing a ticket', () => {
   })
 
   test('asks for structured output in the shape of the shared schema', async () => {
-    const { client, requests } = stubClient({
-      parsed_output: answer,
-      usage,
-      stop_reason: 'end_turn',
-    })
+    const { client, requests } = answered()
 
     await analyseTicket(client, knowledgeBase, ticket)
 
@@ -171,11 +150,7 @@ describe('analysing a ticket', () => {
   })
 
   test('leaves room for the longest reply the schema accepts', async () => {
-    const { client, requests } = stubClient({
-      parsed_output: answer,
-      usage,
-      stop_reason: 'end_turn',
-    })
+    const { client, requests } = answered()
 
     await analyseTicket(client, knowledgeBase, ticket)
 
@@ -185,18 +160,8 @@ describe('analysing a ticket', () => {
   })
 
   test('returns the checked answer with what it cost', async () => {
-    const { client } = stubClient({ parsed_output: answer, usage, stop_reason: 'end_turn' })
+    const { client } = answered()
 
-    const analysis = await analyseTicket(client, knowledgeBase, ticket)
-
-    expect(analysis).toEqual({ output: answer, usage, stopReason: 'end_turn' })
-  })
-
-  test('throws rather than returning nothing when there is no structured output', async () => {
-    const { client } = stubClient({ parsed_output: null, usage, stop_reason: 'refusal' })
-
-    await expect(analyseTicket(client, knowledgeBase, ticket)).rejects.toThrow(
-      'No structured output (stop reason: refusal)',
-    )
+    expect(await analyseTicket(client, knowledgeBase, ticket)).toEqual({ output: answer, usage })
   })
 })

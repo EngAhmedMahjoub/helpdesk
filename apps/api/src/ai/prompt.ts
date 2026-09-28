@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { type AiOutput, type MessageAuthor, aiOutputSchema } from '@helpdesk/shared'
 import { AI_MODEL } from './client.ts'
+import { AiFailure, failureForError, failureForStop } from './failure.ts'
 
 /**
  * Room for the longest reply the schema accepts — 10,000 characters is about
@@ -93,42 +94,86 @@ export function buildTicketMessage(ticket: TicketForPrompt): string {
 export type TicketAnalysis = {
   output: AiOutput
   usage: Anthropic.Usage
-  stopReason: Anthropic.Message['stop_reason']
 }
 
 /**
- * Asks the model about one ticket and returns its answer, already checked
- * against `aiOutputSchema` by `messages.parse`.
+ * Asks the model about one ticket and returns its answer, checked against
+ * `aiOutputSchema`, or throws an `AiFailure` saying why it could not and
+ * whether trying again could help.
+ *
+ * `messages.create`, not `messages.parse`: `parse` validates every text block
+ * without looking at the stop reason, so an answer cut off at max_tokens or a
+ * refusal written as prose throws a bare error with no stop reason and no
+ * usage. Checking the stop reason first, then parsing here, keeps both.
  *
  * The client is a parameter so tests can stand in for it without a network
- * call. Refusals, cut-off answers and output that fails the schema are 5.9's
- * to handle; here they surface as the SDK raises them.
+ * call.
  */
 export async function analyseTicket(
   client: Anthropic,
   knowledgeBase: string,
   ticket: TicketForPrompt,
 ): Promise<TicketAnalysis> {
-  const response = await client.messages.parse({
-    model: AI_MODEL,
-    max_tokens: MAX_OUTPUT_TOKENS,
-    system: [
-      {
-        type: 'text',
-        text: buildSystemPrompt(knowledgeBase),
-        // Inert today: Haiku 4.5 caches nothing under 4,096 tokens, and this
-        // prompt is about 1,500. It costs nothing to mark, and starts saving
-        // on its own once the knowledge base grows past the minimum.
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    messages: [{ role: 'user', content: buildTicketMessage(ticket) }],
-    output_config: { format: zodOutputFormat(aiOutputSchema) },
-  })
-
-  if (!response.parsed_output) {
-    throw new Error(`No structured output (stop reason: ${response.stop_reason ?? 'none'})`)
+  let response: Anthropic.Message
+  try {
+    response = await client.messages.create({
+      model: AI_MODEL,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      system: [
+        {
+          type: 'text',
+          text: buildSystemPrompt(knowledgeBase),
+          // Inert today: Haiku 4.5 caches nothing under 4,096 tokens, and a
+          // call is about 1,770. It costs nothing to mark, and starts saving
+          // on its own once the knowledge base grows past the minimum.
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [{ role: 'user', content: buildTicketMessage(ticket) }],
+      // The same schema the answer is checked against below, sent as the
+      // model's output format; create() sends it without parsing the reply.
+      output_config: { format: zodOutputFormat(aiOutputSchema) },
+    })
+  } catch (error) {
+    throw failureForError(error)
   }
 
-  return { output: response.parsed_output, usage: response.usage, stopReason: response.stop_reason }
+  const stopped = failureForStop(response.stop_reason, response.usage)
+  if (stopped) throw stopped
+
+  return { output: parseOutput(response), usage: response.usage }
+}
+
+/**
+ * The answer's text as `AiOutput`, or an `invalid_output` failure. Retryable:
+ * structured output constrains the shape, but the length limits are only
+ * described to the model, not enforced, so a second answer can come back
+ * inside them where the first did not.
+ */
+function parseOutput(response: Anthropic.Message): AiOutput {
+  const text = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
+
+  const invalid = (detail: string) =>
+    new AiFailure('invalid_output', true, `The answer was not usable: ${detail}`, response.usage)
+
+  if (text.trim() === '') throw invalid('no text in the response')
+
+  let json: unknown
+  try {
+    json = JSON.parse(text)
+  } catch {
+    throw invalid('not JSON')
+  }
+
+  const parsed = aiOutputSchema.safeParse(json)
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+      .join('; ')
+    throw invalid(issues)
+  }
+  return parsed.data
 }
