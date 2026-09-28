@@ -1,7 +1,15 @@
+import { anthropic } from './ai/client.ts'
+import { loadKnowledgeBase } from './ai/knowledge-base.ts'
 import { createApp } from './app.ts'
+import { prisma } from './db.ts'
 import { env } from './env.ts'
 import { createBoss } from './jobs/boss.ts'
-import { createQueues, processTicketQueue } from './jobs/process-ticket.ts'
+import {
+  PROCESS_TICKET,
+  createQueues,
+  processTicketQueue,
+  processTicketWorker,
+} from './jobs/process-ticket.ts'
 
 // Jobs start before the API listens: an API that took requests while its queue
 // was down would accept work it could not do. If the database is unreachable,
@@ -9,6 +17,11 @@ import { createQueues, processTicketQueue } from './jobs/process-ticket.ts'
 const boss = createBoss()
 await boss.start()
 await createQueues(boss)
+// Loaded once, before any job runs: the loader throws on an empty folder or a
+// malformed article, and an API that started without its knowledge base would
+// answer every ticket without it.
+const knowledgeBase = await loadKnowledgeBase()
+await boss.work(PROCESS_TICKET, processTicketWorker({ prisma, client: anthropic, knowledgeBase }))
 console.log('Background jobs started')
 
 const server = createApp({ queueProcessTicket: processTicketQueue(boss) }).listen(env.PORT, () => {
