@@ -3,18 +3,20 @@ import { env } from '../env.ts'
 
 /**
  * The model every ticket goes through. One constant rather than a parameter:
- * classification, summary and reply are one job, and a cheaper model chosen per
- * call would make the evaluation set (5.18) measure a mixture.
+ * classification, summary and reply are one job, and a model chosen per call
+ * would make the evaluation set (5.18) measure a mixture.
+ *
+ * Haiku for cost and speed. Measured on this knowledge base and three real
+ * tickets: ~2.9s and ~$2.23 per thousand tickets, against ~3.7s / $5.02 for
+ * Sonnet 5 and ~5.2s / $15.36 for Opus 5. It takes no `effort` parameter and
+ * does no adaptive thinking, which is most of why its answers are shorter.
+ *
+ * What it costs in judgement: on a technical complaint ending "just refund
+ * me", Haiku answered `technical` where Opus answered `refund`. The keyword
+ * safeguard in 5.11 is what has to catch that, and 5.18's evaluation set is
+ * what should say whether this model stays.
  */
-export const AI_MODEL = 'claude-opus-5'
-
-/**
- * How hard the model works on a ticket. Classifying a support email and
- * drafting a reply from the knowledge base is routine work, and low effort
- * keeps the per-ticket cost down on a free-tier budget; 5.18's evaluation set
- * is what should decide whether it needs raising.
- */
-export const AI_EFFORT = 'low'
+export const AI_MODEL = 'claude-haiku-4-5'
 
 /**
  * One client for the process. The SDK holds a connection pool and retries

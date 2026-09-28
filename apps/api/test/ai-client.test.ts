@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { AI_EFFORT, AI_MODEL, anthropic } from '../src/ai/client.ts'
+import { AI_MODEL, anthropic } from '../src/ai/client.ts'
 import { env } from '../src/env.ts'
 
 describe('the Anthropic client', () => {
@@ -12,7 +12,6 @@ describe('the Anthropic client', () => {
   test('names the model the whole pipeline uses', () => {
     // Pinned so classification, summary and reply cannot drift onto different
     // models, which would make the evaluation set in 5.18 measure a mixture.
-    expect(AI_MODEL).toBe('claude-opus-5')
-    expect(AI_EFFORT).toBe('low')
+    expect(AI_MODEL).toBe('claude-haiku-4-5')
   })
 })

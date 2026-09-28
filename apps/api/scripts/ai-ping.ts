@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { AI_EFFORT, AI_MODEL, anthropic } from '../src/ai/client.ts'
+import { AI_MODEL, anthropic } from '../src/ai/client.ts'
 
 /**
  * One real call to Anthropic, to prove the key and the model id work before a
@@ -13,7 +13,6 @@ try {
   const response = await anthropic.messages.create({
     model: AI_MODEL,
     max_tokens: 1024,
-    output_config: { effort: AI_EFFORT },
     system: 'Answer in one short sentence.',
     messages: [{ role: 'user', content: 'Reply with: the helpdesk can reach Claude.' }],
   })
