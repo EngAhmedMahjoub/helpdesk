@@ -1,0 +1,1 @@
+Not an article; only .md files are read.
