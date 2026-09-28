@@ -125,7 +125,7 @@ None.
 | 5.5 | Knowledge base folder of markdown files and loader | Loader returns combined content; test with sample files | Done |
 | 5.6 | Anthropic client, API key from env. Pinned to `claude-haiku-4-5` rather than the `claude-opus-5` first written here: measured on this knowledge base, Haiku answers in ~2.9s at ~$2.23 per thousand tickets against ~5.2s and ~$15.36 for Opus | Test call succeeds | Done |
 | 5.7 | Zod schema for AI output: category, summary, reply | Schema shared from `packages/shared` |Done |
-| 5.8 | Prompt: knowledge base in cached system prompt, ticket thread as user message, structured JSON output | Returns valid output for sample emails |  |
+| 5.8 | Prompt: knowledge base in cached system prompt, ticket thread as user message, structured JSON output | Returns valid output for sample emails |Done |
 | 5.9 | Handle refusals and invalid output (check `stop_reason`, validate with Zod) | Tests for each failure path |  |
 | 5.10 | Save category and summary on the ticket | Values shown on ticket detail |  |
 | 5.11 | Refund safeguard: keyword check on email and draft forces refund handling | Test: "technical question, refund me" is routed to an agent |  |
