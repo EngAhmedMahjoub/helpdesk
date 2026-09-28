@@ -29,6 +29,14 @@ const envSchema = z.object({
     .string()
     .startsWith('whsec_')
     .describe("Signing secret from the webhook's page in Resend, e.g. whsec_abc123"),
+  // Required like the Resend keys, and for the same reason: an API that boots
+  // without it looks healthy until a ticket needs classifying, which is long
+  // after the deploy that forgot it. The prefix is checked so a truncated or
+  // pasted-over value fails here rather than as a 401 from Anthropic.
+  ANTHROPIC_API_KEY: z
+    .string()
+    .startsWith('sk-ant-')
+    .describe('Anthropic API key, e.g. sk-ant-api03-...'),
 })
 
 type Env = z.infer<typeof envSchema>

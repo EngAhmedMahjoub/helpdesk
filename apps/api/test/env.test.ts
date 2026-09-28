@@ -57,6 +57,24 @@ describe('environment validation', () => {
     expect(stderr).toContain('DATABASE_URL')
   })
 
+  test('refuses to boot without ANTHROPIC_API_KEY', async () => {
+    // Without it the API answers agents normally and fails only when a ticket
+    // needs classifying, long after the deploy that forgot it.
+    const { exitCode, stderr } = await bootWith({ ...valid, ANTHROPIC_API_KEY: undefined })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('ANTHROPIC_API_KEY')
+  })
+
+  test('refuses to boot with an ANTHROPIC_API_KEY that is not one', async () => {
+    // A truncated or pasted-over value fails here rather than as a 401 from
+    // Anthropic in the middle of a job.
+    const { exitCode, stderr } = await bootWith({ ...valid, ANTHROPIC_API_KEY: 'not-a-key' })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('ANTHROPIC_API_KEY')
+  })
+
   test('refuses to boot without RESEND_API_KEY', async () => {
     // Without it the API would run normally and fail only when a reply is sent.
     const { exitCode, stderr } = await bootWith({ ...valid, RESEND_API_KEY: undefined })

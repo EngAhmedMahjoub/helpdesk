@@ -16,6 +16,7 @@
     "test": "bun run db:test:setup && bun test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@helpdesk/shared": "workspace:*",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
