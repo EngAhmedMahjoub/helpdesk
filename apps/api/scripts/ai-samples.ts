@@ -1,5 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { anthropic } from '../src/ai/client.ts'
+import { AiFailure } from '../src/ai/failure.ts'
 import { loadKnowledgeBase } from '../src/ai/knowledge-base.ts'
 import { type TicketForPrompt, analyseTicket } from '../src/ai/prompt.ts'
 
@@ -93,24 +93,20 @@ let outputTokens = 0
 for (const sample of samples) {
   const started = Date.now()
   try {
-    const { output, usage, stopReason } = await analyseTicket(
-      anthropic,
-      knowledgeBase,
-      sample.ticket,
-    )
+    const { output, usage } = await analyseTicket(anthropic, knowledgeBase, sample.ticket)
     valid += 1
     inputTokens += usage.input_tokens
     outputTokens += usage.output_tokens
     const match = output.category === sample.expected ? 'ok  ' : 'MISS'
     console.log(
-      `${match} ${sample.label.padEnd(18)} ${output.category.padEnd(9)} ${String(Date.now() - started).padStart(5)}ms  ${String(usage.input_tokens).padStart(5)} in ${String(usage.output_tokens).padStart(4)} out  ${stopReason ?? ''}`,
+      `${match} ${sample.label.padEnd(18)} ${output.category.padEnd(9)} ${String(Date.now() - started).padStart(5)}ms  ${String(usage.input_tokens).padStart(5)} in ${String(usage.output_tokens).padStart(4)} out`,
     )
     console.log(`     summary: ${output.summary}`)
     console.log(`     reply:   ${output.reply.replace(/\n+/g, ' ').slice(0, 160)}…`)
   } catch (error) {
     const reason =
-      error instanceof Anthropic.APIError
-        ? `${String(error.status)} ${error.message}`
+      error instanceof AiFailure
+        ? `${error.reason}${error.retryable ? ' (retryable)' : ''}: ${error.message}`
         : String(error)
     console.log(`FAIL ${sample.label.padEnd(18)} ${reason}`)
   }
