@@ -127,7 +127,7 @@ None.
 | 5.7 | Zod schema for AI output: category, summary, reply | Schema shared from `packages/shared` |Done |
 | 5.8 | Prompt: knowledge base in cached system prompt, ticket thread as user message, structured JSON output | Returns valid output for sample emails |Done |
 | 5.9 | Handle refusals and invalid output (check `stop_reason`, validate with Zod) | Tests for each failure path |Done |
-| 5.10 | Save category and summary on the ticket | Values shown on ticket detail |  |
+| 5.10 | Save category and summary on the ticket | Values shown on ticket detail |Done |
 | 5.11 | Refund safeguard: keyword check on email and draft forces refund handling | Test: "technical question, refund me" is routed to an agent |  |
 | 5.12 | `ReplyDraft` model: ticketId, body, status (pending/approved/rejected), reviewedBy, reviewedAt | Migration applied |  |
 | 5.13 | Routing: general/technical → send reply as AI outbound message and set status Resolved; refund → save pending draft, set `needsAgent` with reason `refund_approval` | Tests for both paths |  |
