@@ -12,10 +12,12 @@
     "db:seed": "bun --bun --env-file=.env run prisma db seed",
     "db:seed:dev": "bun --env-file=.env prisma/seed-dev.ts",
     "db:studio": "bun --bun --env-file=.env run prisma studio",
+    "ai:ping": "bun --env-file=.env scripts/ai-ping.ts",
     "lint": "oxlint --deny-warnings",
     "test": "bun run db:test:setup && bun test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@helpdesk/shared": "workspace:*",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
