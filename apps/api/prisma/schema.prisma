@@ -31,6 +31,7 @@ model User {
   sessions        Session[]
   messages        Message[]
   assignedTickets Ticket[]
+  reviewedDrafts  ReplyDraft[]
 }
 
 model Session {
@@ -86,6 +87,7 @@ model Ticket {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   messages         Message[]
+  replyDrafts      ReplyDraft[]
 
   // Postgres does not index a foreign key by itself, and this one is read from
   // both ends: the "Assigned to me" filter (task 3.15), and the SET NULL that
@@ -123,4 +125,36 @@ model Message {
   createdAt      DateTime         @default(now())
 
   @@index([ticketId])
+}
+
+enum DraftStatus {
+  pending
+  approved
+  rejected
+}
+
+/// A reply the AI drafted but may not send by itself — a refund, which a
+/// person approves (5.13). Approving sends it as an outbound message (6.2);
+/// rejecting leaves the ticket with an agent (6.3).
+model ReplyDraft {
+  id           Int         @id @default(autoincrement())
+  ticketId     Int
+  // A draft is about its ticket and nothing else, so it goes with it.
+  ticket       Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  body         String
+  status       DraftStatus @default(pending)
+  // Who approved or rejected it, and when; both null while it is pending.
+  // Restrict, as on Message.agentId: an approval is a record of who let a
+  // refund reply go out, and a user row must not be deleted out from under it.
+  reviewedById String?
+  reviewedBy   User?       @relation(fields: [reviewedById], references: [id], onDelete: Restrict)
+  reviewedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Postgres indexes neither foreign key by itself. ticketId is read when a
+  // ticket's drafts are listed for review (6.1) and by the cascade;
+  // reviewedById by the Restrict check that runs whenever a user is deleted.
+  @@index([ticketId])
+  @@index([reviewedById])
 }
