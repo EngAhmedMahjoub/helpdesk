@@ -2,6 +2,7 @@ import { anthropic } from './ai/client.ts'
 import { loadKnowledgeBase } from './ai/knowledge-base.ts'
 import { createApp } from './app.ts'
 import { prisma } from './db.ts'
+import { sendEmail } from './email/outbound.ts'
 import { env } from './env.ts'
 import { createBoss } from './jobs/boss.ts'
 import {
@@ -21,7 +22,10 @@ await createQueues(boss)
 // malformed article, and an API that started without its knowledge base would
 // answer every ticket without it.
 const knowledgeBase = await loadKnowledgeBase()
-await boss.work(PROCESS_TICKET, processTicketWorker({ prisma, client: anthropic, knowledgeBase }))
+await boss.work(
+  PROCESS_TICKET,
+  processTicketWorker({ prisma, client: anthropic, knowledgeBase, sendEmail }),
+)
 console.log('Background jobs started')
 
 const server = createApp({ queueProcessTicket: processTicketQueue(boss) }).listen(env.PORT, () => {
