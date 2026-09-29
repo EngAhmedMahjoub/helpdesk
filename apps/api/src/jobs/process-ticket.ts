@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { MESSAGE_PAGE_SIZE } from '@helpdesk/shared'
 import { type PgBoss, type PrismaTransactionLike, type WorkHandler, fromPrisma } from 'pg-boss'
 import { analyseTicket } from '../ai/prompt.ts'
+import { decideRouting } from '../ai/refund-safeguard.ts'
 import { isPrismaError } from '../db.ts'
 import type { PrismaClient } from '../generated/prisma/client.ts'
 
@@ -68,16 +69,24 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   // throwing would only have pg-boss retry a ticket that will never come back.
   if (!ticket) return
 
-  const { output } = await analyseTicket(deps.client, deps.knowledgeBase, {
-    ...ticket,
-    // Selected newest first for the cap; a thread reads the other way.
-    messages: ticket.messages.reverse(),
+  // Selected newest first for the cap; a thread reads the other way.
+  const messages = ticket.messages.reverse()
+  const { output } = await analyseTicket(deps.client, deps.knowledgeBase, { ...ticket, messages })
+
+  // The model's category stands unless the student or the draft talks about
+  // money back. The route in the decision is 5.13's to act on; today only the
+  // category it settles on is saved.
+  const decision = decideRouting(output, {
+    subject: ticket.subject,
+    studentMessages: messages
+      .filter((message) => message.author === 'student')
+      .map((message) => message.body),
   })
 
   try {
     await deps.prisma.ticket.update({
       where: { id: job.ticketId },
-      data: { category: output.category, summary: output.summary },
+      data: { category: decision.category, summary: output.summary },
     })
   } catch (error) {
     // Deleted while the model was answering. Same as above: nothing to save.
