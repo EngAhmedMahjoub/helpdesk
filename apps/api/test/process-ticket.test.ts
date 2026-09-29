@@ -74,6 +74,38 @@ describe('processing a ticket', () => {
     })
   })
 
+  test('saves refund when the model said technical but the student asked for money back', async () => {
+    // 5.11's safeguard, end to end: the model's category is overridden.
+    const ticket = await createTicket({ subject: 'Videos will not play', category: null })
+    const inbound = await createMessage({
+      ticketId: ticket.id,
+      body: 'Nothing plays on Chrome either. Honestly, just refund me.',
+    })
+    const { client } = stubAnthropic(() =>
+      message(JSON.stringify({ ...answer, category: 'technical', reply: 'Try Chrome.' })),
+    )
+
+    await processTicket(deps(client), { ticketId: ticket.id, messageId: inbound.id })
+
+    expect((await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).category).toBe(
+      'refund',
+    )
+  })
+
+  test("keeps the model's category when nobody mentions money", async () => {
+    const ticket = await createTicket({ subject: 'Videos', category: null })
+    const inbound = await createMessage({ ticketId: ticket.id, body: 'Week 2 will not load.' })
+    const { client } = stubAnthropic(() =>
+      message(JSON.stringify({ ...answer, category: 'technical', reply: 'Try Chrome.' })),
+    )
+
+    await processTicket(deps(client), { ticketId: ticket.id, messageId: inbound.id })
+
+    expect((await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } })).category).toBe(
+      'technical',
+    )
+  })
+
   test('sends the model the whole thread, oldest first', async () => {
     const ticket = await createTicket()
     // Inserted out of order, so the order sent is the query's, not insertion's.
