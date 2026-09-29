@@ -18,6 +18,7 @@ import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
 import { parseBody, parseId, parseQuery } from '../http.ts'
 import { statusChange } from '../tickets/status.ts'
 import { EmailSendError } from '../email/outbound.ts'
+import { replySubject, replyThread } from '../email/reply-thread.ts'
 
 /** The columns the list exposes. Explicit, so a column added later stays out until chosen. */
 const summaryFields = {
@@ -94,43 +95,6 @@ function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields 
 const TICKET_NOT_FOUND = 'Ticket not found'
 
 const REPLY_NOT_SENT = 'The reply could not be emailed. Nothing was saved; try again.'
-
-// How many of the student's latest emails a reply's References names, besides
-// their first. The IDs become one header, so a ticket that runs to hundreds of
-// messages must not make it hundreds of KB, which Resend could refuse on every
-// reply (#210). Mail clients thread on the first ID and the latest few.
-const REPLY_THREAD_RECENT = 20
-
-/**
- * The Message-IDs a reply threads onto, oldest first: the student's first
- * email and their latest REPLY_THREAD_RECENT. Our own outbound messages have no
- * Message-ID to add: Amazon SES sets one and does not report it.
- */
-async function replyThread(ticketId: number): Promise<string[]> {
-  const where = {
-    ticketId,
-    direction: 'inbound',
-    emailMessageId: { not: null },
-  } satisfies Prisma.MessageWhereInput
-  const select = { id: true, emailMessageId: true } as const
-  const orderBy = [
-    { createdAt: 'asc' },
-    { id: 'asc' },
-  ] satisfies Prisma.MessageOrderByWithRelationInput[]
-
-  const [first, recent] = await Promise.all([
-    prisma.message.findFirst({ where, select, orderBy }),
-    // A negative take counts from the end: the latest, still oldest first.
-    prisma.message.findMany({ where, select, orderBy, take: -REPLY_THREAD_RECENT }),
-  ])
-  const messages = first && !recent.some((m) => m.id === first.id) ? [first, ...recent] : recent
-  return messages.flatMap((m) => (m.emailMessageId ? [m.emailMessageId] : []))
-}
-
-/** The ticket's subject as a reply's, without stacking a second "Re:". */
-function replySubject(subject: string): string {
-  return /^re:/i.test(subject.trim()) ? subject : `Re: ${subject}`
-}
 
 // One answer for a user who does not exist and one who is deactivated: either
 // way there is nobody to hand the ticket to, and the ticket screen shows the

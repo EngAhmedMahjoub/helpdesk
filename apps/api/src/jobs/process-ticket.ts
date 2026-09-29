@@ -1,10 +1,13 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import { MESSAGE_PAGE_SIZE } from '@helpdesk/shared'
+import { type AiOutput, MESSAGE_PAGE_SIZE, type TicketCategory } from '@helpdesk/shared'
 import { type PgBoss, type PrismaTransactionLike, type WorkHandler, fromPrisma } from 'pg-boss'
 import { analyseTicket } from '../ai/prompt.ts'
 import { decideRouting } from '../ai/refund-safeguard.ts'
 import { isPrismaError } from '../db.ts'
+import type { SendEmail } from '../email/outbound.ts'
+import { replySubject, replyThread } from '../email/reply-thread.ts'
 import type { PrismaClient } from '../generated/prisma/client.ts'
+import { statusChange } from '../tickets/status.ts'
 
 /** The queue a saved inbound message waits on for the AI (task 5.2). */
 export const PROCESS_TICKET = 'process-ticket'
@@ -33,20 +36,22 @@ export async function createQueues(boss: PgBoss): Promise<void> {
   await boss.createQueue(PROCESS_TICKET)
 }
 
-/** What the worker needs, passed in so tests can stand a client in for Anthropic. */
+/** What the worker needs, passed in so tests can stand in for Anthropic and Resend. */
 export type ProcessTicketDeps = {
   prisma: PrismaClient
   client: Anthropic
   knowledgeBase: string
+  sendEmail: SendEmail
 }
 
 /**
- * Asks the model about a ticket's thread and saves the category and summary it
- * gives. The reply it also drafts is not used yet: sending it, or saving it as a
- * draft for a refund, is 5.13's routing.
+ * Asks the model about a ticket's thread and acts on the answer (5.13). A
+ * refund, by the model's word or the safeguard's, is saved as a draft for an
+ * agent to approve; anything else is emailed to the student and the ticket
+ * resolved.
  *
- * An `AiFailure` is thrown on, for pg-boss to retry; which failures deserve a
- * retry and what happens after the last is 5.15's.
+ * An `AiFailure` or an `EmailSendError` is thrown on, for pg-boss to retry;
+ * which failures deserve a retry and what happens after the last is 5.15's.
  */
 export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJob): Promise<void> {
   const ticket = await deps.prisma.ticket.findUnique({
@@ -65,7 +70,7 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
     },
   })
 
-  // Deleted since the job was queued: there is nothing left to classify, and
+  // Deleted since the job was queued: there is nothing left to answer, and
   // throwing would only have pg-boss retry a ticket that will never come back.
   if (!ticket) return
 
@@ -74,8 +79,7 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   const { output } = await analyseTicket(deps.client, deps.knowledgeBase, { ...ticket, messages })
 
   // The model's category stands unless the student or the draft talks about
-  // money back. The route in the decision is 5.13's to act on; today only the
-  // category it settles on is saved.
+  // money back, in which case a person approves the reply before it goes out.
   const decision = decideRouting(output, {
     subject: ticket.subject,
     studentMessages: messages
@@ -84,15 +88,98 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   })
 
   try {
-    await deps.prisma.ticket.update({
-      where: { id: job.ticketId },
-      data: { category: decision.category, summary: output.summary },
-    })
+    if (decision.route === 'agent') {
+      await saveForApproval(deps.prisma, job.ticketId, output, decision.category)
+    } else {
+      await sendAndResolve(deps, job.ticketId, ticket, output, decision.category)
+    }
   } catch (error) {
     // Deleted while the model was answering. Same as above: nothing to save.
     if (isPrismaError(error, 'P2025')) return
     throw error
   }
+}
+
+/**
+ * The refund path: the reply waits as a draft and the ticket is flagged for an
+ * agent. Nothing is emailed until someone approves it (6.2).
+ *
+ * One pending draft per ticket: a follow-up while one waits replaces its body
+ * rather than queuing a second, since the newer draft answers the whole thread
+ * and the older one would only be a stale thing to reject. One transaction, so
+ * a ticket is never flagged without its draft, or the reverse.
+ */
+async function saveForApproval(
+  prisma: PrismaClient,
+  ticketId: number,
+  output: AiOutput,
+  category: TicketCategory,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.ticket.update({
+      where: { id: ticketId },
+      data: {
+        category,
+        summary: output.summary,
+        needsAgent: true,
+        escalationReason: 'refund_approval',
+      },
+    })
+
+    const pending = await tx.replyDraft.findFirst({
+      where: { ticketId, status: 'pending' },
+      select: { id: true },
+    })
+    if (pending) {
+      await tx.replyDraft.update({ where: { id: pending.id }, data: { body: output.reply } })
+    } else {
+      await tx.replyDraft.create({ data: { ticketId, body: output.reply } })
+    }
+  })
+}
+
+/**
+ * The general and technical path: the reply is emailed, then saved as an AI
+ * message on a ticket now Resolved.
+ *
+ * Emailed before it is saved, as an agent's reply is (4.3): the other order
+ * can leave a reply in the thread the student never received. A failed send
+ * saves nothing and throws for pg-boss to try again. The cost of this order is
+ * a narrow window — the email sent, then the save failing — in which a retry
+ * would email the student a second time.
+ */
+async function sendAndResolve(
+  deps: ProcessTicketDeps,
+  ticketId: number,
+  ticket: { subject: string; studentEmail: string },
+  output: AiOutput,
+  category: TicketCategory,
+): Promise<void> {
+  await deps.sendEmail({
+    to: ticket.studentEmail,
+    subject: replySubject(ticket.subject),
+    text: output.reply,
+    thread: await replyThread(ticketId, deps.prisma),
+  })
+
+  await deps.prisma.$transaction(async (tx) => {
+    await tx.ticket.update({
+      where: { id: ticketId },
+      // Resolved through statusChange, so the 14-day auto-close timer starts.
+      data: { category, summary: output.summary, ...statusChange('resolved') },
+    })
+    await tx.message.create({
+      data: {
+        ticketId,
+        direction: 'outbound',
+        author: 'ai',
+        body: output.reply,
+        // Null, as on an agent's reply: Amazon SES sets the Message-ID and
+        // does not report it back.
+        emailMessageId: null,
+      },
+    })
+  })
 }
 
 /** The pg-boss handler: jobs arrive in batches, one at a time by default. */

@@ -130,7 +130,7 @@ None.
 | 5.10 | Save category and summary on the ticket | Values shown on ticket detail |Done |
 | 5.11 | Refund safeguard: keyword check on email and draft forces refund handling | Test: "technical question, refund me" is routed to an agent |Done |
 | 5.12 | `ReplyDraft` model: ticketId, body, status (pending/approved/rejected), reviewedBy, reviewedAt | Migration applied |Done |
-| 5.13 | Routing: general/technical → send reply as AI outbound message and set status Resolved; refund → save pending draft, set `needsAgent` with reason `refund_approval` | Tests for both paths |  |
+| 5.13 | Routing: general/technical → send reply as AI outbound message and set status Resolved; refund → save pending draft, set `needsAgent` with reason `refund_approval` | Tests for both paths |Done |
 | 5.14 | Follow-ups on Resolved or Closed tickets: same routing (reply or refund draft) and category/summary update, but status never changes | Tests: reply sent, summary updated, status unchanged |  |
 | 5.15 | Job retries; after final failure set `needsAgent` with reason `ai_failed`, status stays Open | Test: failing AI call escalates the ticket |  |
 | 5.16 | `POST /api/tasks/auto-close` (shared-secret protected): Resolved tickets with `autoCloseAt` in the past become Closed | Test with an expired and a non-expired Resolved ticket |  |
