@@ -140,3 +140,93 @@ describe('Message', () => {
     expect(await prisma.message.count()).toBe(1)
   })
 })
+
+describe('ReplyDraft', () => {
+  const newTicket = () =>
+    prisma.ticket.create({
+      data: { subject: 'Refund please', studentEmail: 'student@example.com' },
+    })
+
+  test('starts pending, with nobody having reviewed it', async () => {
+    const ticket = await newTicket()
+
+    const draft = await prisma.replyDraft.create({
+      data: { ticketId: ticket.id, body: 'Your refund request has been passed to the team.' },
+    })
+
+    expect(draft).toMatchObject({ status: 'pending', reviewedById: null, reviewedAt: null })
+    expect(typeof draft.id).toBe('number')
+  })
+
+  test('records who reviewed it and when', async () => {
+    const ticket = await newTicket()
+    const reviewer = await prisma.user.create({
+      data: { email: 'agent@example.com', name: 'Agent', passwordHash: 'x' },
+    })
+    const reviewedAt = new Date('2026-09-29T10:00:00Z')
+
+    const draft = await prisma.replyDraft.create({
+      data: {
+        ticketId: ticket.id,
+        body: 'Approved.',
+        status: 'approved',
+        reviewedById: reviewer.id,
+        reviewedAt,
+      },
+    })
+
+    expect(draft).toMatchObject({ status: 'approved', reviewedById: reviewer.id, reviewedAt })
+  })
+
+  test('is deleted with its ticket', async () => {
+    const ticket = await newTicket()
+    await prisma.replyDraft.create({ data: { ticketId: ticket.id, body: 'Draft' } })
+
+    await prisma.ticket.delete({ where: { id: ticket.id } })
+
+    expect(await prisma.replyDraft.count()).toBe(0)
+  })
+
+  test('keeps its reviewer: their user row cannot be deleted', async () => {
+    // An approval records who let a refund reply go out.
+    const ticket = await newTicket()
+    const reviewer = await prisma.user.create({
+      data: { email: 'agent@example.com', name: 'Agent', passwordHash: 'x' },
+    })
+    await prisma.replyDraft.create({
+      data: {
+        ticketId: ticket.id,
+        body: 'Approved.',
+        status: 'approved',
+        reviewedById: reviewer.id,
+        reviewedAt: new Date(),
+      },
+    })
+
+    await expect(
+      (async () => prisma.user.delete({ where: { id: reviewer.id } }))(),
+    ).rejects.toThrow()
+  })
+
+  test('cannot belong to a ticket that does not exist', async () => {
+    await expect(
+      (async () => prisma.replyDraft.create({ data: { ticketId: 999_999, body: 'Draft' } }))(),
+    ).rejects.toThrow()
+  })
+
+  test('refuses a status outside its enum', async () => {
+    const ticket = await newTicket()
+
+    // Raw SQL for the same reason as the other enums: the client would not compile it.
+    const insert = async (status: string) =>
+      prisma.$executeRaw`
+        INSERT INTO "ReplyDraft" ("ticketId", body, status, "updatedAt")
+        VALUES (${ticket.id}, 'Draft', ${status}::"DraftStatus", now())`
+
+    await expect(insert('sent')).rejects.toThrow()
+    // The same insert with a valid status goes through, so the one above
+    // failed on the enum and not on something else in the statement.
+    await insert('pending')
+    expect(await prisma.replyDraft.count()).toBe(1)
+  })
+})
