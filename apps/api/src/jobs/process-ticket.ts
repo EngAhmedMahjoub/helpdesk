@@ -50,6 +50,10 @@ export type ProcessTicketDeps = {
  * agent to approve; anything else is emailed to the student and the ticket
  * resolved.
  *
+ * A follow-up on a Resolved or Closed ticket takes the same two paths and
+ * updates the category and summary, but keeps its status (5.14): the student
+ * writing back has not reopened it, as the inbound webhook already holds (4.9).
+ *
  * An `AiFailure` or an `EmailSendError` is thrown on, for pg-boss to retry;
  * which failures deserve a retry and what happens after the last is 5.15's.
  */
@@ -91,7 +95,7 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
     if (decision.route === 'agent') {
       await saveForApproval(deps.prisma, job.ticketId, output, decision.category)
     } else {
-      await sendAndResolve(deps, job.ticketId, ticket, output, decision.category)
+      await sendReply(deps, job.ticketId, ticket, output, decision.category)
     }
   } catch (error) {
     // Deleted while the model was answering. Same as above: nothing to save.
@@ -140,7 +144,8 @@ async function saveForApproval(
 
 /**
  * The general and technical path: the reply is emailed, then saved as an AI
- * message on a ticket now Resolved.
+ * message, and an Open ticket is resolved. A Resolved or Closed one keeps its
+ * status and its auto-close timer, which the inbound webhook already restarted.
  *
  * Emailed before it is saved, as an agent's reply is (4.3): the other order
  * can leave a reply in the thread the student never received. A failed send
@@ -148,7 +153,7 @@ async function saveForApproval(
  * a narrow window — the email sent, then the save failing — in which a retry
  * would email the student a second time.
  */
-async function sendAndResolve(
+async function sendReply(
   deps: ProcessTicketDeps,
   ticketId: number,
   ticket: { subject: string; studentEmail: string },
@@ -165,8 +170,14 @@ async function sendAndResolve(
   await deps.prisma.$transaction(async (tx) => {
     await tx.ticket.update({
       where: { id: ticketId },
-      // Resolved through statusChange, so the 14-day auto-close timer starts.
-      data: { category, summary: output.summary, ...statusChange('resolved') },
+      data: { category, summary: output.summary },
+    })
+    // The status is the statement's own condition rather than read with the
+    // thread, so an agent closing the ticket while the model answered is not
+    // undone. Resolved through statusChange, so the 14-day auto-close timer starts.
+    await tx.ticket.updateMany({
+      where: { id: ticketId, status: 'open' },
+      data: statusChange('resolved'),
     })
     await tx.message.create({
       data: {

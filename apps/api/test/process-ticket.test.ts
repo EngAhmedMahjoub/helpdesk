@@ -213,6 +213,73 @@ describe('a refund ticket', () => {
   })
 })
 
+describe.each(['resolved', 'closed'] as const)('a follow-up on a %s ticket', (status) => {
+  // Last time's category and summary still on it, and a Resolved ticket's timer
+  // well short of the 14 days a fresh resolve would give, so a reset shows.
+  const autoCloseAt = status === 'resolved' ? new Date(Date.now() + 3 * DAY) : null
+  const earlier = {
+    status,
+    autoCloseAt,
+    category: 'general' as const,
+    summary: 'Asked about deadlines.',
+  }
+  // Compared as numbers: Bun's toMatchObject counts any two Dates as equal.
+  const timerOf = async (id: number) => (await stored(id)).autoCloseAt?.getTime() ?? null
+
+  test('emails the reply and updates the summary, but the status stays', async () => {
+    const { ticket, job } = await ticketWithEmail('Now the week 2 videos will not load.', earlier)
+    const { deps, emails } = depsFor(answering(technical).client)
+
+    await processTicket(deps, job)
+
+    expect(emails.map((email) => email.text)).toEqual([technical.reply])
+    expect(await timerOf(ticket.id)).toBe(autoCloseAt?.getTime() ?? null)
+    expect(await stored(ticket.id)).toMatchObject({
+      status,
+      category: 'technical',
+      summary: technical.summary,
+      needsAgent: false,
+    })
+    const replies = await prisma.message.findMany({
+      where: { ticketId: ticket.id, direction: 'outbound' },
+    })
+    expect(replies).toMatchObject([{ author: 'ai', body: technical.reply }])
+  })
+
+  test('a refund saves a draft and flags the ticket, but the status stays', async () => {
+    const { ticket, job } = await ticketWithEmail('I withdrew in week 1. Refund please.', earlier)
+    const { deps, emails } = depsFor(answering(refund).client)
+
+    await processTicket(deps, job)
+
+    expect(emails).toHaveLength(0)
+    expect(await timerOf(ticket.id)).toBe(autoCloseAt?.getTime() ?? null)
+    expect(await stored(ticket.id)).toMatchObject({
+      status,
+      category: 'refund',
+      summary: refund.summary,
+      needsAgent: true,
+      escalationReason: 'refund_approval',
+    })
+    expect(await prisma.replyDraft.findMany({ where: { ticketId: ticket.id } })).toMatchObject([
+      { body: refund.reply, status: 'pending' },
+    ])
+  })
+})
+
+test('a ticket closed while the model answered stays closed', async () => {
+  // The status is read at the end, not with the thread: an agent's close wins.
+  const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+  const { client } = stubAnthropic(async () => {
+    await prisma.ticket.update({ where: { id: ticket.id }, data: { status: 'closed' } })
+    return message(JSON.stringify(technical))
+  })
+
+  await processTicket(depsFor(client).deps, job)
+
+  expect(await stored(ticket.id)).toMatchObject({ status: 'closed', summary: technical.summary })
+})
+
 describe('either path', () => {
   test('sends the model the whole thread, oldest first', async () => {
     const ticket = await createTicket()
