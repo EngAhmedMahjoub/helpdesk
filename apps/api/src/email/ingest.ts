@@ -123,7 +123,8 @@ export async function ingestInboundEmail(
   // Only a reply that passed DMARC may join a ticket (task 5.2a): the address
   // check in ticketForReply is only as good as the From it compares. Any other
   // reply still opens a ticket of its own, so no student's mail is dropped.
-  const ticketId = passedDmarc(received)
+  const verified = passedDmarc(received)
+  const ticketId = verified
     ? await ticketForReply(threadIds(email.inReplyTo, email.references), ticket.studentEmail)
     : null
 
@@ -164,7 +165,9 @@ export async function ingestInboundEmail(
     // ticket and no job.
     await prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
-        data: { ...ticket, messages: { create: message } },
+        // Recorded for the AI (#239): it emails only a sender who passed
+        // DMARC, since anyone can forge the From of a new ticket.
+        data: { ...ticket, senderVerified: verified, messages: { create: message } },
         select: { id: true, messages: { select: { id: true } } },
       })
       const [first] = created.messages

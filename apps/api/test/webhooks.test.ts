@@ -201,6 +201,30 @@ describe('POST /api/webhooks/resend: signature', () => {
 })
 
 describe('POST /api/webhooks/resend: inbound email', () => {
+  describe('records whether a new ticket passed DMARC (#239)', () => {
+    const withVerdict = (verdict: string) => {
+      const auth = saved.headers?.['authentication-results'] ?? ''
+      return receive({
+        headers: {
+          ...saved.headers,
+          'authentication-results': auth.replace('dmarc=pass', verdict),
+        },
+      })
+    }
+
+    test('verified when it passed', async () => {
+      await deliverSigned()
+
+      expect((await prisma.ticket.findFirstOrThrow()).senderVerified).toBe(true)
+    })
+
+    test.each(['dmarc=fail', 'dmarc=none'])('unverified on %s', async (verdict) => {
+      await deliverSigned(eventFor(withVerdict(verdict)))
+
+      expect((await prisma.ticket.findFirstOrThrow()).senderVerified).toBe(false)
+    })
+  })
+
   test('saves a new email as a ticket holding it as the first message', async () => {
     await deliverSigned()
 
@@ -686,6 +710,8 @@ describe('POST /api/webhooks/resend: threading', () => {
       expect(await prisma.message.count({ where: { ticketId: ticket.id } })).toBe(1)
       const other = await prisma.ticket.findFirstOrThrow({ where: { NOT: { id: ticket.id } } })
       expect(other.studentEmail).toBe('maya.chen@uni.edu')
+      // Nor will the AI email it: the sender is unverified (#239).
+      expect(other.senderVerified).toBe(false)
     })
   })
 
