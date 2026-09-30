@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import type Anthropic from '@anthropic-ai/sdk'
 import request from 'supertest'
 import type { JobWithMetadata } from 'pg-boss'
 import type { AiOutput, TicketDetail } from '@helpdesk/shared'
@@ -338,6 +339,84 @@ describe('either path', () => {
     })
 
     await expect(processTicket(depsFor(client).deps, job)).resolves.toBeUndefined()
+  })
+})
+
+describe('usage logging (5.17)', () => {
+  let logged: string[] = []
+  let spy: ReturnType<typeof spyOn<Console, 'log'>>
+
+  beforeEach(() => {
+    logged = []
+    spy = spyOn(console, 'log').mockImplementation((line: unknown) => {
+      logged.push(String(line))
+    })
+  })
+  afterEach(() => spy.mockRestore())
+
+  const usageLines = () => logged.filter((line) => line.startsWith('AI usage:'))
+
+  test('logs one line per call: tokens, cache reads and writes, and the outcome', async () => {
+    const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+    const { client } = stubAnthropic(() => ({
+      ...message(JSON.stringify(technical)),
+      usage: {
+        input_tokens: 320,
+        output_tokens: 110,
+        cache_read_input_tokens: 4200,
+        cache_creation_input_tokens: 0,
+      } as Anthropic.Usage,
+    }))
+
+    await processTicket(depsFor(client).deps, job)
+
+    expect(usageLines()).toEqual([
+      `AI usage: ticket=${String(ticket.id)} outcome=reply input=320 output=110 cache_read=4200 cache_write=0`,
+    ])
+  })
+
+  test('names a refund draft, and counts the phrases when the safeguard forced it', async () => {
+    const { ticket, job } = await ticketWithEmail('Nothing plays. Just refund me.')
+
+    await processTicket(depsFor(answering({ ...technical, reply: 'Try Chrome.' }).client).deps, job)
+
+    // The stub reports no cache fields, as the API does when nothing is cached.
+    expect(usageLines()).toEqual([
+      `AI usage: ticket=${String(ticket.id)} outcome=refund_draft input=1770 output=110 cache_read=0 cache_write=0 forced_by=1`,
+    ])
+  })
+
+  test('logs a refused call, which is billed, with its reason', async () => {
+    const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+    const { client } = stubAnthropic(() => message(null, 'refusal'))
+
+    await expect(processTicket(depsFor(client).deps, job)).rejects.toBeInstanceOf(AiFailure)
+
+    expect(usageLines()).toEqual([
+      `AI usage: ticket=${String(ticket.id)} outcome=failed_refusal input=1770 output=110 cache_read=0 cache_write=0`,
+    ])
+  })
+
+  test('logs nothing for a call that never reached the model', async () => {
+    const { job } = await ticketWithEmail('Week 2 videos spin forever.')
+    const { client } = stubAnthropic(() => {
+      throw new AiFailure('rate_limited', true, 'Rate limited by Anthropic')
+    })
+
+    await expect(processTicket(depsFor(client).deps, job)).rejects.toBeInstanceOf(AiFailure)
+
+    expect(usageLines()).toEqual([])
+  })
+
+  test("never logs the student's email or the reply", async () => {
+    const { job } = await ticketWithEmail('Week 2 videos spin forever.')
+
+    await processTicket(depsFor(answering(technical).client).deps, job)
+
+    const all = logged.join('\n')
+    expect(all).not.toContain('spin forever')
+    expect(all).not.toContain(technical.reply)
+    expect(all).not.toContain('tom@uni.edu')
   })
 })
 
