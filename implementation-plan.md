@@ -136,7 +136,7 @@ None.
 | 5.16 | `POST /api/tasks/auto-close` (shared-secret protected): Resolved tickets with `autoCloseAt` in the past become Closed | Test with an expired and a non-expired Resolved ticket |Done |
 | 5.16a | `POST /api/tasks/cleanup-sessions` (shared-secret protected): delete expired sessions | Test passes ||Done |
 | 5.17 | Log token usage and prompt-cache hits per job | Usage visible in logs ||Done |
-| 5.18 | Evaluation set: 20–30 sample emails written from the knowledge base brief, with expected category; script reports accuracy | Script runs and reports a score |  |
+| 5.18 | Evaluation set: 20–30 sample emails written from the knowledge base brief, with expected category; script reports accuracy | Script runs and reports a score ||Done |
 
 ## Phase 6 — Agent Review of AI Output
 
