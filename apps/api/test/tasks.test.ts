@@ -91,3 +91,47 @@ describe('POST /api/tasks/auto-close', () => {
     })
   })
 })
+
+describe('POST /api/tasks/cleanup-sessions', () => {
+  const cleanup = (authorization = `Bearer ${env.TASKS_SECRET}`) =>
+    request(app).post('/api/tasks/cleanup-sessions').set('Authorization', authorization)
+
+  /** A session row for `userId` expiring at `expiresAt`, with a token hash of its own. */
+  const sessionExpiring = (userId: string, expiresAt: Date) =>
+    prisma.session.create({
+      data: { userId, expiresAt, tokenHash: crypto.randomUUID() },
+    })
+
+  test('deletes expired sessions and keeps live ones', async () => {
+    const agent = await createUser()
+    await sessionExpiring(agent.id, new Date(Date.now() - DAY))
+    await sessionExpiring(agent.id, new Date(Date.now() - 1000))
+    const live = await sessionExpiring(agent.id, new Date(Date.now() + DAY))
+
+    const res = await cleanup()
+
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ deleted: 2 })
+    expect(await prisma.session.findMany({ select: { id: true } })).toEqual([{ id: live.id }])
+  })
+
+  test('a live session still signs its user in afterwards', async () => {
+    const agent = await createUser()
+    const cookie = await sessionCookieFor(agent.id)
+
+    await cleanup()
+
+    const res = await request(app).get('/api/auth/me').set('Cookie', cookie)
+    expect(res.status).toBe(200)
+  })
+
+  test('refuses a wrong secret with 401, deleting nothing', async () => {
+    const agent = await createUser()
+    await sessionExpiring(agent.id, new Date(Date.now() - DAY))
+
+    const res = await cleanup('Bearer not-the-secret')
+
+    expect(res.status).toBe(401)
+    expect(await prisma.session.count()).toBe(1)
+  })
+})

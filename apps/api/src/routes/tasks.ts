@@ -44,3 +44,18 @@ tasksRouter.post('/auto-close', async (_req, res) => {
   console.log(`Auto-close: ${String(count)} ticket(s) closed`)
   res.json({ closed: count })
 })
+
+/**
+ * Deletes every expired session (5.16a). requireAuth already refuses them, so
+ * this is housekeeping: a row outliving its session is a token hash nobody
+ * can use, kept for no reason. Expired means what requireAuth takes it to
+ * mean, `expiresAt` at or before now, so the two never disagree about a
+ * session on the boundary.
+ */
+tasksRouter.post('/cleanup-sessions', async (_req, res) => {
+  const { count } = await prisma.session.deleteMany({
+    where: { expiresAt: { lte: new Date() } },
+  })
+  console.log(`Session cleanup: ${String(count)} session(s) deleted`)
+  res.json({ deleted: count })
+})
