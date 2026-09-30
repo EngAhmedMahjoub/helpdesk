@@ -11,4 +11,5 @@ export const VALID_BOOT_ENV = {
   EMAIL_FROM: 'Helpdesk Support <support@helpdesk.example.com>',
   RESEND_WEBHOOK_SECRET: 'whsec_dGVzdA==',
   ANTHROPIC_API_KEY: 'sk-ant-test-not-a-real-key',
+  TASKS_SECRET: 'test-tasks-secret-not-a-real-one-0000',
 }

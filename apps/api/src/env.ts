@@ -37,6 +37,13 @@ const envSchema = z.object({
     .string()
     .startsWith('sk-ant-')
     .describe('Anthropic API key, e.g. sk-ant-api03-...'),
+  // Required: without it the scheduled workflow's calls would all be refused
+  // and no Resolved ticket would ever close, with nothing failing loudly. At
+  // least 32 characters, so a placeholder or a short guessable word is refused.
+  TASKS_SECRET: z
+    .string()
+    .min(32)
+    .describe('Shared secret the scheduled workflow sends, e.g. from `openssl rand -hex 32`'),
 })
 
 type Env = z.infer<typeof envSchema>
