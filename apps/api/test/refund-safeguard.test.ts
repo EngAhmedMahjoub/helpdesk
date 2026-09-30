@@ -19,6 +19,12 @@ describe('refund phrases', () => {
     ['Please cancel my purchase.', 'cancel purchase'],
     ['I want to cancel my enrollment.', 'cancel purchase'],
     ['I will dispute the charge.', 'dispute charge'],
+    ['If not sorted I will dispute it with my bank.', 'dispute with bank'],
+    ['I think I was overcharged.', 'overcharged'],
+    ['I was over-billed for the course.', 'overcharged'],
+    ['The coupon was accepted but I was charged the full price.', 'charged full price'],
+    ['Please send me the difference.', 'the difference back'],
+    ['Can I have the difference back?', 'the difference back'],
   ]
 
   for (const [text, phrase] of caught) {
@@ -39,6 +45,8 @@ describe('refund phrases', () => {
     'The fundamentals module is great.',
     'Can I get back into my account?',
     'Please send the certificate back to me with my name fixed.',
+    'What is the difference between the two courses?',
+    'Is the full price shown in dollars?',
   ]
 
   for (const text of ignored) {
@@ -52,6 +60,22 @@ const reply = 'Allow auto-play for the site, then reload the lesson.'
 const technical: AiOutput = { category: 'technical', summary: 'Videos will not load.', reply }
 
 describe('the routing decision', () => {
+  test('"charged the full price, send me the difference" is routed to an agent', () => {
+    // The done-when for 5.19: the one refund sample the 5.18 evaluation found
+    // the model filing as general, and no phrase catching.
+    const general: AiOutput = { category: 'general', summary: 'Coupon did not apply.', reply }
+    const decision = decideRouting(general, {
+      subject: 'Coupon did not apply',
+      studentMessages: [
+        'My 20% coupon was accepted but I was charged the full price. Please send me the difference.',
+      ],
+    })
+
+    expect(decision.route).toBe('agent')
+    expect(decision.category).toBe('refund')
+    expect(decision.forcedBy.length).toBeGreaterThan(0)
+  })
+
   test('"technical question, refund me" is routed to an agent', () => {
     // The done-when for 5.11, and the trap Haiku missed in the model benchmark.
     const decision = decideRouting(technical, {
