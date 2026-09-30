@@ -2,7 +2,12 @@ import { z } from 'zod'
 
 export const TICKET_STATUSES = ['open', 'resolved', 'closed'] as const
 export const TICKET_CATEGORIES = ['general', 'technical', 'refund'] as const
-export const ESCALATION_REASONS = ['refund_approval', 'ai_failed'] as const
+export const ESCALATION_REASONS = [
+  'refund_approval',
+  'ai_failed',
+  'unverified_sender',
+  'auto_reply_limit',
+] as const
 
 export type TicketStatus = (typeof TICKET_STATUSES)[number]
 export type TicketCategory = (typeof TICKET_CATEGORIES)[number]

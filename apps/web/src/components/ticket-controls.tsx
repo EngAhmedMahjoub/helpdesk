@@ -25,6 +25,8 @@ const UNCLASSIFIED = 'unclassified'
 const escalationReasons = {
   refund_approval: 'refund approval',
   ai_failed: 'AI could not answer',
+  unverified_sender: 'sender not verified',
+  auto_reply_limit: 'AI reply limit reached',
 } as const
 
 /**
