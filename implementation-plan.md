@@ -137,6 +137,7 @@ None.
 | 5.16a | `POST /api/tasks/cleanup-sessions` (shared-secret protected): delete expired sessions | Test passes | Done |
 | 5.17 | Log token usage and prompt-cache hits per job | Usage visible in logs | Done |
 | 5.18 | Evaluation set: 20–30 sample emails written from the knowledge base brief, with expected category; script reports accuracy | Script runs and reports a score | Done |
+| 5.19 | Align the prompt's categories and the refund safeguard with the brief (#237), from the 5.18 baseline of 23/28: logins go general, downloads technical, and partial money back ("send me the difference") is a refund | Test: the safeguard routes "charged the full price, send me the difference" to an agent; `ai:eval` beats 23/28 with no refund sample missed | Done |
 
 ## Phase 6 — Agent Review of AI Output
 
