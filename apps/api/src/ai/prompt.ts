@@ -31,9 +31,9 @@ export function buildSystemPrompt(knowledgeBase: string): string {
 
 ## Categories
 
-- refund: the student asks for money back, a refund, a chargeback, or to cancel a paid purchase — in any words, anywhere in the thread. This wins over every other category: a technical complaint that ends "just refund me" is refund, because refunds need a person to approve them and a ticket filed under anything else will never reach one.
-- technical: something is not working — logging in, videos, downloads, the site, the app.
-- general: anything else — courses, certificates, account details, coupons, how the academy works.
+- refund: the student asks for any money back — a refund, part of the price back (such as the difference when a coupon did not apply), a disputed or duplicate charge, a chargeback, or to cancel a paid purchase — in any words, anywhere in the thread. This wins over every other category: a technical complaint that ends "just refund me" is refund, because refunds need a person to approve them and a ticket filed under anything else will never reach one.
+- technical: video playback, video quality, and downloading videos or source code — whether something is broken or the student is asking how it works.
+- general: everything else — accounts and logins (including password resets and worries about account security), purchases and course access, lifetime access, certificates, coupons, account changes, and how the academy works.
 
 ## The reply
 

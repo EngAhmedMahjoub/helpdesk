@@ -22,6 +22,15 @@ const REFUND_PATTERNS: [label: string, pattern: RegExp][] = [
     /\bcancel\s+(?:my\s+|the\s+)?(?:order|purchase|payment|subscription|enrol+ment)\b/i,
   ],
   ['dispute charge', /\bdispute\s+(?:the\s+|this\s+|a\s+)?(?:charge|payment|transaction)\b/i],
+  ['dispute with bank', /\bdispute\s+(?:it|this|that)\s+with\s+(?:my|the)\s+(?:bank|card)\b/i],
+  // Partial money back (5.19): the 5.18 evaluation found "charged the full
+  // price, send me the difference" answered by the AI, caught by nothing.
+  ['overcharged', /\bover[\s-]?(?:charged|billed)\b/i],
+  ['charged full price', /\b(?:charged|billed)\s+(?:me\s+)?(?:the\s+)?full\s+price\b/i],
+  [
+    'the difference back',
+    /\b(?:send|give|pay|return|refund)\s+(?:me\s+)?(?:back\s+)?the\s+difference\b|\bdifference\s+back\b/i,
+  ],
 ]
 
 /** Which refund phrases `text` contains, by label; empty when it contains none. */
