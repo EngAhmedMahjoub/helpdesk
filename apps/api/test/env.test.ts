@@ -98,6 +98,21 @@ describe('environment validation', () => {
     expect(stderr).toContain('RESEND_WEBHOOK_SECRET')
   })
 
+  test('refuses to boot without TASKS_SECRET', async () => {
+    // Without it no scheduled task could run, and Resolved tickets would never close.
+    const { exitCode, stderr } = await bootWith({ ...valid, TASKS_SECRET: undefined })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('TASKS_SECRET')
+  })
+
+  test('refuses a TASKS_SECRET shorter than 32 characters', async () => {
+    const { exitCode, stderr } = await bootWith({ ...valid, TASKS_SECRET: 'changeme' })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('TASKS_SECRET')
+  })
+
   test('refuses an EMAIL_FROM with no address in it', async () => {
     // Caught at boot rather than by Resend refusing the first reply.
     const { exitCode, stderr } = await bootWith({ ...valid, EMAIL_FROM: 'Helpdesk Support' })
