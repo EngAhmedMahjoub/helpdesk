@@ -33,6 +33,14 @@ const REFUND_PATTERNS: [label: string, pattern: RegExp][] = [
   ],
 ]
 
+/**
+ * A sum of money: a currency sign before a number, or a number before a
+ * currency name. The prompt forbids the reply stating an amount, so one there
+ * means the model was talked into it or misread the ticket; either way a
+ * person should see it before a student holds it in writing (#239).
+ */
+const AMOUNT = /[$€£]\s?\d|\b\d[\d,.]*\s?(?:usd|eur|gbp|dollars?|euros?|pounds?)\b/i
+
 /** Which refund phrases `text` contains, by label; empty when it contains none. */
 export function refundPhrases(text: string): string[] {
   return REFUND_PATTERNS.filter(([, pattern]) => pattern.test(text)).map(([label]) => label)
@@ -73,8 +81,8 @@ export type StudentText = {
  *
  * The whole thread is read, so once a ticket has asked for money back its
  * follow-ups stay with agents too. The draft is read as well: a reply that
- * talks about refunds needs approving before it goes out, whatever the model
- * called the ticket.
+ * talks about refunds, or names a sum of money, needs approving before it
+ * goes out, whatever the model called the ticket.
  */
 export function decideRouting(output: AiOutput, student: StudentText): RoutingDecision {
   if (output.category === 'refund') {
@@ -88,6 +96,7 @@ export function decideRouting(output: AiOutput, student: StudentText): RoutingDe
       .filter((phrase, index, all) => all.indexOf(phrase) === index)
       .map((phrase) => `"${phrase}" in the student's email`),
     ...refundPhrases(output.reply).map((phrase) => `"${phrase}" in the drafted reply`),
+    ...(AMOUNT.test(output.reply) ? ['an amount of money in the drafted reply'] : []),
   ]
 
   if (found.length > 0) return { category: 'refund', route: 'agent', forcedBy: found }
