@@ -12,6 +12,13 @@ export type OutboundEmail = {
    * message being replied to. Empty or absent starts a new thread.
    */
   thread?: string[]
+  /**
+   * Sent by a machine rather than a person: the AI's replies. Marked with
+   * `Auto-Submitted: auto-replied` (RFC 3834), which well-behaved
+   * auto-responders read as "do not answer", so two of them cannot keep
+   * mailing each other through this helpdesk (#239).
+   */
+  automatic?: boolean
 }
 
 /**
@@ -69,6 +76,7 @@ export function createEmailSender(client: EmailClient, from: string): SendEmail 
       headers['In-Reply-To'] = parent
       headers.References = thread.join(' ')
     }
+    if (email.automatic) headers['Auto-Submitted'] = 'auto-replied'
 
     const { data, error } = await client.emails.send({
       from,
