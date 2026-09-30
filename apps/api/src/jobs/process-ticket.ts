@@ -10,6 +10,7 @@ import {
 import { AiFailure } from '../ai/failure.ts'
 import { analyseTicket } from '../ai/prompt.ts'
 import { decideRouting } from '../ai/refund-safeguard.ts'
+import { usageLine } from '../ai/usage.ts'
 import { isPrismaError } from '../db.ts'
 import type { SendEmail } from '../email/outbound.ts'
 import { replySubject, replyThread } from '../email/reply-thread.ts'
@@ -105,7 +106,18 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
 
   // Selected newest first for the cap; a thread reads the other way.
   const messages = ticket.messages.reverse()
-  const { output } = await analyseTicket(deps.client, deps.knowledgeBase, { ...ticket, messages })
+  let analysis
+  try {
+    analysis = await analyseTicket(deps.client, deps.knowledgeBase, { ...ticket, messages })
+  } catch (error) {
+    // A refused or cut-off answer is billed like any other, so it is counted
+    // too. Failures without usage never reached the model, and cost nothing.
+    if (error instanceof AiFailure && error.usage) {
+      console.log(usageLine(job.ticketId, error.usage, `failed_${error.reason}`))
+    }
+    throw error
+  }
+  const { output, usage } = analysis
 
   // The model's category stands unless the student or the draft talks about
   // money back, in which case a person approves the reply before it goes out.
@@ -115,6 +127,13 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
       .filter((message) => message.author === 'student')
       .map((message) => message.body),
   })
+
+  // Logged once the call is paid for, before anything is saved: a save that
+  // fails afterwards does not make the call free. The safeguard's override is
+  // named, so how often it overrules the model can be counted (5.18).
+  const outcome = decision.route === 'agent' ? 'refund_draft' : 'reply'
+  const forced = decision.forcedBy.length > 0 ? ` forced_by=${decision.forcedBy.length}` : ''
+  console.log(`${usageLine(job.ticketId, usage, outcome)}${forced}`)
 
   try {
     if (decision.route === 'agent') {
