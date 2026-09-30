@@ -14,6 +14,7 @@
     "db:studio": "bun --bun --env-file=.env run prisma studio",
     "ai:ping": "bun --env-file=.env scripts/ai-ping.ts",
     "ai:samples": "bun --env-file=.env scripts/ai-samples.ts",
+    "ai:eval": "bun --env-file=.env scripts/ai-eval.ts",
     "lint": "oxlint --deny-warnings",
     "test": "bun run db:test:setup && bun test"
   },
