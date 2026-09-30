@@ -138,6 +138,7 @@ None.
 | 5.17 | Log token usage and prompt-cache hits per job | Usage visible in logs | Done |
 | 5.18 | Evaluation set: 20–30 sample emails written from the knowledge base brief, with expected category; script reports accuracy | Script runs and reports a score | Done |
 | 5.19 | Align the prompt's categories and the refund safeguard with the brief (#237), from the 5.18 baseline of 23/28: logins go general, downloads technical, and partial money back ("send me the difference") is a refund | Test: the safeguard routes "charged the full price, send me the difference" to an agent; `ai:eval` beats 23/28 with no refund sample missed | Done |
+| 5.20 | Phase 5 security review fixes (#239): the AI emails only a sender whose first email passed DMARC, marks its email `Auto-Submitted`, stops after 3 AI emails per ticket a day and 50 an hour overall, skips the model past 5 calls per ticket a day and 500 overall, reads at most 40,000 characters of thread, never answers a ticket with a refund draft waiting, sends any reply naming a sum of money to an agent, and logs failures without their message | Each fix has a test that fails without it | Done |
 
 ## Phase 6 — Agent Review of AI Output
 
@@ -151,6 +152,9 @@ None.
 | 6.6 | Frontend: draft review panel — edit, approve, reject | Agent approves an edited draft |
 | 6.7 | Frontend: "Needs agent" filter and escalation reason badge on ticket list | Filter shows refund approvals and AI failures |
 | 6.8 | Frontend: label AI-sent messages in the thread | AI messages visually distinct from agent messages |
+| 6.9 | From the Phase 5 security review (#239): the AI does not answer a ticket an agent is working, or one already escalated `ai_failed`; its reply waits as a draft | Test: a follow-up on an assigned or `ai_failed` ticket is drafted, not emailed |
+| 6.10 | From the Phase 5 security review (#239): two jobs for one ticket cannot both email the student, e.g. a pg-boss `singletonKey` per ticket | Test: two messages queued together produce one AI email |
+| 6.11 | From the Phase 5 security review (#239): a partial unique index enforces one pending `ReplyDraft` per ticket, so two overlapping jobs cannot each create one | Migration applied; test: a second pending draft is refused |
 
 ## Phase 7 — Dashboard
 

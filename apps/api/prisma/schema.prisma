@@ -61,6 +61,12 @@ enum TicketCategory {
 enum EscalationReason {
   refund_approval
   ai_failed
+  // The ticket's first email did not pass DMARC, so the AI's reply waits for
+  // an agent rather than going to an address anyone could have forged (#239).
+  unverified_sender
+  // The AI has emailed this ticket, or everyone, as often as it may for now;
+  // the reply waits for an agent rather than feeding a mail loop (#239).
+  auto_reply_limit
 }
 
 model Ticket {
@@ -76,6 +82,11 @@ model Ticket {
   needsAgent       Boolean           @default(false)
   // Why needsAgent was set; null while it is false.
   escalationReason EscalationReason?
+  // Whether the email that opened the ticket passed DMARC. The AI emails only
+  // a verified sender: otherwise anyone could forge a From and have the
+  // academy mail a stranger a subject they wrote (#239). False by default, so
+  // a ticket made any other way fails closed.
+  senderVerified   Boolean           @default(false)
   // Only a Resolved ticket has one: when auto-close will set it Closed.
   autoCloseAt      DateTime?
   // Who is responsible for the ticket; null while nobody is. A label, not a

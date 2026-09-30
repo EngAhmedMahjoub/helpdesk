@@ -60,6 +60,9 @@ async function ticketWithEmail(body: string, overrides: Parameters<typeof create
     studentEmail: 'tom@uni.edu',
     category: null,
     summary: null,
+    // A student whose email passed DMARC, as a real one's will; the tests of
+    // an unverified sender say so.
+    senderVerified: true,
     ...overrides,
   })
   // Unique per ticket: the column is, so two tickets cannot share one.
@@ -83,6 +86,7 @@ describe('a general or technical ticket', () => {
         subject: 'Re: Videos will not play',
         text: technical.reply,
         thread: [emailMessageId],
+        automatic: true,
       },
     ])
   })
@@ -507,6 +511,228 @@ describe('the pg-boss worker', () => {
     expect(await stored(ticket.id)).toMatchObject({
       needsAgent: true,
       escalationReason: 'refund_approval',
+    })
+  })
+})
+
+describe('Phase 5 security fixes (#239)', () => {
+  const HOUR = 60 * 60 * 1000
+  let logged: string[] = []
+  let spies: { mockRestore: () => void }[] = []
+
+  beforeEach(() => {
+    logged = []
+    const record = (line: unknown) => {
+      logged.push(String(line))
+    }
+    spies = [
+      spyOn(console, 'log').mockImplementation(record),
+      spyOn(console, 'error').mockImplementation(record),
+    ]
+  })
+  afterEach(() => {
+    for (const spy of spies) spy.mockRestore()
+  })
+
+  /** `count` AI replies on `ticketId`, sent `ago` milliseconds back. */
+  const aiReplies = (ticketId: number, count: number, ago = HOUR / 2) =>
+    prisma.message.createMany({
+      data: Array.from({ length: count }, () => ({
+        ticketId,
+        direction: 'outbound' as const,
+        author: 'ai' as const,
+        body: 'An earlier AI reply.',
+        createdAt: new Date(Date.now() - ago),
+      })),
+    })
+
+  /** `count` more student messages on `ticketId`, sent `ago` milliseconds back. */
+  const studentMessages = (ticketId: number, count: number, ago = HOUR) =>
+    prisma.message.createMany({
+      data: Array.from({ length: count }, () => ({
+        ticketId,
+        direction: 'inbound' as const,
+        author: 'student' as const,
+        body: 'Another message.',
+        createdAt: new Date(Date.now() - ago),
+      })),
+    })
+
+  describe('1. a sender who did not pass DMARC', () => {
+    test('gets no email: the reply waits as a draft for an agent', async () => {
+      const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.', {
+        senderVerified: false,
+      })
+      const { deps, emails } = depsFor(answering(technical).client)
+
+      await processTicket(deps, job)
+
+      expect(emails).toHaveLength(0)
+      expect(await stored(ticket.id)).toMatchObject({
+        status: 'open',
+        category: 'technical',
+        summary: technical.summary,
+        needsAgent: true,
+        escalationReason: 'unverified_sender',
+      })
+      expect(await prisma.replyDraft.findMany({ where: { ticketId: ticket.id } })).toMatchObject([
+        { body: technical.reply, status: 'pending' },
+      ])
+      expect(logged).toContain(
+        `AI usage: ticket=${String(ticket.id)} outcome=held_unverified_sender input=1770 output=110 cache_read=0 cache_write=0`,
+      )
+    })
+  })
+
+  describe('2. the AI reply limits', () => {
+    test('a ticket the AI has emailed 3 times today gets a draft, not a 4th email', async () => {
+      const { ticket, job } = await ticketWithEmail('Still spinning.')
+      await aiReplies(ticket.id, 3)
+      const { deps, emails } = depsFor(answering(technical).client)
+
+      await processTicket(deps, job)
+
+      expect(emails).toHaveLength(0)
+      expect(await stored(ticket.id)).toMatchObject({
+        needsAgent: true,
+        escalationReason: 'auto_reply_limit',
+      })
+    })
+
+    test('AI emails older than a day do not count', async () => {
+      const { ticket, job } = await ticketWithEmail('Still spinning.')
+      await aiReplies(ticket.id, 3, 25 * HOUR)
+      const { deps, emails } = depsFor(answering(technical).client)
+
+      await processTicket(deps, job)
+
+      expect(emails).toHaveLength(1)
+    })
+
+    test('after 50 AI emails in the last hour, anywhere, the next is held', async () => {
+      const other = await createTicket()
+      await aiReplies(other.id, 50)
+      const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+      const { deps, emails } = depsFor(answering(technical).client)
+
+      await processTicket(deps, job)
+
+      expect(emails).toHaveLength(0)
+      expect((await stored(ticket.id)).escalationReason).toBe('auto_reply_limit')
+    })
+  })
+
+  describe('3. the call budget', () => {
+    test("a ticket's 6th message in a day is not sent to the model", async () => {
+      const { ticket, job } = await ticketWithEmail('Message six.')
+      await studentMessages(ticket.id, 5)
+      const { client, requests } = answering(technical)
+
+      await processTicket(depsFor(client).deps, job)
+
+      expect(requests).toHaveLength(0)
+      expect(await stored(ticket.id)).toMatchObject({
+        status: 'open',
+        needsAgent: true,
+        escalationReason: 'ai_failed',
+      })
+      expect(logged).toContain(`AI skipped: ticket=${String(ticket.id)} reason=call_budget`)
+    })
+
+    test("a ticket's 5th message in a day still is", async () => {
+      const { ticket, job } = await ticketWithEmail('Message five.')
+      await studentMessages(ticket.id, 4)
+      const { client, requests } = answering(technical)
+
+      await processTicket(depsFor(client).deps, job)
+
+      expect(requests).toHaveLength(1)
+    })
+
+    test('past 500 messages in a day across every ticket, nothing more is sent', async () => {
+      const other = await createTicket()
+      await studentMessages(other.id, 500)
+      const { job } = await ticketWithEmail('One too many.')
+      const { client, requests } = answering(technical)
+
+      await processTicket(depsFor(client).deps, job)
+
+      expect(requests).toHaveLength(0)
+    })
+
+    test('the model reads the newest messages up to 40,000 characters', async () => {
+      // Three near-maximum bodies: only the two newest fit.
+      const ticket = await createTicket({ senderVerified: true })
+      const long = (marker: string) => `${marker} ${'x'.repeat(19_000)}`
+      await createMessage({
+        ticketId: ticket.id,
+        body: long('OLDEST'),
+        createdAt: new Date(Date.now() - 3 * HOUR),
+      })
+      await createMessage({
+        ticketId: ticket.id,
+        body: long('MIDDLE'),
+        createdAt: new Date(Date.now() - 2 * HOUR),
+      })
+      const newest = await createMessage({ ticketId: ticket.id, body: long('NEWEST') })
+      const { client, requests } = answering(technical)
+
+      await processTicket(depsFor(client).deps, { ticketId: ticket.id, messageId: newest.id })
+
+      const sent = (requests[0]!.messages as { content: string }[])[0]!.content
+      expect(sent).toContain('NEWEST')
+      expect(sent).toContain('MIDDLE')
+      expect(sent).not.toContain('OLDEST')
+    })
+  })
+
+  describe('4. a refund draft already waiting', () => {
+    test('keeps the ticket with agents when the follow-up says nothing about money', async () => {
+      // The model caught a refund no keyword could; this follow-up is technical.
+      const { ticket, job } = await ticketWithEmail('Also, the videos will not play.', {
+        needsAgent: true,
+        escalationReason: 'refund_approval',
+        category: 'refund',
+      })
+      await prisma.replyDraft.create({
+        data: { ticketId: ticket.id, body: 'Passed to the team.' },
+      })
+      const { deps, emails } = depsFor(answering(technical).client)
+
+      await processTicket(deps, job)
+
+      expect(emails).toHaveLength(0)
+      expect(await stored(ticket.id)).toMatchObject({
+        status: 'open',
+        category: 'refund',
+        needsAgent: true,
+        escalationReason: 'refund_approval',
+      })
+      // The one pending draft now answers the whole thread.
+      expect(await prisma.replyDraft.findMany({ where: { ticketId: ticket.id } })).toMatchObject([
+        { body: technical.reply, status: 'pending' },
+      ])
+    })
+  })
+
+  describe('8. the failure log', () => {
+    test('names the error and its code, never its message', async () => {
+      const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+      const deps = {
+        ...depsFor(answering(technical).client).deps,
+        sendEmail: async () => {
+          // As a Prisma validation error would: its message quotes the data.
+          throw Object.assign(new Error(`Invalid call with body "${technical.reply}"`), {
+            code: 'P2000',
+          })
+        },
+      }
+      const asJob = { data: job, retryCount: 2, retryLimit: 2 } as JobWithMetadata<ProcessTicketJob>
+
+      await processTicketWorker(deps)([asJob])
+
+      expect(logged).toContain(`Ticket ${String(ticket.id)} sent to an agent: Error code=P2000`)
+      expect(logged.join('\n')).not.toContain(technical.reply)
     })
   })
 })

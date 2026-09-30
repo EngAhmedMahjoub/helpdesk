@@ -60,6 +60,42 @@ const reply = 'Allow auto-play for the site, then reload the lesson.'
 const technical: AiOutput = { category: 'technical', summary: 'Videos will not load.', reply }
 
 describe('the routing decision', () => {
+  describe('a sum of money in the drafted reply (#239)', () => {
+    // Injection plus a misread ticket could produce a promise of money with no
+    // refund word in it; the prompt forbids amounts, so any is a warning sign.
+    const promising = [
+      'Your $49 payment will be returned to your card within 5 days.',
+      'We will send €20 back to you.',
+      'A credit of £ 15 has been applied.',
+      'You will receive 49 USD shortly.',
+      'We are returning 30 dollars to your account.',
+    ]
+
+    for (const draft of promising) {
+      test(`routes "${draft}" to an agent`, () => {
+        const decision = decideRouting(
+          { ...technical, reply: draft },
+          { subject: 'Videos', studentMessages: ['The videos will not play.'] },
+        )
+
+        expect(decision).toMatchObject({ route: 'agent', category: 'refund' })
+        expect(decision.forcedBy).toContain('an amount of money in the drafted reply')
+      })
+    }
+
+    test('lets a reply with ordinary numbers go out', () => {
+      const decision = decideRouting(
+        {
+          ...technical,
+          reply: 'Try Chrome 120 or later, and wait 10 minutes for the reset email.',
+        },
+        { subject: 'Videos', studentMessages: ['The videos will not play.'] },
+      )
+
+      expect(decision.route).toBe('auto')
+    })
+  })
+
   test('"charged the full price, send me the difference" is routed to an agent', () => {
     // The done-when for 5.19: the one refund sample the 5.18 evaluation found
     // the model filing as general, and no phrase catching.

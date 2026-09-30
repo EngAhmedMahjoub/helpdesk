@@ -54,6 +54,17 @@ describe('sendEmail', () => {
     expect(sent[0]?.headers).not.toHaveProperty('References')
   })
 
+  test("marks an automatic email Auto-Submitted, and a person's email not", async () => {
+    // RFC 3834: auto-responders read the header as "do not answer" (#239).
+    const { send, sent } = fakeSender()
+
+    await send({ ...email, automatic: true })
+    await send(email)
+
+    expect(sent[0]?.headers).toEqual({ 'Auto-Submitted': 'auto-replied' })
+    expect(sent[1]?.headers).not.toHaveProperty('Auto-Submitted')
+  })
+
   test('replies to the last message and references the whole thread', async () => {
     const { send, sent } = fakeSender()
 
