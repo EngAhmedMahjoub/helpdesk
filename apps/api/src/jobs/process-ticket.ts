@@ -1,6 +1,13 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { type AiOutput, MESSAGE_PAGE_SIZE, type TicketCategory } from '@helpdesk/shared'
-import { type PgBoss, type PrismaTransactionLike, type WorkHandler, fromPrisma } from 'pg-boss'
+import {
+  type PgBoss,
+  type PrismaTransactionLike,
+  type QueueOptions,
+  type WorkWithMetadataHandler,
+  fromPrisma,
+} from 'pg-boss'
+import { AiFailure } from '../ai/failure.ts'
 import { analyseTicket } from '../ai/prompt.ts'
 import { decideRouting } from '../ai/refund-safeguard.ts'
 import { isPrismaError } from '../db.ts'
@@ -31,9 +38,27 @@ export function processTicketQueue(boss: PgBoss): QueueProcessTicket {
   }
 }
 
-/** The queues the API sends to, created on start; creating one that exists is a no-op. */
+/**
+ * Two retries, about a minute and then two minutes after the failure (5.15).
+ * The SDK has already retried a 429 or 5xx twice within seconds, so a failure
+ * that reaches the job is an outage worth waiting out rather than hammering;
+ * a ticket answered a few minutes late beats one handed to an agent.
+ */
+export const PROCESS_TICKET_RETRIES = {
+  retryLimit: 2,
+  retryDelay: 60,
+  retryBackoff: true,
+} satisfies QueueOptions
+
+/**
+ * The queues the API sends to, created on start. Updated as well as created:
+ * creating one that exists is a no-op, so a queue made before its retry
+ * policy was set would otherwise keep the defaults. Each job copies the
+ * policy when it is queued.
+ */
 export async function createQueues(boss: PgBoss): Promise<void> {
-  await boss.createQueue(PROCESS_TICKET)
+  await boss.createQueue(PROCESS_TICKET, PROCESS_TICKET_RETRIES)
+  await boss.updateQueue(PROCESS_TICKET, PROCESS_TICKET_RETRIES)
 }
 
 /** What the worker needs, passed in so tests can stand in for Anthropic and Resend. */
@@ -54,8 +79,8 @@ export type ProcessTicketDeps = {
  * updates the category and summary, but keeps its status (5.14): the student
  * writing back has not reopened it, as the inbound webhook already holds (4.9).
  *
- * An `AiFailure` or an `EmailSendError` is thrown on, for pg-boss to retry;
- * which failures deserve a retry and what happens after the last is 5.15's.
+ * An `AiFailure` or an `EmailSendError` is thrown on; the worker below
+ * decides between a retry and handing the ticket to an agent.
  */
 export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJob): Promise<void> {
   const ticket = await deps.prisma.ticket.findUnique({
@@ -193,9 +218,48 @@ async function sendReply(
   })
 }
 
-/** The pg-boss handler: jobs arrive in batches, one at a time by default. */
-export function processTicketWorker(deps: ProcessTicketDeps): WorkHandler<ProcessTicketJob> {
+/**
+ * The pg-boss handler: jobs arrive in batches, one at a time by default.
+ * Registered with `includeMetadata`, for the retry count.
+ *
+ * A failure is thrown for pg-boss to retry, unless it is the last attempt or
+ * an `AiFailure` a retry cannot fix, such as a refusal. Then the ticket goes
+ * to an agent (5.15) and the job completes: the student's email is still
+ * unanswered, and nothing else would tell anyone. Any other error — a failed
+ * send, a bug — is retried too, and escalated the same way when it outlasts
+ * the retries.
+ */
+export function processTicketWorker(
+  deps: ProcessTicketDeps,
+): WorkWithMetadataHandler<ProcessTicketJob> {
   return async (jobs) => {
-    for (const job of jobs) await processTicket(deps, job.data)
+    for (const job of jobs) {
+      try {
+        await processTicket(deps, job.data)
+      } catch (error) {
+        const retryable = !(error instanceof AiFailure) || error.retryable
+        if (retryable && job.retryCount < job.retryLimit) throw error
+        // The message only, as for pg-boss's own errors: it names the
+        // failure without carrying the student's email into the logs.
+        const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+        console.error(`Ticket ${String(job.data.ticketId)} sent to an agent: ${reason}`)
+        await escalate(deps.prisma, job.data.ticketId)
+      }
+    }
   }
+}
+
+/**
+ * Flags the ticket for an agent with reason `ai_failed`. The status is left
+ * as it is: nobody has answered the student, so an Open ticket stays Open.
+ *
+ * A ticket already flagged keeps its reason: a refund draft waiting for
+ * approval is the more specific thing for an agent to see, and it still
+ * waits. A deleted ticket matches nothing, which is all there is to do.
+ */
+async function escalate(prisma: PrismaClient, ticketId: number): Promise<void> {
+  await prisma.ticket.updateMany({
+    where: { id: ticketId, needsAgent: false },
+    data: { needsAgent: true, escalationReason: 'ai_failed' },
+  })
 }
