@@ -24,6 +24,7 @@ await createQueues(boss)
 const knowledgeBase = await loadKnowledgeBase()
 await boss.work(
   PROCESS_TICKET,
+  { includeMetadata: true },
   processTicketWorker({ prisma, client: anthropic, knowledgeBase, sendEmail }),
 )
 console.log('Background jobs started')

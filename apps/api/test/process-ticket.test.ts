@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
-import type { Job } from 'pg-boss'
+import type { JobWithMetadata } from 'pg-boss'
 import type { AiOutput, TicketDetail } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
 import { AiFailure } from '../src/ai/failure.ts'
@@ -342,15 +342,92 @@ describe('either path', () => {
 })
 
 describe('the pg-boss worker', () => {
+  /** A job as pg-boss hands it with includeMetadata, on attempt `retryCount` of 2 retries. */
+  const asJob = (data: ProcessTicketJob, retryCount = 0) =>
+    ({ data, retryCount, retryLimit: 2 }) as JobWithMetadata<ProcessTicketJob>
+
+  const rateLimited = () =>
+    stubAnthropic(() => {
+      throw new AiFailure('rate_limited', true, 'Rate limited by Anthropic')
+    })
+
   test('processes each job in the batch it is handed', async () => {
     const first = await ticketWithEmail('Refund please.')
     const second = await ticketWithEmail('Refund me too.')
     const { client, requests } = answering(refund)
-    const asJob = (data: ProcessTicketJob) => ({ data }) as Job<ProcessTicketJob>
 
     await processTicketWorker(depsFor(client).deps)([asJob(first.job), asJob(second.job)])
 
     expect(requests).toHaveLength(2)
     expect(await prisma.replyDraft.count({ where: { status: 'pending' } })).toBe(2)
+  })
+
+  test('a failing AI call with retries left is thrown for pg-boss to retry', async () => {
+    const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+    const worker = processTicketWorker(depsFor(rateLimited().client).deps)
+
+    await expect(worker([asJob(job, 1)])).rejects.toBeInstanceOf(AiFailure)
+
+    expect(await stored(ticket.id)).toMatchObject({ needsAgent: false, escalationReason: null })
+  })
+
+  test('a failing AI call on the last attempt escalates the ticket, still Open', async () => {
+    const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+    const { deps, emails } = depsFor(rateLimited().client)
+
+    // Resolves: the job is done with, and pg-boss must not try a fourth time.
+    await expect(processTicketWorker(deps)([asJob(job, 2)])).resolves.toBeUndefined()
+
+    expect(emails).toHaveLength(0)
+    expect(await stored(ticket.id)).toMatchObject({
+      status: 'open',
+      needsAgent: true,
+      escalationReason: 'ai_failed',
+    })
+  })
+
+  test('a failure a retry cannot fix escalates on the first attempt', async () => {
+    // A refusal: the same ticket is refused again, and each try is billed.
+    const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+    const { client, requests } = stubAnthropic(() => message(null, 'refusal'))
+
+    await expect(processTicketWorker(depsFor(client).deps)([asJob(job)])).resolves.toBeUndefined()
+
+    expect(requests).toHaveLength(1)
+    expect(await stored(ticket.id)).toMatchObject({
+      status: 'open',
+      needsAgent: true,
+      escalationReason: 'ai_failed',
+    })
+  })
+
+  test('a failed send is retried, then escalated like a failed AI call', async () => {
+    const { ticket, job } = await ticketWithEmail('Week 2 videos spin forever.')
+    const worker = processTicketWorker(
+      depsFor(answering(technical).client, { failSend: true }).deps,
+    )
+
+    await expect(worker([asJob(job)])).rejects.toBeInstanceOf(EmailSendError)
+    await worker([asJob(job, 2)])
+
+    expect(await stored(ticket.id)).toMatchObject({
+      status: 'open',
+      needsAgent: true,
+      escalationReason: 'ai_failed',
+    })
+  })
+
+  test('a ticket already waiting on a refund approval keeps that reason', async () => {
+    const { ticket, job } = await ticketWithEmail('Refund please.', {
+      needsAgent: true,
+      escalationReason: 'refund_approval',
+    })
+
+    await processTicketWorker(depsFor(rateLimited().client).deps)([asJob(job, 2)])
+
+    expect(await stored(ticket.id)).toMatchObject({
+      needsAgent: true,
+      escalationReason: 'refund_approval',
+    })
   })
 })

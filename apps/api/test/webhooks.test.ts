@@ -7,6 +7,7 @@ import { EmailFetchError } from '../src/email/receiving.ts'
 import { createBoss } from '../src/jobs/boss.ts'
 import {
   PROCESS_TICKET,
+  PROCESS_TICKET_RETRIES,
   type ProcessTicketJob,
   type QueueProcessTicket,
   createQueues,
@@ -371,6 +372,21 @@ describe('POST /api/webhooks/resend: process-ticket jobs', () => {
 
     const message = await prisma.message.findFirstOrThrow()
     expect(await queuedJobs()).toEqual([{ ticketId: message.ticketId, messageId: message.id }])
+  })
+
+  test('the job carries the retry policy (5.15)', async () => {
+    // A job copies its queue's policy when queued, so this reads the policy
+    // the queue holds after createQueues, whether it made the queue or found it.
+    await deliverSigned()
+
+    const rows = await prisma.$queryRaw<
+      { retryLimit: number; retryDelay: number; retryBackoff: boolean }[]
+    >`
+      SELECT retry_limit AS "retryLimit", retry_delay AS "retryDelay",
+             retry_backoff AS "retryBackoff"
+      FROM pgboss.job WHERE name = ${PROCESS_TICKET}
+    `
+    expect(rows).toEqual([PROCESS_TICKET_RETRIES])
   })
 
   test('queues a job for a reply appended to its ticket', async () => {
