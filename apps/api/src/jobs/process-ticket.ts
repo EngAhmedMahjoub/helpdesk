@@ -1,5 +1,10 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import { type AiOutput, MESSAGE_PAGE_SIZE, type TicketCategory } from '@helpdesk/shared'
+import {
+  type AiOutput,
+  type EscalationReason,
+  MESSAGE_PAGE_SIZE,
+  type TicketCategory,
+} from '@helpdesk/shared'
 import {
   type PgBoss,
   type PrismaTransactionLike,
@@ -8,6 +13,7 @@ import {
   fromPrisma,
 } from 'pg-boss'
 import { AiFailure } from '../ai/failure.ts'
+import { atSendLimit, overCallBudget, withinBudget } from '../ai/limits.ts'
 import { analyseTicket } from '../ai/prompt.ts'
 import { decideRouting } from '../ai/refund-safeguard.ts'
 import { usageLine } from '../ai/usage.ts'
@@ -80,6 +86,11 @@ export type ProcessTicketDeps = {
  * updates the category and summary, but keeps its status (5.14): the student
  * writing back has not reopened it, as the inbound webhook already holds (4.9).
  *
+ * Before anything is emailed, four checks can hold the reply for an agent
+ * instead (#239): a refund draft already waiting, a sender who did not pass
+ * DMARC, the AI's send limits, and, before the model is even asked, its call
+ * budget.
+ *
  * An `AiFailure` or an `EmailSendError` is thrown on; the worker below
  * decides between a retry and handing the ticket to an agent.
  */
@@ -90,6 +101,9 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
       subject: true,
       studentName: true,
       studentEmail: true,
+      senderVerified: true,
+      escalationReason: true,
+      replyDrafts: { where: { status: 'pending' }, select: { id: true }, take: 1 },
       messages: {
         select: { author: true, body: true, createdAt: true },
         // The newest, capped as the detail page caps them: the model reads
@@ -104,8 +118,20 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   // throwing would only have pg-boss retry a ticket that will never come back.
   if (!ticket) return
 
-  // Selected newest first for the cap; a thread reads the other way.
-  const messages = ticket.messages.reverse()
+  // Checked before the call, since the call is what costs: past the budget
+  // the model is not asked, and an agent answers instead.
+  if (await overCallBudget(deps.prisma, job.ticketId)) {
+    console.log(`AI skipped: ticket=${String(job.ticketId)} reason=call_budget`)
+    await escalate(deps.prisma, job.ticketId)
+    return
+  }
+
+  // Read before the call too, so nothing between a paid call and its usage
+  // line can fail: whether the AI may email is known before it answers.
+  const sendLimited = await atSendLimit(deps.prisma, job.ticketId)
+
+  // Selected newest first for the caps; a thread reads the other way.
+  const messages = withinBudget(ticket.messages).reverse()
   let analysis
   try {
     analysis = await analyseTicket(deps.client, deps.knowledgeBase, { ...ticket, messages })
@@ -128,16 +154,33 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
       .map((message) => message.body),
   })
 
+  // A refund already waiting for approval keeps the ticket with agents, even
+  // when this message says nothing about money: the model may have caught a
+  // refund the keyword list could not, and answering the follow-up would
+  // resolve the ticket, and in time auto-close it, with the draft unseen.
+  const refundWaiting =
+    ticket.escalationReason === 'refund_approval' || ticket.replyDrafts.length > 0
+  const heldFor: EscalationReason | null =
+    decision.route === 'agent' || refundWaiting
+      ? 'refund_approval'
+      : !ticket.senderVerified
+        ? 'unverified_sender'
+        : sendLimited
+          ? 'auto_reply_limit'
+          : null
+
   // Logged once the call is paid for, before anything is saved: a save that
   // fails afterwards does not make the call free. The safeguard's override is
   // named, so how often it overrules the model can be counted (5.18).
-  const outcome = decision.route === 'agent' ? 'refund_draft' : 'reply'
+  const outcome =
+    heldFor === null ? 'reply' : heldFor === 'refund_approval' ? 'refund_draft' : `held_${heldFor}`
   const forced = decision.forcedBy.length > 0 ? ` forced_by=${decision.forcedBy.length}` : ''
   console.log(`${usageLine(job.ticketId, usage, outcome)}${forced}`)
 
   try {
-    if (decision.route === 'agent') {
-      await saveForApproval(deps.prisma, job.ticketId, output, decision.category)
+    if (heldFor) {
+      const category = heldFor === 'refund_approval' ? 'refund' : decision.category
+      await saveDraft(deps.prisma, job.ticketId, output, category, heldFor)
     } else {
       await sendReply(deps, job.ticketId, ticket, output, decision.category)
     }
@@ -149,19 +192,20 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
 }
 
 /**
- * The refund path: the reply waits as a draft and the ticket is flagged for an
- * agent. Nothing is emailed until someone approves it (6.2).
+ * The reply waits as a draft and the ticket is flagged for an agent, with the
+ * reason it was held. Nothing is emailed until someone approves it (6.2).
  *
  * One pending draft per ticket: a follow-up while one waits replaces its body
  * rather than queuing a second, since the newer draft answers the whole thread
  * and the older one would only be a stale thing to reject. One transaction, so
  * a ticket is never flagged without its draft, or the reverse.
  */
-async function saveForApproval(
+async function saveDraft(
   prisma: PrismaClient,
   ticketId: number,
   output: AiOutput,
   category: TicketCategory,
+  reason: EscalationReason,
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.ticket.update({
@@ -170,7 +214,7 @@ async function saveForApproval(
         category,
         summary: output.summary,
         needsAgent: true,
-        escalationReason: 'refund_approval',
+        escalationReason: reason,
       },
     })
 
@@ -209,6 +253,7 @@ async function sendReply(
     subject: replySubject(ticket.subject),
     text: output.reply,
     thread: await replyThread(ticketId, deps.prisma),
+    automatic: true,
   })
 
   await deps.prisma.$transaction(async (tx) => {
@@ -258,14 +303,24 @@ export function processTicketWorker(
       } catch (error) {
         const retryable = !(error instanceof AiFailure) || error.retryable
         if (retryable && job.retryCount < job.retryLimit) throw error
-        // The message only, as for pg-boss's own errors: it names the
-        // failure without carrying the student's email into the logs.
-        const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-        console.error(`Ticket ${String(job.data.ticketId)} sent to an agent: ${reason}`)
+        console.error(`Ticket ${String(job.data.ticketId)} sent to an agent: ${describe(error)}`)
         await escalate(deps.prisma, job.data.ticketId)
       }
     }
   }
+}
+
+/**
+ * What failed, without its message (#239): a Prisma validation error's
+ * message quotes the call's arguments, which here include the reply and the
+ * summary. The name, and the reason or code where the error has one, say
+ * which failure it was.
+ */
+function describe(error: unknown): string {
+  if (!(error instanceof Error)) return 'unknown error'
+  if (error instanceof AiFailure) return `${error.name} reason=${error.reason}`
+  const code = 'code' in error && typeof error.code === 'string' ? ` code=${error.code}` : ''
+  return `${error.name}${code}`
 }
 
 /**
