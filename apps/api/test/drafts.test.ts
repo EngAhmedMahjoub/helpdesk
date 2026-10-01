@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import request from 'supertest'
 import type { DraftListResponse } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
+import { env } from '../src/env.ts'
+import { saveDraft } from '../src/jobs/process-ticket.ts'
 import { EmailSendError, type OutboundEmail } from '../src/email/outbound.ts'
 import { prisma, resetDatabase } from './db.ts'
 import { createMessage, createTicket, createUser, sessionCookieFor } from './fixtures.ts'
@@ -194,10 +196,16 @@ async function approve(
   reviewer?: { id: string },
 ) {
   const user = reviewer ?? (await createUser())
+  // The version the agent saw: the draft's current one, unless the test says
+  // otherwise. A draft that does not exist has none, so any will do.
+  const current = /^\d+$/.test(String(id))
+    ? await prisma.replyDraft.findUnique({ where: { id: Number(id) }, select: { updatedAt: true } })
+    : null
+  const updatedAt = (current?.updatedAt ?? new Date()).toISOString()
   return request(target)
     .post(`/api/drafts/${String(id)}/approve`)
     .set('Cookie', await sessionCookieFor(user.id))
-    .send(body)
+    .send({ updatedAt, ...body })
 }
 
 describe('POST /api/drafts/:id/approve', () => {
@@ -454,5 +462,185 @@ describe('POST /api/drafts/:id/reject', () => {
     expect((await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe(
       'pending',
     )
+  })
+})
+
+describe('Phase 6 security fixes (#249)', () => {
+  describe('1. a draft the AI rewrote is not approved unseen', () => {
+    test('an approval of an older version answers 409 and sends nothing', async () => {
+      const draft = await pendingDraft()
+      const seen = draft.updatedAt.toISOString()
+      // A follow-up arrives and the worker rewrites the draft, as saveDraft does.
+      await prisma.replyDraft.updateMany({
+        where: { id: draft.id, status: 'pending' },
+        data: { body: 'The newer draft, answering the follow-up.' },
+      })
+      const { app: sending, emails } = appSending()
+
+      const res = await approve(sending, draft.id, {
+        updatedAt: seen,
+        body: 'The old text, edited.',
+      })
+
+      expect(res.status).toBe(409)
+      expect(res.body).toEqual({
+        error:
+          'The AI updated this draft after a new message from the student. Review the new version.',
+      })
+      expect(emails).toHaveLength(0)
+      // The newer text survives, still waiting.
+      expect(await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })).toMatchObject({
+        status: 'pending',
+        body: 'The newer draft, answering the follow-up.',
+      })
+      expect(
+        (await prisma.ticket.findUniqueOrThrow({ where: { id: draft.ticketId } })).needsAgent,
+      ).toBe(true)
+    })
+
+    test('an approval without the version it reviewed is refused with 400', async () => {
+      const draft = await pendingDraft()
+      const user = await createUser()
+
+      const res = await request(appSending().app)
+        .post(`/api/drafts/${String(draft.id)}/approve`)
+        .set('Cookie', await sessionCookieFor(user.id))
+        .send({ body: 'No version.' })
+
+      expect(res.status).toBe(400)
+    })
+
+    test('the worker never rewrites a draft once it has been reviewed', async () => {
+      // A follow-up after approval gets a draft of its own; the approved one
+      // stays the record of what was sent.
+      const draft = await pendingDraft()
+      await approve(appSending().app, draft.id)
+
+      await saveDraft(
+        prisma,
+        draft.ticketId,
+        { category: 'refund', summary: 'Follow-up.', reply: 'A new draft' },
+        'refund',
+        'refund_approval',
+      )
+
+      const drafts = await prisma.replyDraft.findMany({
+        where: { ticketId: draft.ticketId },
+        orderBy: { id: 'asc' },
+      })
+      expect(drafts.map((d) => [d.status, d.body])).toEqual([
+        ['approved', 'Your request has been passed to the team.'],
+        ['pending', 'A new draft'],
+      ])
+    })
+  })
+
+  describe('2. a failed revert after a refused send', () => {
+    let errors: string[] = []
+    let restore: (() => void)[] = []
+    afterEach(() => {
+      for (const undo of restore) undo()
+      restore = []
+    })
+
+    test('still answers 502, and logs both failures without the draft', async () => {
+      const draft = await pendingDraft()
+      errors = []
+      const logged = spyOn(console, 'error').mockImplementation((line: unknown) => {
+        errors.push(String(line))
+      })
+      // The claim goes through; the revert that follows the refused send
+      // fails. The model delegate is a proxy a spy cannot patch, so the whole
+      // property is swapped for one that counts its updateMany calls.
+      const real = prisma.replyDraft
+      let calls = 0
+      const failingRevert = new Proxy(real, {
+        get(target, key, receiver) {
+          if (key !== 'updateMany') return Reflect.get(target, key, receiver)
+          return (args: Parameters<typeof real.updateMany>[0]) => {
+            calls += 1
+            return calls === 2
+              ? Promise.reject(new Error('connection lost'))
+              : real.updateMany(args)
+          }
+        },
+      })
+      Object.defineProperty(prisma, 'replyDraft', { value: failingRevert, configurable: true })
+      restore = [
+        () => logged.mockRestore(),
+        () => Object.defineProperty(prisma, 'replyDraft', { value: real, configurable: true }),
+      ]
+
+      const res = await approve(appSending({ fail: true }).app, draft.id, { body: 'Edited.' })
+
+      expect(res.status).toBe(502)
+      expect(errors).toEqual([
+        `Draft ${String(draft.id)} not sent (EmailSendError: Resend refused the email: rate_limit_exceeded), and not returned to pending (Error: connection lost)`,
+      ])
+      expect(errors.join('\n')).not.toContain('Edited.')
+    })
+  })
+
+  describe('3. state-changing requests from another origin', () => {
+    const foreign = 'https://evil.helpdesk.example'
+
+    test('a reject posted from a sibling page is refused, and the draft stays', async () => {
+      const draft = await pendingDraft()
+      const user = await createUser()
+
+      const res = await request(appSending().app)
+        .post(`/api/drafts/${String(draft.id)}/reject`)
+        .set('Cookie', await sessionCookieFor(user.id))
+        .set('Origin', foreign)
+
+      expect(res.status).toBe(403)
+      expect((await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe(
+        'pending',
+      )
+    })
+
+    test('a sign-out posted from a sibling page is refused, and the session stays', async () => {
+      const user = await createUser()
+      const cookie = await sessionCookieFor(user.id)
+
+      const res = await request(appSending().app)
+        .post('/api/auth/logout')
+        .set('Cookie', cookie)
+        .set('Origin', foreign)
+
+      expect(res.status).toBe(403)
+      const me = await request(appSending().app).get('/api/auth/me').set('Cookie', cookie)
+      expect(me.status).toBe(200)
+    })
+
+    test('the web app itself, and callers with no Origin, are let through', async () => {
+      const first = await pendingDraft()
+      const user = await createUser()
+      const cookie = await sessionCookieFor(user.id)
+
+      const fromApp = await request(appSending().app)
+        .post(`/api/drafts/${String(first.id)}/reject`)
+        .set('Cookie', cookie)
+        .set('Origin', env.WEB_ORIGIN)
+      expect(fromApp.status).toBe(200)
+
+      // No Origin: a server, the scheduled workflow, a test. Its route's own
+      // check still applies.
+      const tasks = await request(appSending().app)
+        .post('/api/tasks/cleanup-sessions')
+        .set('Authorization', `Bearer ${env.TASKS_SECRET}`)
+      expect(tasks.status).toBe(200)
+    })
+
+    test('reads are not refused: CORS already keeps their answers from other pages', async () => {
+      const user = await createUser()
+
+      const res = await request(appSending().app)
+        .get('/api/drafts?status=pending')
+        .set('Cookie', await sessionCookieFor(user.id))
+        .set('Origin', foreign)
+
+      expect(res.status).toBe(200)
+    })
   })
 })

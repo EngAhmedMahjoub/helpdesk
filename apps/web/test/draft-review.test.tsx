@@ -15,6 +15,17 @@ const waiting = ticketDetail({
     id: 7,
     body: 'Your request has been passed to the team.',
     createdAt: '2026-09-30T09:00:00.000Z',
+    updatedAt: '2026-09-30T09:00:00.000Z',
+  },
+})
+
+/** The draft as it is after `changes`, with a later version stamp, as the API bumps it. */
+const redrafted = (ticket: TicketDetail, body: string): TicketDetail => ({
+  ...ticket,
+  pendingDraft: ticket.pendingDraft && {
+    ...ticket.pendingDraft,
+    body,
+    updatedAt: '2026-09-30T10:00:00.000Z',
   },
 })
 
@@ -25,7 +36,14 @@ const waiting = ticketDetail({
 function stubReview({
   ticket = waiting,
   onApprove,
-}: { ticket?: TicketDetail; onApprove?: () => Response } = {}) {
+}: {
+  ticket?: TicketDetail
+  /**
+   * Answers an approval instead, given what was sent and a way to change the
+   * stored ticket, for the refusals and what the API leaves behind them.
+   */
+  onApprove?: (sent: ApproveDraftRequest, store: (next: TicketDetail) => void) => Response
+} = {}) {
   let stored = ticket
   const approved: ApproveDraftRequest[] = []
   const rejected: number[] = []
@@ -37,9 +55,12 @@ function stubReview({
     '/auth/me': responds.currentUser,
     '/tickets/40': () => Response.json(stored),
     '/drafts/7/approve': async (request) => {
-      const failure = onApprove?.()
+      const sent = (await request.clone().json()) as ApproveDraftRequest
+      const failure = onApprove?.(sent, (next) => {
+        stored = next
+      })
       if (failure) return failure
-      approved.push((await request.clone().json()) as ApproveDraftRequest)
+      approved.push(sent)
       reviewed()
       return Response.json({ id: 7, status: 'approved' })
     },
@@ -80,7 +101,13 @@ test('an agent approves an edited draft, and the panel goes away', async () => {
   await waitFor(() => {
     expect(screen.queryByLabelText('Draft reply to Maya Chen')).toBeNull()
   })
-  expect(approved).toEqual([{ body: 'Approved: your refund will reach you within 10 days.' }])
+  expect(approved).toEqual([
+    {
+      // The version the agent reviewed travels with the text (#249).
+      updatedAt: '2026-09-30T09:00:00.000Z',
+      body: 'Approved: your refund will reach you within 10 days.',
+    },
+  ])
   // Announced from the region that outlives the panel.
   expect((await screen.findByText('Reply sent to Maya Chen.')).getAttribute('role')).toBe('status')
 })
@@ -115,7 +142,12 @@ test('an emptied box is refused here, before anything is sent', async () => {
 test("a send the API couldn't make keeps the draft and the edit, and says why", async () => {
   const user = userEvent.setup()
   stubReview({
-    onApprove: () => responds.error(502, 'The reply could not be sent. Please try again.'),
+    // As the API leaves it: back to pending with the edit kept, at a new
+    // version, which the panel refetches so the next try carries it.
+    onApprove: (sent, store) => {
+      store(redrafted(waiting, sent.body ?? ''))
+      return responds.error(502, 'The reply could not be sent. Please try again.')
+    },
   })
 
   renderRoute('/tickets/40')
@@ -147,4 +179,31 @@ test('shows no panel on a ticket with no draft waiting', async () => {
   await screen.findByRole('heading', { name: 'Refund' })
 
   expect(screen.queryByRole('heading', { name: /Draft reply awaiting review/ })).toBeNull()
+})
+
+test('a draft the AI rewrote meanwhile is shown anew, not approved unseen', async () => {
+  const user = userEvent.setup()
+  const { approved } = stubReview({
+    onApprove: (_sent, store) => {
+      // A follow-up arrived while the panel was open; the AI rewrote the draft.
+      store(redrafted(waiting, 'A newer draft that answers the follow-up too.'))
+      return responds.error(
+        409,
+        'The AI updated this draft after a new message from the student. Review the new version.',
+      )
+    },
+  })
+
+  renderRoute('/tickets/40')
+  await user.click(await screen.findByRole('button', { name: 'Approve and send' }))
+
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'The AI updated this draft after a new message from the student. Review the new version.',
+  )
+  await waitFor(async () => {
+    expect(((await box()) as HTMLTextAreaElement).value).toBe(
+      'A newer draft that answers the follow-up too.',
+    )
+  })
+  expect(approved).toHaveLength(0)
 })
