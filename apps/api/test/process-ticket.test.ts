@@ -11,6 +11,7 @@ import {
   type ProcessTicketJob,
   processTicket,
   processTicketWorker,
+  saveDraft,
 } from '../src/jobs/process-ticket.ts'
 import { message, stubAnthropic } from './ai-stub.ts'
 import { prisma, resetDatabase } from './db.ts'
@@ -624,11 +625,13 @@ describe('Phase 5 security fixes (#239)', () => {
 
   describe('3. the call budget', () => {
     test("a ticket's 6th message in a day is not sent to the model", async () => {
-      const { ticket, job } = await ticketWithEmail('Message six.')
-      await studentMessages(ticket.id, 5)
+      const { ticket } = await ticketWithEmail('Message one.')
+      await studentMessages(ticket.id, 4)
+      // The sixth arrives last, so it is the newest and its job runs (6.10).
+      const sixth = await createMessage({ ticketId: ticket.id, body: 'Message six.' })
       const { client, requests } = answering(technical)
 
-      await processTicket(depsFor(client).deps, job)
+      await processTicket(depsFor(client).deps, { ticketId: ticket.id, messageId: sixth.id })
 
       expect(requests).toHaveLength(0)
       expect(await stored(ticket.id)).toMatchObject({
@@ -640,11 +643,12 @@ describe('Phase 5 security fixes (#239)', () => {
     })
 
     test("a ticket's 5th message in a day still is", async () => {
-      const { ticket, job } = await ticketWithEmail('Message five.')
-      await studentMessages(ticket.id, 4)
+      const { ticket } = await ticketWithEmail('Message one.')
+      await studentMessages(ticket.id, 3)
+      const fifth = await createMessage({ ticketId: ticket.id, body: 'Message five.' })
       const { client, requests } = answering(technical)
 
-      await processTicket(depsFor(client).deps, job)
+      await processTicket(depsFor(client).deps, { ticketId: ticket.id, messageId: fifth.id })
 
       expect(requests).toHaveLength(1)
     })
@@ -733,6 +737,145 @@ describe('Phase 5 security fixes (#239)', () => {
 
       expect(logged).toContain(`Ticket ${String(ticket.id)} sent to an agent: Error code=P2000`)
       expect(logged.join('\n')).not.toContain(technical.reply)
+    })
+  })
+})
+
+describe('Phase 5 review follow-ups (#250)', () => {
+  describe('6.9 the AI does not answer over an agent', () => {
+    test('a follow-up on an assigned ticket is drafted for the agent, not emailed', async () => {
+      const agent = await createUser()
+      const { ticket, job } = await ticketWithEmail('Any news on this?', { assigneeId: agent.id })
+      const { deps, emails } = depsFor(answering(technical).client)
+
+      await processTicket(deps, job)
+
+      expect(emails).toHaveLength(0)
+      expect(await stored(ticket.id)).toMatchObject({
+        status: 'open',
+        assigneeId: agent.id,
+        needsAgent: true,
+        escalationReason: 'agent_assigned',
+      })
+      expect(await prisma.replyDraft.findMany({ where: { ticketId: ticket.id } })).toMatchObject([
+        { body: technical.reply, status: 'pending' },
+      ])
+    })
+
+    test('a follow-up on a ticket the AI already failed stays with the agent', async () => {
+      const { ticket, job } = await ticketWithEmail('Hello? Still waiting.', {
+        needsAgent: true,
+        escalationReason: 'ai_failed',
+      })
+      const { deps, emails } = depsFor(answering(technical).client)
+
+      await processTicket(deps, job)
+
+      expect(emails).toHaveLength(0)
+      expect(await stored(ticket.id)).toMatchObject({
+        status: 'open',
+        needsAgent: true,
+        escalationReason: 'ai_failed',
+      })
+      expect(await prisma.replyDraft.count({ where: { ticketId: ticket.id } })).toBe(1)
+    })
+  })
+
+  describe('6.10 one email for messages queued together', () => {
+    test('two messages queued together produce one AI email, answering both', async () => {
+      const { ticket, job: first } = await ticketWithEmail('Videos spin forever.')
+      const second = await createMessage({
+        ticketId: ticket.id,
+        body: 'Also on Chrome, by the way.',
+      })
+      const { client, requests } = answering(technical)
+      const { deps, emails } = depsFor(client)
+
+      // In the order pg-boss runs them: one at a time, oldest first.
+      await processTicket(deps, first)
+      await processTicket(deps, { ticketId: ticket.id, messageId: second.id })
+
+      expect(emails).toHaveLength(1)
+      expect(requests).toHaveLength(1)
+      // The one call read the whole thread, the later message included.
+      const sent = (requests[0]!.messages as { content: string }[])[0]!.content
+      expect(sent).toContain('Videos spin forever.')
+      expect(sent).toContain('Also on Chrome, by the way.')
+    })
+
+    test('a follow-up that arrives after the answer still gets one of its own', async () => {
+      const { ticket, job: first } = await ticketWithEmail('Videos spin forever.')
+      const { deps, emails } = depsFor(answering(technical).client)
+
+      await processTicket(deps, first)
+      const later = await createMessage({ ticketId: ticket.id, body: 'That did not work.' })
+      await processTicket(deps, { ticketId: ticket.id, messageId: later.id })
+
+      expect(emails).toHaveLength(2)
+    })
+  })
+
+  describe('6.11 one pending draft per ticket', () => {
+    test('the database refuses a second pending draft for the same ticket', async () => {
+      const ticket = await createTicket()
+      await prisma.replyDraft.create({ data: { ticketId: ticket.id, body: 'First' } })
+
+      const refused = await prisma.replyDraft
+        .create({ data: { ticketId: ticket.id, body: 'Second' } })
+        .catch((error: unknown) => error)
+
+      expect(refused).toMatchObject({ code: 'P2002' })
+    })
+
+    test('reviewed drafts do not count: a new pending draft can follow them', async () => {
+      const ticket = await createTicket()
+      const reviewer = await createUser()
+      for (const status of ['approved', 'rejected'] as const) {
+        await prisma.replyDraft.create({
+          data: {
+            ticketId: ticket.id,
+            body: status,
+            status,
+            reviewedById: reviewer.id,
+            reviewedAt: new Date(),
+          },
+        })
+      }
+
+      await prisma.replyDraft.create({ data: { ticketId: ticket.id, body: 'Pending' } })
+
+      expect(await prisma.replyDraft.count({ where: { ticketId: ticket.id } })).toBe(3)
+    })
+
+    test('a draft whose insert loses the race is saved again as an update', async () => {
+      // Another job created the pending draft between this one's update and
+      // its insert. Staged rather than raced, so it happens every run: the
+      // client's first transaction fails with the index's own P2002.
+      const { ticket } = await ticketWithEmail('Refund please.')
+      const original = await prisma.replyDraft.create({
+        data: { ticketId: ticket.id, body: 'From the other job' },
+      })
+      const conflict = await prisma.replyDraft
+        .create({ data: { ticketId: ticket.id, body: 'Duplicate' } })
+        .catch((error: unknown) => error)
+      let attempts = 0
+      const racing = new Proxy(prisma, {
+        get(target, key, receiver) {
+          if (key !== '$transaction') return Reflect.get(target, key, receiver)
+          return (fn: Parameters<typeof prisma.$transaction>[0]) => {
+            attempts += 1
+            if (attempts === 1) return Promise.reject(conflict)
+            return target.$transaction(fn)
+          }
+        },
+      })
+
+      await saveDraft(racing, ticket.id, refund, 'refund', 'refund_approval')
+
+      expect(attempts).toBe(2)
+      expect(await prisma.replyDraft.findMany({ where: { ticketId: ticket.id } })).toMatchObject([
+        { id: original.id, body: refund.reply, status: 'pending' },
+      ])
     })
   })
 })
