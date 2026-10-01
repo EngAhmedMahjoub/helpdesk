@@ -155,6 +155,7 @@ None.
 | 6.9 | From the Phase 5 security review (#239), done in #250: the AI does not answer a ticket an agent is working, or one already escalated `ai_failed`; its reply waits as a draft | Test: a follow-up on an assigned or `ai_failed` ticket is drafted, not emailed | Done |
 | 6.10 | From the Phase 5 security review (#239), done in #250: two jobs for one ticket cannot both email the student, e.g. a pg-boss `singletonKey` per ticket | Test: two messages queued together produce one AI email | Done |
 | 6.11 | From the Phase 5 security review (#239), done in #250: a partial unique index enforces one pending `ReplyDraft` per ticket, so two overlapping jobs cannot each create one | Migration applied; test: a second pending draft is refused | Done |
+| 6.12 | Phase 6 security review fixes (#249): an approval names the draft version it reviewed, so one the AI rewrote is not approved unseen; a failed revert after a refused send still answers 502 and logs both errors; state-changing requests from another origin are refused; an agent's own reply retires the pending AI draft | Each fix has a test that fails without it | Done |
 
 ## Phase 7 — Dashboard
 
