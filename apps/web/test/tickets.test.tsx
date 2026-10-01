@@ -68,7 +68,8 @@ test('shows the tickets the API returned', async () => {
   expect(row.getByRole('cell', { name: 'Lena Fischer' })).toBeTruthy()
   expect(row.getByRole('cell', { name: 'open' })).toBeTruthy()
   expect(row.getByRole('cell', { name: 'refund' })).toBeTruthy()
-  expect(row.getByRole('cell', { name: 'Yes' })).toBeTruthy()
+  // The reason, not a bare Yes (6.7).
+  expect(row.getByRole('cell', { name: 'refund approval' })).toBeTruthy()
 
   // No name on the second ticket, so the address stands in for one.
   expect(await screen.findByRole('cell', { name: 'tom@student.example' })).toBeTruthy()
@@ -243,6 +244,74 @@ test('the Assignee filter narrows the list to mine or to unassigned, and lives i
     expect(search().has('assignee')).toBe(false)
   })
   expect(search().get('category')).toBe('refund')
+})
+
+test('each escalation reason reads as its own badge in the list', async () => {
+  const flagged = (id: number, escalationReason: TicketSummary['escalationReason']) =>
+    ticketSummary({ id, subject: `Ticket ${String(id)}`, needsAgent: true, escalationReason })
+  stubTickets(() =>
+    listOf([
+      flagged(11, 'refund_approval'),
+      flagged(12, 'ai_failed'),
+      flagged(13, 'unverified_sender'),
+      flagged(14, 'auto_reply_limit'),
+      // Flagged before reasons were recorded.
+      flagged(15, null),
+    ]),
+  )
+
+  renderRoute('/tickets')
+
+  for (const [subject, label] of [
+    ['Ticket 11', 'refund approval'],
+    ['Ticket 12', 'AI could not answer'],
+    ['Ticket 13', 'sender not verified'],
+    ['Ticket 14', 'AI reply limit reached'],
+    ['Ticket 15', 'Yes'],
+  ]) {
+    const row = within((await screen.findByRole('cell', { name: subject })).closest('tr')!)
+    expect(row.getByRole('cell', { name: label })).toBeTruthy()
+  }
+})
+
+test('the Needs agent filter narrows the list either way, and lives in the URL', async () => {
+  const user = userEvent.setup()
+  const { queries } = stubTickets(() => listOf(tickets))
+
+  const router = renderRoute('/tickets?status=open')
+  await screen.findByRole('table')
+  const search = () => new URLSearchParams(router.state.location.search)
+
+  for (const [label, value] of [
+    ['Needs agent', 'true'],
+    ['No agent needed', 'false'],
+  ] as const) {
+    await user.click(screen.getByLabelText('Needs agent'))
+    await user.click(await screen.findByRole('option', { name: label }))
+
+    await waitFor(() => {
+      expect(queries.at(-1)?.get('needsAgent')).toBe(value)
+    })
+    expect(search().get('needsAgent')).toBe(value)
+    // It narrows the other filters rather than replacing them.
+    expect(queries.at(-1)?.get('status')).toBe('open')
+  }
+
+  // All takes the filter off, and the parameter with it.
+  await user.click(screen.getByLabelText('Needs agent'))
+  await user.click(await screen.findByRole('option', { name: 'All' }))
+  await waitFor(() => {
+    expect(search().has('needsAgent')).toBe(false)
+  })
+})
+
+test('a link to the needs-agent list opens with the filter applied', async () => {
+  const { queries } = stubTickets(() => listOf(tickets))
+
+  renderRoute('/tickets?needsAgent=true')
+  await screen.findByRole('table')
+
+  expect(queries.at(-1)?.get('needsAgent')).toBe('true')
 })
 
 test('each sort option asks for its column and direction', async () => {

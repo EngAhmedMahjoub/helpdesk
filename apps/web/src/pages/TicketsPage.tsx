@@ -14,18 +14,20 @@ import {
 } from '@/components/ui/table'
 import { useTicketQuery } from '@/hooks/use-ticket-query'
 import { useTickets } from '@/hooks/use-tickets'
+import { escalationReasonLabels } from '@/lib/escalation'
 import { compactDateTime, fullDateTime } from '@/lib/format'
 import { studentLabel } from '@/lib/tickets'
 
 // One list for the skeleton and the table, so their headers and widths cannot
 // drift apart. Sums to 100%; Subject gets the most because it runs longest.
 const columns: Column[] = [
-  { label: 'Subject', width: 'w-[26%]' },
-  { label: 'Student', width: 'w-[17%]' },
+  { label: 'Subject', width: 'w-[24%]' },
+  { label: 'Student', width: 'w-[15%]' },
   { label: 'Status', width: 'w-[10%]' },
   { label: 'Category', width: 'w-[11%]' },
   { label: 'Assignee', width: 'w-[13%]' },
-  { label: 'Needs agent', width: 'w-[10%]' },
+  // Wider than a Yes needed: it holds the reason now.
+  { label: 'Needs agent', width: 'w-[14%]' },
   { label: 'Last activity', width: 'w-[13%]' },
 ]
 
@@ -45,7 +47,9 @@ export default function TicketsPage() {
       <TicketFilters
         assignee={query.assignee}
         category={query.category}
+        needsAgent={query.needsAgent}
         onAssignee={(assignee) => update({ assignee })}
+        onNeedsAgent={(needsAgent) => update({ needsAgent })}
         onCategory={(category) => update({ category })}
         onSort={(choice) => {
           const [sortBy, order] = choice.split(':') as [ListTicketsQuery['sort'], 'asc' | 'desc']
@@ -143,8 +147,13 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
         {ticket.assignee?.name ?? 'Unassigned'}
       </TableCell>
       <TableCell>
+        {/* The reason, not just "Yes", so an agent scanning the list knows
+            which tickets wait on an approval and which on an answer (6.7).
+            A flag without a reason, from before reasons existed, still reads. */}
         {ticket.needsAgent ? (
-          <Badge variant="destructive">Yes</Badge>
+          <Badge className="max-w-full truncate" variant="destructive">
+            {ticket.escalationReason ? escalationReasonLabels[ticket.escalationReason] : 'Yes'}
+          </Badge>
         ) : (
           <span className="text-muted-foreground">No</span>
         )}

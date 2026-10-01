@@ -150,7 +150,7 @@ None.
 | 6.4 | `GET /api/tickets?needsAgent=true` filter | Test passes | Done |
 | 6.5 | Frontend: AI summary and category badge on ticket detail | Visible for AI-processed tickets | Done |
 | 6.6 | Frontend: draft review panel — edit, approve, reject | Agent approves an edited draft | Done |
-| 6.7 | Frontend: "Needs agent" filter and escalation reason badge on ticket list | Filter shows refund approvals and AI failures |  |
+| 6.7 | Frontend: "Needs agent" filter and escalation reason badge on ticket list | Filter shows refund approvals and AI failures | Done |
 | 6.8 | Frontend: label AI-sent messages in the thread | AI messages visually distinct from agent messages |  |
 | 6.9 | From the Phase 5 security review (#239): the AI does not answer a ticket an agent is working, or one already escalated `ai_failed`; its reply waits as a draft | Test: a follow-up on an assigned or `ai_failed` ticket is drafted, not emailed |  |
 | 6.10 | From the Phase 5 security review (#239): two jobs for one ticket cannot both email the student, e.g. a pg-boss `singletonKey` per ticket | Test: two messages queued together produce one AI email |  |
