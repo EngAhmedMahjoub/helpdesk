@@ -103,6 +103,7 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
       studentEmail: true,
       senderVerified: true,
       escalationReason: true,
+      assigneeId: true,
       replyDrafts: { where: { status: 'pending' }, select: { id: true }, take: 1 },
       messages: {
         select: { author: true, body: true, createdAt: true },
@@ -117,6 +118,19 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   // Deleted since the job was queued: there is nothing left to answer, and
   // throwing would only have pg-boss retry a ticket that will never come back.
   if (!ticket) return
+
+  // A newer student message has its own job, which answers the whole thread,
+  // this message included (6.10). Answering here as well would email the
+  // student twice: jobs run one at a time, so the two would not overlap, they
+  // would follow each other. Only one message is the newest, so this holds
+  // with any number of workers too. Ids rise with every insert.
+  const newer = await deps.prisma.message.count({
+    where: { ticketId: job.ticketId, direction: 'inbound', id: { gt: job.messageId } },
+  })
+  if (newer > 0) {
+    console.log(`AI skipped: ticket=${String(job.ticketId)} reason=newer_message`)
+    return
+  }
 
   // Checked before the call, since the call is what costs: past the budget
   // the model is not asked, and an agent answers instead.
@@ -160,14 +174,20 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   // resolve the ticket, and in time auto-close it, with the draft unseen.
   const refundWaiting =
     ticket.escalationReason === 'refund_approval' || ticket.replyDrafts.length > 0
+  // An agent already on the ticket answers it, not the AI over their head,
+  // and one that failed the AI before is with an agent already (6.9).
   const heldFor: EscalationReason | null =
     decision.route === 'agent' || refundWaiting
       ? 'refund_approval'
       : !ticket.senderVerified
         ? 'unverified_sender'
-        : sendLimited
-          ? 'auto_reply_limit'
-          : null
+        : ticket.escalationReason === 'ai_failed'
+          ? 'ai_failed'
+          : ticket.assigneeId !== null
+            ? 'agent_assigned'
+            : sendLimited
+              ? 'auto_reply_limit'
+              : null
 
   // Logged once the call is paid for, before anything is saved: a save that
   // fails afterwards does not make the call free. The safeguard's override is
@@ -200,7 +220,25 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
  * and the older one would only be a stale thing to reject. One transaction, so
  * a ticket is never flagged without its draft, or the reverse.
  */
-async function saveDraft(
+export async function saveDraft(
+  prisma: PrismaClient,
+  ticketId: number,
+  output: AiOutput,
+  category: TicketCategory,
+  reason: EscalationReason,
+): Promise<void> {
+  try {
+    await saveDraftOnce(prisma, ticketId, output, category, reason)
+  } catch (error) {
+    // Another job created the pending draft between this one's update and
+    // its insert, and the one-pending index refused the second (6.11). The
+    // draft exists now, so a second try updates it.
+    if (!isPrismaError(error, 'P2002')) throw error
+    await saveDraftOnce(prisma, ticketId, output, category, reason)
+  }
+}
+
+async function saveDraftOnce(
   prisma: PrismaClient,
   ticketId: number,
   output: AiOutput,
@@ -218,15 +256,14 @@ async function saveDraft(
       },
     })
 
-    const pending = await tx.replyDraft.findFirst({
+    // The status is the update's own condition, so a draft an agent reviewed
+    // a moment ago is never rewritten; there is then none pending, and a new
+    // one is created.
+    const { count } = await tx.replyDraft.updateMany({
       where: { ticketId, status: 'pending' },
-      select: { id: true },
+      data: { body: output.reply },
     })
-    if (pending) {
-      await tx.replyDraft.update({ where: { id: pending.id }, data: { body: output.reply } })
-    } else {
-      await tx.replyDraft.create({ data: { ticketId, body: output.reply } })
-    }
+    if (count === 0) await tx.replyDraft.create({ data: { ticketId, body: output.reply } })
   })
 }
 

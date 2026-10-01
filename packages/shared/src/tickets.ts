@@ -7,6 +7,7 @@ export const ESCALATION_REASONS = [
   'ai_failed',
   'unverified_sender',
   'auto_reply_limit',
+  'agent_assigned',
 ] as const
 
 export type TicketStatus = (typeof TICKET_STATUSES)[number]
