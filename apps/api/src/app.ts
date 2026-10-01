@@ -11,6 +11,7 @@ import {
 } from './email/receiving.ts'
 import type { QueueProcessTicket } from './jobs/process-ticket.ts'
 import { authRouter } from './routes/auth.ts'
+import { draftsRouter } from './routes/drafts.ts'
 import { tasksRouter } from './routes/tasks.ts'
 import { ticketsRouter } from './routes/tickets.ts'
 import { usersRouter } from './routes/users.ts'
@@ -116,6 +117,7 @@ export function createApp({
   app.use('/api/auth', authRouter)
   app.use('/api/users', usersRouter)
   app.use('/api/tickets', ticketsRouter)
+  app.use('/api/drafts', draftsRouter)
   // No session: the scheduled workflow proves itself with TASKS_SECRET.
   app.use('/api/tasks', tasksRouter)
 

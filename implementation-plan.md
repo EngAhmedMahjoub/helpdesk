@@ -142,19 +142,19 @@ None.
 
 ## Phase 6 — Agent Review of AI Output
 
-| ID | Task | Done when |
-|---|---|---|
-| 6.1 | `GET /api/drafts?status=pending` | Test passes |
-| 6.2 | `POST /api/drafts/:id/approve` — optional edited body; sends email; records reviewer | Student receives approved reply |
-| 6.3 | `POST /api/drafts/:id/reject` | Draft marked rejected; ticket stays Open |
-| 6.4 | `GET /api/tickets?needsAgent=true` filter | Test passes |
-| 6.5 | Frontend: AI summary and category badge on ticket detail | Visible for AI-processed tickets |
-| 6.6 | Frontend: draft review panel — edit, approve, reject | Agent approves an edited draft |
-| 6.7 | Frontend: "Needs agent" filter and escalation reason badge on ticket list | Filter shows refund approvals and AI failures |
-| 6.8 | Frontend: label AI-sent messages in the thread | AI messages visually distinct from agent messages |
-| 6.9 | From the Phase 5 security review (#239): the AI does not answer a ticket an agent is working, or one already escalated `ai_failed`; its reply waits as a draft | Test: a follow-up on an assigned or `ai_failed` ticket is drafted, not emailed |
-| 6.10 | From the Phase 5 security review (#239): two jobs for one ticket cannot both email the student, e.g. a pg-boss `singletonKey` per ticket | Test: two messages queued together produce one AI email |
-| 6.11 | From the Phase 5 security review (#239): a partial unique index enforces one pending `ReplyDraft` per ticket, so two overlapping jobs cannot each create one | Migration applied; test: a second pending draft is refused |
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 6.1 | `GET /api/drafts?status=pending` | Test passes | Done |
+| 6.2 | `POST /api/drafts/:id/approve` — optional edited body; sends email; records reviewer | Student receives approved reply |  |
+| 6.3 | `POST /api/drafts/:id/reject` | Draft marked rejected; ticket stays Open |  |
+| 6.4 | `GET /api/tickets?needsAgent=true` filter | Test passes |  |
+| 6.5 | Frontend: AI summary and category badge on ticket detail | Visible for AI-processed tickets |  |
+| 6.6 | Frontend: draft review panel — edit, approve, reject | Agent approves an edited draft |  |
+| 6.7 | Frontend: "Needs agent" filter and escalation reason badge on ticket list | Filter shows refund approvals and AI failures |  |
+| 6.8 | Frontend: label AI-sent messages in the thread | AI messages visually distinct from agent messages |  |
+| 6.9 | From the Phase 5 security review (#239): the AI does not answer a ticket an agent is working, or one already escalated `ai_failed`; its reply waits as a draft | Test: a follow-up on an assigned or `ai_failed` ticket is drafted, not emailed |  |
+| 6.10 | From the Phase 5 security review (#239): two jobs for one ticket cannot both email the student, e.g. a pg-boss `singletonKey` per ticket | Test: two messages queued together produce one AI email |  |
+| 6.11 | From the Phase 5 security review (#239): a partial unique index enforces one pending `ReplyDraft` per ticket, so two overlapping jobs cannot each create one | Migration applied; test: a second pending draft is refused |  |
 
 ## Phase 7 — Dashboard
 
