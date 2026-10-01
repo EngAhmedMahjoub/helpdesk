@@ -156,6 +156,11 @@ export type NewTicket = {
   summary?: string
   needsAgent?: boolean
   escalationReason?: EscalationReason
+  /**
+   * Whether the email that opened the ticket passed DMARC. False by default,
+   * as in the schema, so a spec that needs the verified case has to say so.
+   */
+  senderVerified?: boolean
   /** Set explicitly where a spec asserts on sort order; Prisma honours both. */
   createdAt?: Date
   updatedAt?: Date
@@ -190,6 +195,7 @@ export async function createTicket({
   summary,
   needsAgent = false,
   escalationReason,
+  senderVerified,
   createdAt,
   updatedAt,
   messages = [],
@@ -204,6 +210,7 @@ export async function createTicket({
       summary,
       needsAgent,
       escalationReason,
+      senderVerified,
       createdAt,
       updatedAt,
       messages: {
@@ -250,4 +257,36 @@ export function countMessagesFor(ticketId: number): Promise<number> {
 export async function userIdFor(email: string): Promise<string> {
   const user = await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } })
   return user.id
+}
+
+export type TestDraft = {
+  id: number
+  body: string
+}
+
+/**
+ * A pending AI draft on a ticket the spec made. Written straight to the table:
+ * the only thing that makes one is the AI pipeline, and no spec may reach
+ * Anthropic. It goes with its ticket through the cascade on `ReplyDraft.ticketId`.
+ */
+export async function createDraft(ticketId: number, body: string): Promise<TestDraft> {
+  const draft = await prisma.replyDraft.create({ data: { ticketId, body } })
+  return { id: draft.id, body: draft.body }
+}
+
+/**
+ * Rewrites a draft as the AI does after a student's follow-up. Prisma's
+ * `@updatedAt` moves the version with it, which is what makes an approval of
+ * the old text stale.
+ */
+export async function rewriteDraft(id: number, body: string): Promise<void> {
+  await prisma.replyDraft.update({ where: { id }, data: { body } })
+}
+
+/** A draft's review state, for what the page cannot show once the panel is gone. */
+export function findDraft(id: number) {
+  return prisma.replyDraft.findUniqueOrThrow({
+    where: { id },
+    select: { status: true, body: true, reviewedById: true },
+  })
 }
