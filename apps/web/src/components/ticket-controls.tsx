@@ -12,6 +12,7 @@ import SelectField from '@/components/select-field'
 import { SelectItem } from '@/components/ui/select'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useAssignees, useUpdateTicket } from '@/hooks/use-tickets'
+import { escalationReasonLabels } from '@/lib/escalation'
 
 /**
  * Stands in for a null category, so the select always has a value. Given
@@ -21,13 +22,6 @@ import { useAssignees, useUpdateTicket } from '@/hooks/use-tickets'
  * but the API takes nothing back to unclassified.
  */
 const UNCLASSIFIED = 'unclassified'
-
-const escalationReasons = {
-  refund_approval: 'refund approval',
-  ai_failed: 'AI could not answer',
-  unverified_sender: 'sender not verified',
-  auto_reply_limit: 'AI reply limit reached',
-} as const
 
 /**
  * The status and category an agent can change, in place of the badges that
@@ -76,7 +70,9 @@ export default function TicketControls({ ticket }: { ticket: TicketDetail }) {
           <div className="flex items-center gap-2">
             <Badge variant="destructive">
               Needs agent
-              {ticket.escalationReason ? `: ${escalationReasons[ticket.escalationReason]}` : ''}
+              {ticket.escalationReason
+                ? `: ${escalationReasonLabels[ticket.escalationReason]}`
+                : ''}
             </Badge>
             <Button
               disabled={update.isPending}
