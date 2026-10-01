@@ -72,7 +72,7 @@ const detailFields = {
   // One at most is pending; newest first all the same, should two ever be.
   replyDrafts: {
     where: { status: 'pending' },
-    select: { id: true, body: true, createdAt: true },
+    select: { id: true, body: true, createdAt: true, updatedAt: true },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: 1,
   },
@@ -97,7 +97,13 @@ function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields 
     summary,
     autoCloseAt: autoCloseAt?.toISOString() ?? null,
     senderVerified,
-    pendingDraft: draft ? { ...draft, createdAt: draft.createdAt.toISOString() } : null,
+    pendingDraft: draft
+      ? {
+          ...draft,
+          createdAt: draft.createdAt.toISOString(),
+          updatedAt: draft.updatedAt.toISOString(),
+        }
+      : null,
     // Selected newest first for the cap; a thread reads the other way.
     messages: messages.map(toMessage).reverse(),
   }
@@ -311,6 +317,14 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
       // updatedAt. Inserting a message does not touch the ticket row by itself.
       // The update also answers P2025 for a ticket deleted since the lookup.
       await tx.ticket.update({ where: { id }, data: { updatedAt: new Date() } })
+
+      // The agent has answered, so the AI's pending draft would only be a
+      // second, outdated answer waiting to be approved (#249). Rejected, with
+      // this agent as its reviewer: they set it aside by writing their own.
+      await tx.replyDraft.updateMany({
+        where: { ticketId: id, status: 'pending' },
+        data: { status: 'rejected', reviewedById: agentId, reviewedAt: new Date() },
+      })
 
       return tx.message.create({
         data: {
