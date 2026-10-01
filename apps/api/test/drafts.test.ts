@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
 import type { DraftListResponse } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
+import { EmailSendError, type OutboundEmail } from '../src/email/outbound.ts'
 import { prisma, resetDatabase } from './db.ts'
-import { createTicket, createUser, sessionCookieFor } from './fixtures.ts'
+import { createMessage, createTicket, createUser, sessionCookieFor } from './fixtures.ts'
 
 beforeEach(resetDatabase)
 
@@ -155,5 +156,197 @@ describe('GET /api/drafts', () => {
     expect(Object.keys(only!.reviewedBy!).sort()).toEqual(['id', 'name'])
     expect(only!.reviewedBy!.id).toBe(reviewed.reviewedById!)
     expect(JSON.stringify(res.body)).not.toContain('passwordHash')
+  })
+})
+
+describe('POST /api/drafts/:id/approve', () => {
+  /** An app whose sends are recorded, or refused with `fail`. */
+  function appSending({ fail = false } = {}) {
+    const emails: OutboundEmail[] = []
+    const sending = createApp({
+      sendEmail: async (email) => {
+        if (fail) throw new EmailSendError('Resend refused the email: rate_limit_exceeded')
+        emails.push(email)
+        return { resendId: 'resend-id' }
+      },
+    })
+    return { app: sending, emails }
+  }
+
+  /** A pending draft on an Open ticket from tom@uni.edu, whose email had a Message-ID. */
+  async function pendingDraft(ticket: Parameters<typeof createTicket>[0] = {}) {
+    const owner = await createTicket({
+      subject: 'Refund',
+      studentEmail: 'tom@uni.edu',
+      needsAgent: true,
+      escalationReason: 'refund_approval',
+      ...ticket,
+    })
+    await createMessage({ ticketId: owner.id, emailMessageId: '<tom-1@uni.edu>' })
+    return prisma.replyDraft.create({
+      data: { ticketId: owner.id, body: 'Your request has been passed to the team.' },
+    })
+  }
+
+  async function approve(
+    target: ReturnType<typeof appSending>['app'],
+    id: number | string,
+    body: object = {},
+    reviewer?: { id: string },
+  ) {
+    const user = reviewer ?? (await createUser())
+    return request(target)
+      .post(`/api/drafts/${String(id)}/approve`)
+      .set('Cookie', await sessionCookieFor(user.id))
+      .send(body)
+  }
+
+  test('emails the draft to the student, threaded, and records who approved it', async () => {
+    const draft = await pendingDraft()
+    const { app: sending, emails } = appSending()
+    const agent = await createUser()
+
+    const res = await approve(sending, draft.id, {}, agent)
+
+    expect(res.status).toBe(200)
+    expect(emails).toEqual([
+      {
+        to: 'tom@uni.edu',
+        subject: 'Re: Refund',
+        text: 'Your request has been passed to the team.',
+        thread: ['<tom-1@uni.edu>'],
+      },
+    ])
+    expect(res.body).toMatchObject({
+      id: draft.id,
+      status: 'approved',
+      reviewedBy: { id: agent.id, name: agent.name },
+    })
+    const stored = await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })
+    expect(stored.reviewedById).toBe(agent.id)
+    expect(stored.reviewedAt).not.toBeNull()
+  })
+
+  test("sends the agent's edit instead, trimmed, and keeps it on the draft", async () => {
+    const draft = await pendingDraft()
+    const { app: sending, emails } = appSending()
+
+    await approve(sending, draft.id, { body: '  Approved: £20 back within 5 days.  ' })
+
+    expect(emails[0]!.text).toBe('Approved: £20 back within 5 days.')
+    const stored = await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })
+    expect(stored.body).toBe('Approved: £20 back within 5 days.')
+  })
+
+  test("saves the reply as the approver's message and resolves the ticket", async () => {
+    const draft = await pendingDraft()
+    const agent = await createUser()
+
+    await approve(appSending().app, draft.id, {}, agent)
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: draft.ticketId } })
+    expect(ticket).toMatchObject({ status: 'resolved', needsAgent: false, escalationReason: null })
+    expect(ticket.autoCloseAt).not.toBeNull()
+    const reply = await prisma.message.findFirstOrThrow({
+      where: { ticketId: draft.ticketId, direction: 'outbound' },
+    })
+    expect(reply).toMatchObject({
+      author: 'agent',
+      agentId: agent.id,
+      body: 'Your request has been passed to the team.',
+    })
+  })
+
+  test.each(['resolved', 'closed'] as const)('leaves a %s ticket in its status', async (status) => {
+    const draft = await pendingDraft({ status })
+
+    await approve(appSending().app, draft.id)
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: draft.ticketId } })
+    expect(ticket).toMatchObject({ status, needsAgent: false })
+  })
+
+  test('a send Resend refuses answers 502 and leaves the draft pending, edit kept', async () => {
+    const draft = await pendingDraft()
+
+    const res = await approve(appSending({ fail: true }).app, draft.id, { body: 'Edited.' })
+
+    expect(res.status).toBe(502)
+    const stored = await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })
+    expect(stored).toMatchObject({
+      status: 'pending',
+      body: 'Edited.',
+      reviewedById: null,
+      reviewedAt: null,
+    })
+    expect(await prisma.message.count({ where: { direction: 'outbound' } })).toBe(0)
+    expect(
+      (await prisma.ticket.findUniqueOrThrow({ where: { id: draft.ticketId } })).needsAgent,
+    ).toBe(true)
+  })
+
+  test.each(['approved', 'rejected'] as const)(
+    'refuses a draft already %s with 409, emailing nothing',
+    async (status) => {
+      const draft = await pendingDraft()
+      const reviewer = await createUser({ email: 'first@example.com' })
+      await prisma.replyDraft.update({
+        where: { id: draft.id },
+        data: { status, reviewedById: reviewer.id, reviewedAt: new Date() },
+      })
+      const { app: sending, emails } = appSending()
+
+      const res = await approve(sending, draft.id)
+
+      expect(res.status).toBe(409)
+      expect(emails).toHaveLength(0)
+    },
+  )
+
+  test('two agents approving at once email the student once', async () => {
+    const draft = await pendingDraft()
+    const { app: sending, emails } = appSending()
+    const first = await createUser({ email: 'first@example.com' })
+    const second = await createUser({ email: 'second@example.com' })
+
+    const results = await Promise.all([
+      approve(sending, draft.id, {}, first),
+      approve(sending, draft.id, {}, second),
+    ])
+
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409])
+    expect(emails).toHaveLength(1)
+    expect(await prisma.message.count({ where: { direction: 'outbound' } })).toBe(1)
+  })
+
+  test.each(['999999', 'abc', '0'])('answers 404 for the draft id "%s"', async (id) => {
+    const res = await approve(appSending().app, id)
+
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Draft not found' })
+  })
+
+  test.each([{ body: '' }, { body: '   ' }, { body: 'x'.repeat(10_001) }, { body: 42 }])(
+    'answers 400 for the body %j, emailing nothing',
+    async (body) => {
+      const draft = await pendingDraft()
+      const { app: sending, emails } = appSending()
+
+      const res = await approve(sending, draft.id, body)
+
+      expect(res.status).toBe(400)
+      expect(emails).toHaveLength(0)
+      expect((await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe(
+        'pending',
+      )
+    },
+  )
+
+  test('refuses a caller with no session', async () => {
+    const draft = await pendingDraft()
+
+    const res = await request(appSending().app).post(`/api/drafts/${String(draft.id)}/approve`)
+
+    expect(res.status).toBe(401)
   })
 })

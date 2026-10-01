@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import type { Assignee, EscalationReason, TicketCategory } from './tickets.ts'
+import {
+  type Assignee,
+  type EscalationReason,
+  REPLY_MAX_LENGTH,
+  type TicketCategory,
+  ticketIdSchema,
+} from './tickets.ts'
 
 export const DRAFT_STATUSES = ['pending', 'approved', 'rejected'] as const
 
@@ -47,3 +53,22 @@ export type DraftSummary = {
 export type DraftListResponse = {
   drafts: DraftSummary[]
 }
+
+/** A draft id as it arrives in a URL: the same integer column rules as a ticket's. */
+export const draftIdSchema = ticketIdSchema
+
+/**
+ * The body of `POST /api/drafts/:id/approve`. `body` is the agent's edit of the
+ * draft; left out, the draft goes as the AI wrote it. Held to an agent reply's
+ * rules, since once approved it is one.
+ */
+export const approveDraftSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Write a reply')
+    .max(REPLY_MAX_LENGTH, `Keep the reply under ${REPLY_MAX_LENGTH} characters`)
+    .optional(),
+})
+
+export type ApproveDraftRequest = z.infer<typeof approveDraftSchema>
