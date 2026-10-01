@@ -156,6 +156,7 @@ None.
 | 6.10 | From the Phase 5 security review (#239), done in #250: two jobs for one ticket cannot both email the student, e.g. a pg-boss `singletonKey` per ticket | Test: two messages queued together produce one AI email | Done |
 | 6.11 | From the Phase 5 security review (#239), done in #250: a partial unique index enforces one pending `ReplyDraft` per ticket, so two overlapping jobs cannot each create one | Migration applied; test: a second pending draft is refused | Done |
 | 6.12 | Phase 6 security review fixes (#249): an approval names the draft version it reviewed, so one the AI rewrote is not approved unseen; a failed revert after a refused send still answers 502 and logs both errors; state-changing requests from another origin are refused; an agent's own reply retires the pending AI draft | Each fix has a test that fails without it | Done |
+| 6.13 | Phase 6 end-to-end specs (#253): approving an edited draft, rejecting one, a draft the AI rewrote while open, the unverified-sender warning, the Needs agent filter and reason badges, and the AI summary and labels on ticket detail | `bun run test:e2e` covers the six journeys | Done |
 
 ## Phase 7 — Dashboard
 
