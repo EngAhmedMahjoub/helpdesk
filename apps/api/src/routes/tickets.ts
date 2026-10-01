@@ -135,6 +135,8 @@ ticketsRouter.get('/', async (req, res) => {
     category: query.category,
     // undefined leaves the filter off; null matches the unassigned.
     assigneeId: query.assignee && (query.assignee === 'me' ? userId : null),
+    // undefined leaves the filter off, as above (6.4).
+    needsAgent: query.needsAgent && query.needsAgent === 'true',
   }
 
   const [tickets, total] = await prisma.$transaction([

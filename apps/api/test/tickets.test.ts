@@ -267,6 +267,61 @@ describe('GET /api/tickets by assignee', () => {
   })
 })
 
+describe('GET /api/tickets?needsAgent (6.4)', () => {
+  beforeEach(async () => {
+    await createTicket({
+      subject: 'Refund draft',
+      createdAt: day(1),
+      needsAgent: true,
+      escalationReason: 'refund_approval',
+    })
+    await createTicket({ subject: 'AI answered', createdAt: day(2), status: 'resolved' })
+    await createTicket({
+      subject: 'AI failed',
+      createdAt: day(3),
+      needsAgent: true,
+      escalationReason: 'ai_failed',
+    })
+    await createTicket({ subject: 'Not yet processed', createdAt: day(4) })
+  })
+
+  const ordered = (query: string) => list(`${query}&sort=createdAt&order=asc`)
+
+  test('true: only the tickets waiting for an agent, with the total', async () => {
+    const res = await ordered('?needsAgent=true')
+
+    expect(res.status).toBe(200)
+    expect(subjects(res)).toEqual(['Refund draft', 'AI failed'])
+    expect((res.body as TicketListResponse).total).toBe(2)
+    // The reason travels with each, for the badge (6.7).
+    expect((res.body as TicketListResponse).tickets.map((t) => t.escalationReason)).toEqual([
+      'refund_approval',
+      'ai_failed',
+    ])
+  })
+
+  test('false: only the tickets that are not', async () => {
+    const res = await ordered('?needsAgent=false')
+
+    expect(subjects(res)).toEqual(['AI answered', 'Not yet processed'])
+  })
+
+  test('combines with the other filters', async () => {
+    const res = await ordered('?needsAgent=true&status=open')
+
+    expect(subjects(res)).toEqual(['Refund draft', 'AI failed'])
+    expect(subjects(await ordered('?needsAgent=false&status=resolved'))).toEqual(['AI answered'])
+  })
+
+  test('left out, it filters nothing', async () => {
+    expect(subjects(await ordered('?status=open'))).toEqual([
+      'Refund draft',
+      'AI failed',
+      'Not yet processed',
+    ])
+  })
+})
+
 describe('GET /api/tickets sorting', () => {
   // Created and updated in different orders, so each sort gives its own answer.
   beforeEach(async () => {
@@ -343,6 +398,8 @@ describe('GET /api/tickets with an invalid query', () => {
     ['an unknown assignee value', '?assignee=anyone'],
     // Someone else's tickets are not a filter this list offers.
     ['a user id as the assignee', `?assignee=${crypto.randomUUID()}`],
+    ['needsAgent as anything but true or false', '?needsAgent=yes'],
+    ['needsAgent in capitals', '?needsAgent=TRUE'],
   ]
 
   for (const [label, query] of cases) {
