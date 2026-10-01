@@ -4,6 +4,7 @@ import { type TicketDetail, ticketIdSchema } from '@helpdesk/shared'
 import MessageThread from '@/components/message-thread'
 import ReplyBox from '@/components/reply-box'
 import TicketControls from '@/components/ticket-controls'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTicket } from '@/hooks/use-tickets'
@@ -88,11 +89,20 @@ function Header({ ticket }: { ticket: TicketDetail }) {
 
       <TicketControls ticket={ticket} />
 
+      {/* Only the AI writes a summary, so it says so: an agent reading it
+          should know it is the model's reading of the thread, not a person's
+          (6.5). A named region, so a screen reader announces it as one. */}
       {ticket.summary && (
-        <p className="mt-4 rounded-lg border bg-muted/40 p-4 text-foreground">
-          <span className="font-medium">Summary: </span>
-          {ticket.summary}
-        </p>
+        <section aria-label="AI summary" className="mt-4 rounded-lg border bg-muted/40 p-4">
+          <p
+            aria-hidden
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground"
+          >
+            <Badge variant="secondary">AI</Badge>
+            Summary
+          </p>
+          <p className="mt-1 text-foreground">{ticket.summary}</p>
+        </section>
       )}
 
       <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">

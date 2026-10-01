@@ -230,3 +230,21 @@ test('opens a ticket from the list', async () => {
   })
   expect(await screen.findAllByRole('article')).toHaveLength(3)
 })
+
+test("labels the summary as the AI's", async () => {
+  stubTicket()
+
+  renderRoute('/tickets/32')
+
+  const summary = await screen.findByRole('region', { name: 'AI summary' })
+  expect(within(summary).getByText('Moved from the March to the April cohort.')).toBeTruthy()
+})
+
+test('shows no summary region before the AI has written one', async () => {
+  stubTicket({ ...thread, summary: null })
+
+  renderRoute('/tickets/32')
+
+  await screen.findByRole('heading', { level: 1 })
+  expect(screen.queryByRole('region', { name: 'AI summary' })).toBeNull()
+})
