@@ -68,6 +68,14 @@ const detailFields = {
   ...summaryFields,
   summary: true,
   autoCloseAt: true,
+  senderVerified: true,
+  // One at most is pending; newest first all the same, should two ever be.
+  replyDrafts: {
+    where: { status: 'pending' },
+    select: { id: true, body: true, createdAt: true },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 1,
+  },
   messages: {
     select: messageFields,
     // Capped: a thread is read back whole, and nothing bounds how many messages
@@ -82,11 +90,14 @@ const detailFields = {
 } satisfies Prisma.TicketSelect
 
 function toDetail(ticket: Prisma.TicketGetPayload<{ select: typeof detailFields }>): TicketDetail {
-  const { summary, autoCloseAt, messages, ...rest } = ticket
+  const { summary, autoCloseAt, senderVerified, replyDrafts, messages, ...rest } = ticket
+  const [draft] = replyDrafts
   return {
     ...toSummary(rest),
     summary,
     autoCloseAt: autoCloseAt?.toISOString() ?? null,
+    senderVerified,
+    pendingDraft: draft ? { ...draft, createdAt: draft.createdAt.toISOString() } : null,
     // Selected newest first for the cap; a thread reads the other way.
     messages: messages.map(toMessage).reverse(),
   }

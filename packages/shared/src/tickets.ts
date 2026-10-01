@@ -109,10 +109,25 @@ export type TicketMessage = {
  */
 export const MESSAGE_PAGE_SIZE = 200
 
+/** The AI's reply on a ticket, waiting for an agent to approve or reject it (6.6). */
+export type PendingDraft = {
+  id: number
+  body: string
+  createdAt: string
+}
+
 /** The body of `GET /api/tickets/:id`: the ticket and its thread, oldest message first. */
 export type TicketDetail = TicketSummary & {
   summary: string | null
   autoCloseAt: string | null
+  /**
+   * Whether the email that opened the ticket passed DMARC. When false, the
+   * address on it may be forged, which an agent should know before approving
+   * a draft that emails it (#239).
+   */
+  senderVerified: boolean
+  /** The draft waiting for review, or null when none is. One at most per ticket. */
+  pendingDraft: PendingDraft | null
   messages: TicketMessage[]
 }
 
