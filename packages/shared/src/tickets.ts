@@ -62,6 +62,11 @@ export const listTicketsQuerySchema = z.object({
   // "me" rather than an id: the API reads who that is from the session, so a
   // link to "my tickets" means the same thing for whoever opens it.
   assignee: z.enum(['me', 'none']).optional(),
+  // Kept as the text it arrives as, and turned into a boolean by the API:
+  // the page parses its URL with this schema and sends the result back, so
+  // the output must still read as a query value. Not z.coerce.boolean, which
+  // reads the text "false" as true.
+  needsAgent: z.enum(['true', 'false']).optional(),
   sort: z.enum(['createdAt', 'updatedAt']).default('updatedAt'),
   order: z.enum(['asc', 'desc']).default('desc'),
   // Coerced: a query string carries every value as text.
