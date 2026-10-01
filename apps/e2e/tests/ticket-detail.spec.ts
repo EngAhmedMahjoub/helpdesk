@@ -13,6 +13,7 @@ test('a subject on the list opens the ticket and its thread, oldest message firs
   const ticket = await createTestTicket({
     subject: `${uniqueSubject('detail')} refund for the March cohort`,
     studentName: 'Maya Chen',
+    summary: 'Charged twice for March; asking for one charge back.',
     messages: [
       { author: 'student', body: 'I was charged twice for March.', createdAt: minutesAgo(30) },
       { author: 'ai', body: 'Thanks — a colleague will check.', createdAt: minutesAgo(20) },
@@ -43,6 +44,17 @@ test('a subject on the list opens the ticket and its thread, oldest message firs
     await expect(message(adminPage, 'Student message from Maya Chen')).toContainText(
       'I was charged twice for March.',
     )
+  })
+
+  await test.step('what the AI wrote is labelled as the AI’s', async () => {
+    // Only the AI writes a summary, so it sits in a region that says so.
+    await expect(adminPage.getByRole('region', { name: 'AI summary' })).toContainText(
+      'Charged twice for March; asking for one charge back.',
+    )
+
+    const reply = message(adminPage, 'AI message from AI assistant')
+    await expect(reply.getByText('AI assistant', { exact: true })).toBeVisible()
+    await expect(reply.getByText('AI', { exact: true })).toBeVisible()
   })
 
   await test.step('All tickets goes back to the list', async () => {
