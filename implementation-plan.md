@@ -152,9 +152,9 @@ None.
 | 6.6 | Frontend: draft review panel — edit, approve, reject | Agent approves an edited draft | Done |
 | 6.7 | Frontend: "Needs agent" filter and escalation reason badge on ticket list | Filter shows refund approvals and AI failures | Done |
 | 6.8 | Frontend: label AI-sent messages in the thread | AI messages visually distinct from agent messages | Done |
-| 6.9 | From the Phase 5 security review (#239): the AI does not answer a ticket an agent is working, or one already escalated `ai_failed`; its reply waits as a draft | Test: a follow-up on an assigned or `ai_failed` ticket is drafted, not emailed |  |
-| 6.10 | From the Phase 5 security review (#239): two jobs for one ticket cannot both email the student, e.g. a pg-boss `singletonKey` per ticket | Test: two messages queued together produce one AI email |  |
-| 6.11 | From the Phase 5 security review (#239): a partial unique index enforces one pending `ReplyDraft` per ticket, so two overlapping jobs cannot each create one | Migration applied; test: a second pending draft is refused |  |
+| 6.9 | From the Phase 5 security review (#239), done in #250: the AI does not answer a ticket an agent is working, or one already escalated `ai_failed`; its reply waits as a draft | Test: a follow-up on an assigned or `ai_failed` ticket is drafted, not emailed | Done |
+| 6.10 | From the Phase 5 security review (#239), done in #250: two jobs for one ticket cannot both email the student, e.g. a pg-boss `singletonKey` per ticket | Test: two messages queued together produce one AI email | Done |
+| 6.11 | From the Phase 5 security review (#239), done in #250: a partial unique index enforces one pending `ReplyDraft` per ticket, so two overlapping jobs cannot each create one | Migration applied; test: a second pending draft is refused | Done |
 
 ## Phase 7 — Dashboard
 
