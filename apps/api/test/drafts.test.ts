@@ -159,48 +159,48 @@ describe('GET /api/drafts', () => {
   })
 })
 
+/** An app whose sends are recorded, or refused with `fail`. */
+function appSending({ fail = false } = {}) {
+  const emails: OutboundEmail[] = []
+  const sending = createApp({
+    sendEmail: async (email) => {
+      if (fail) throw new EmailSendError('Resend refused the email: rate_limit_exceeded')
+      emails.push(email)
+      return { resendId: 'resend-id' }
+    },
+  })
+  return { app: sending, emails }
+}
+
+/** A pending draft on an Open ticket from tom@uni.edu, whose email had a Message-ID. */
+async function pendingDraft(ticket: Parameters<typeof createTicket>[0] = {}) {
+  const owner = await createTicket({
+    subject: 'Refund',
+    studentEmail: 'tom@uni.edu',
+    needsAgent: true,
+    escalationReason: 'refund_approval',
+    ...ticket,
+  })
+  await createMessage({ ticketId: owner.id, emailMessageId: '<tom-1@uni.edu>' })
+  return prisma.replyDraft.create({
+    data: { ticketId: owner.id, body: 'Your request has been passed to the team.' },
+  })
+}
+
+async function approve(
+  target: ReturnType<typeof appSending>['app'],
+  id: number | string,
+  body: object = {},
+  reviewer?: { id: string },
+) {
+  const user = reviewer ?? (await createUser())
+  return request(target)
+    .post(`/api/drafts/${String(id)}/approve`)
+    .set('Cookie', await sessionCookieFor(user.id))
+    .send(body)
+}
+
 describe('POST /api/drafts/:id/approve', () => {
-  /** An app whose sends are recorded, or refused with `fail`. */
-  function appSending({ fail = false } = {}) {
-    const emails: OutboundEmail[] = []
-    const sending = createApp({
-      sendEmail: async (email) => {
-        if (fail) throw new EmailSendError('Resend refused the email: rate_limit_exceeded')
-        emails.push(email)
-        return { resendId: 'resend-id' }
-      },
-    })
-    return { app: sending, emails }
-  }
-
-  /** A pending draft on an Open ticket from tom@uni.edu, whose email had a Message-ID. */
-  async function pendingDraft(ticket: Parameters<typeof createTicket>[0] = {}) {
-    const owner = await createTicket({
-      subject: 'Refund',
-      studentEmail: 'tom@uni.edu',
-      needsAgent: true,
-      escalationReason: 'refund_approval',
-      ...ticket,
-    })
-    await createMessage({ ticketId: owner.id, emailMessageId: '<tom-1@uni.edu>' })
-    return prisma.replyDraft.create({
-      data: { ticketId: owner.id, body: 'Your request has been passed to the team.' },
-    })
-  }
-
-  async function approve(
-    target: ReturnType<typeof appSending>['app'],
-    id: number | string,
-    body: object = {},
-    reviewer?: { id: string },
-  ) {
-    const user = reviewer ?? (await createUser())
-    return request(target)
-      .post(`/api/drafts/${String(id)}/approve`)
-      .set('Cookie', await sessionCookieFor(user.id))
-      .send(body)
-  }
-
   test('emails the draft to the student, threaded, and records who approved it', async () => {
     const draft = await pendingDraft()
     const { app: sending, emails } = appSending()
@@ -348,5 +348,111 @@ describe('POST /api/drafts/:id/approve', () => {
     const res = await request(appSending().app).post(`/api/drafts/${String(draft.id)}/approve`)
 
     expect(res.status).toBe(401)
+  })
+})
+
+describe('POST /api/drafts/:id/reject', () => {
+  async function reject(
+    target: ReturnType<typeof appSending>['app'],
+    id: number | string,
+    reviewer?: { id: string },
+  ) {
+    const user = reviewer ?? (await createUser())
+    return request(target)
+      .post(`/api/drafts/${String(id)}/reject`)
+      .set('Cookie', await sessionCookieFor(user.id))
+  }
+
+  test('marks the draft rejected, records who rejected it, and emails nothing', async () => {
+    const draft = await pendingDraft()
+    const { app: sending, emails } = appSending()
+    const agent = await createUser()
+
+    const res = await reject(sending, draft.id, agent)
+
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({
+      id: draft.id,
+      status: 'rejected',
+      body: 'Your request has been passed to the team.',
+      reviewedBy: { id: agent.id, name: agent.name },
+    })
+    expect(emails).toHaveLength(0)
+    const stored = await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })
+    expect(stored).toMatchObject({ status: 'rejected', reviewedById: agent.id })
+    expect(stored.reviewedAt).not.toBeNull()
+  })
+
+  test('leaves the ticket Open and still waiting for an agent', async () => {
+    // The student has not been answered: someone still has to write to them.
+    const draft = await pendingDraft()
+
+    await reject(appSending().app, draft.id)
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: draft.ticketId } })
+    expect(ticket).toMatchObject({
+      status: 'open',
+      autoCloseAt: null,
+      needsAgent: true,
+      escalationReason: 'refund_approval',
+    })
+    expect(await prisma.message.count({ where: { direction: 'outbound' } })).toBe(0)
+  })
+
+  test.each(['approved', 'rejected'] as const)(
+    'refuses a draft already %s with 409, changing nothing',
+    async (status) => {
+      const draft = await pendingDraft()
+      const first = await createUser({ email: 'first@example.com' })
+      const reviewedAt = new Date('2026-09-30T09:00:00Z')
+      await prisma.replyDraft.update({
+        where: { id: draft.id },
+        data: { status, reviewedById: first.id, reviewedAt },
+      })
+
+      const res = await reject(appSending().app, draft.id)
+
+      expect(res.status).toBe(409)
+      expect(res.body).toEqual({ error: 'This draft has already been reviewed' })
+      const stored = await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })
+      expect(stored.status).toBe(status)
+      expect(stored.reviewedById).toBe(first.id)
+      expect(stored.reviewedAt?.getTime()).toBe(reviewedAt.getTime())
+    },
+  )
+
+  test('approving and rejecting at once ends in one or the other, never both', async () => {
+    const draft = await pendingDraft()
+    const { app: sending, emails } = appSending()
+    const approver = await createUser({ email: 'approver@example.com' })
+    const rejecter = await createUser({ email: 'rejecter@example.com' })
+
+    const [approved, rejected] = await Promise.all([
+      approve(sending, draft.id, {}, approver),
+      reject(sending, draft.id, rejecter),
+    ])
+
+    expect([approved.status, rejected.status].sort()).toEqual([200, 409])
+    const stored = await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })
+    // An email went out exactly when the approval won.
+    expect(emails).toHaveLength(stored.status === 'approved' ? 1 : 0)
+  })
+
+  test.each(['999999', 'abc', '0'])('answers 404 for the draft id "%s"', async (id) => {
+    const res = await reject(appSending().app, id)
+
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'Draft not found' })
+  })
+
+  test('refuses a caller with no session', async () => {
+    const draft = await pendingDraft()
+
+    const res = await request(appSending().app).post(`/api/drafts/${String(draft.id)}/reject`)
+
+    expect(res.status).toBe(401)
+    expect((await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe(
+      'pending',
+    )
   })
 })

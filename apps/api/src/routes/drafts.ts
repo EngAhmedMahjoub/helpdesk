@@ -198,3 +198,48 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
 
   res.json(toSummary(approved))
 })
+
+/**
+ * Rejects a pending draft (6.3): nothing is emailed, and the draft stays as a
+ * record of what the AI proposed and who turned it down. Answers the rejected
+ * draft.
+ *
+ * The ticket is left as it is. Its status stays, so an Open ticket stays
+ * Open: the student has still not been answered. Its `needsAgent` and reason
+ * stay too, so it remains in front of agents until one replies, and a
+ * `refund_approval` reason keeps the AI from answering its follow-ups (#239).
+ *
+ * One conditional update, as approval's claim, so a draft approved and
+ * rejected at the same moment ends up one or the other, never both.
+ */
+draftsRouter.post('/:id/reject', ticketWriteRateLimit, async (req, res) => {
+  const id = parseId(draftIdSchema, req, res, DRAFT_NOT_FOUND)
+  if (id === undefined) return
+
+  const reviewerId = req.user?.id
+  if (!reviewerId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  const { count } = await prisma.replyDraft.updateMany({
+    where: { id, status: 'pending' },
+    data: { status: 'rejected', reviewedById: reviewerId, reviewedAt: new Date() },
+  })
+  if (count === 0) {
+    // No pending draft by that id: either none at all, or one already reviewed.
+    const exists = await prisma.replyDraft.findUnique({ where: { id }, select: { id: true } })
+    res
+      .status(exists ? 409 : 404)
+      .json({ error: exists ? DRAFT_ALREADY_REVIEWED : DRAFT_NOT_FOUND })
+    return
+  }
+
+  const rejected = await prisma.replyDraft.findUnique({ where: { id }, select: draftFields })
+  // Deleted with its ticket in the moment since the update.
+  if (!rejected) {
+    res.status(404).json({ error: DRAFT_NOT_FOUND })
+    return
+  }
+  res.json(toSummary(rejected))
+})
