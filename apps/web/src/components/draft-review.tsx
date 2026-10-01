@@ -15,8 +15,8 @@ import { useApproveDraft, useRejectDraft } from '@/hooks/use-drafts'
 
 // The API's own rule for an approved body, made required: the box always
 // holds the text that will be sent, so an emptied box is an error here rather
-// than a quiet fallback to the AI's original.
-const reviewSchema = approveDraftSchema.required()
+// than a quiet fallback to the AI's original. The version travels beside it.
+const reviewSchema = approveDraftSchema.pick({ body: true }).required()
 type Review = { body: string }
 
 /**
@@ -38,11 +38,12 @@ export default function DraftReview({
   return (
     <>
       {draft && (
-        // Keyed by the draft, so a new one arriving resets the box to its text.
+        // Keyed by the draft and its version, so a draft the AI rewrote resets
+        // the box to the new text rather than leaving the old one to approve.
         <DraftForm
           approve={approve}
           draft={draft}
-          key={draft.id}
+          key={`${String(draft.id)}:${draft.updatedAt}`}
           reject={reject}
           senderVerified={ticket.senderVerified}
           student={student}
@@ -116,7 +117,7 @@ function DraftForm({
         className="mt-4"
         noValidate
         onSubmit={form.handleSubmit((values) => {
-          approve.mutate({ draftId: draft.id, body: values.body })
+          approve.mutate({ draftId: draft.id, updatedAt: draft.updatedAt, body: values.body })
         })}
       >
         <Field data-invalid={Boolean(errors.body)}>
