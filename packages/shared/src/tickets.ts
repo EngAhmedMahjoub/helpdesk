@@ -115,6 +115,11 @@ export type PendingDraft = {
   id: number
   body: string
   createdAt: string
+  /**
+   * When the draft last changed. Sent back with an approval, so a draft the
+   * AI rewrote after the agent opened it is not approved unseen (#249).
+   */
+  updatedAt: string
 }
 
 /** The body of `GET /api/tickets/:id`: the ticket and its thread, oldest message first. */

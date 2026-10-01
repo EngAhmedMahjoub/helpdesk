@@ -10,6 +10,7 @@ import {
   fetchReceivedEmail as resendFetchReceivedEmail,
 } from './email/receiving.ts'
 import type { QueueProcessTicket } from './jobs/process-ticket.ts'
+import { refuseForeignOrigin } from './auth/origin.ts'
 import { authRouter } from './routes/auth.ts'
 import { draftsRouter } from './routes/drafts.ts'
 import { tasksRouter } from './routes/tasks.ts'
@@ -94,6 +95,9 @@ export function createApp({
   // body, which the JSON parser would consume first. No session either: Resend
   // proves itself by the signature.
   app.use('/api/webhooks', webhooksRouter)
+  // After the webhook, which Resend's servers call with no browser involved,
+  // and before every route a signed-in page can reach (#249).
+  app.use(refuseForeignOrigin)
   app.use(express.json())
   app.use(cookieParser())
 

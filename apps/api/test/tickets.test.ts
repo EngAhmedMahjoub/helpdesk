@@ -465,6 +465,7 @@ describe('GET /api/tickets/:id', () => {
         id: pending.id,
         body: 'Your request has been passed to the team.',
         createdAt: pending.createdAt.toISOString(),
+        updatedAt: pending.updatedAt.toISOString(),
       })
     })
 
@@ -1236,5 +1237,49 @@ describe('POST /api/tickets/:id/replies', () => {
     const ticket = await createTicket()
 
     expect((await reply(ticket.id, { body: 'a'.repeat(10_000) })).status).toBe(201)
+  })
+})
+
+describe("an agent's reply retires the AI's pending draft (#249)", () => {
+  test('the pending draft is rejected, with the replying agent as reviewer', async () => {
+    const ticket = await createTicket({ needsAgent: true, escalationReason: 'refund_approval' })
+    const agent = await createUser({ email: 'replier@example.com' })
+    const draft = await prisma.replyDraft.create({
+      data: { ticketId: ticket.id, body: 'The AI draft' },
+    })
+
+    const res = await request(createApp({ sendEmail: async () => ({ resendId: null }) }))
+      .post(`/api/tickets/${String(ticket.id)}/replies`)
+      .set('Cookie', await sessionCookieFor(agent.id))
+      .send({ body: 'I have answered this myself.' })
+
+    expect(res.status).toBe(201)
+    const retired = await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })
+    expect(retired).toMatchObject({ status: 'rejected', reviewedById: agent.id })
+    expect(retired.reviewedAt).not.toBeNull()
+  })
+
+  test('a reply that is not sent leaves the draft pending', async () => {
+    const ticket = await createTicket()
+    const agent = await createUser({ email: 'replier@example.com' })
+    const draft = await prisma.replyDraft.create({
+      data: { ticketId: ticket.id, body: 'The AI draft' },
+    })
+
+    const res = await request(
+      createApp({
+        sendEmail: async () => {
+          throw new EmailSendError('Resend refused the email: rate_limit_exceeded')
+        },
+      }),
+    )
+      .post(`/api/tickets/${String(ticket.id)}/replies`)
+      .set('Cookie', await sessionCookieFor(agent.id))
+      .send({ body: 'This one fails.' })
+
+    expect(res.status).toBe(502)
+    expect((await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe(
+      'pending',
+    )
   })
 })
