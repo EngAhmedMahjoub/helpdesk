@@ -2,8 +2,12 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  // For the one-pending-draft index on ReplyDraft (6.11): declared here
+  // rather than hand-written in a migration, so a later migrate dev knows it
+  // and does not drop it.
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -67,6 +71,9 @@ enum EscalationReason {
   // The AI has emailed this ticket, or everyone, as often as it may for now;
   // the reply waits for an agent rather than feeding a mail loop (#239).
   auto_reply_limit
+  // An agent is assigned to the ticket, so the AI's reply waits for them
+  // rather than answering over their head (6.9).
+  agent_assigned
 }
 
 model Ticket {
@@ -167,5 +174,9 @@ model ReplyDraft {
   // ticket's drafts are listed for review (6.1) and by the cascade;
   // reviewedById by the Restrict check that runs whenever a user is deleted.
   @@index([ticketId])
+  // At most one pending draft per ticket (6.11). saveDraft keeps to this, but
+  // two overlapping jobs could each find none and each create one; the index
+  // makes the second insert fail instead.
+  @@unique([ticketId], where: raw("status = 'pending'"), map: "ReplyDraft_one_pending_per_ticket")
   @@index([reviewedById])
 }

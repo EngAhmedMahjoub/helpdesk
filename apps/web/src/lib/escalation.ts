@@ -9,4 +9,5 @@ export const escalationReasonLabels: Record<EscalationReason, string> = {
   ai_failed: 'AI could not answer',
   unverified_sender: 'sender not verified',
   auto_reply_limit: 'AI reply limit reached',
+  agent_assigned: 'assigned agent to reply',
 }
