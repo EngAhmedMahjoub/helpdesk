@@ -147,7 +147,7 @@ None.
 | 6.1 | `GET /api/drafts?status=pending` | Test passes | Done |
 | 6.2 | `POST /api/drafts/:id/approve` — optional edited body; sends email; records reviewer | Student receives approved reply | Done |
 | 6.3 | `POST /api/drafts/:id/reject` | Draft marked rejected; ticket stays Open | Done |
-| 6.4 | `GET /api/tickets?needsAgent=true` filter | Test passes |  |
+| 6.4 | `GET /api/tickets?needsAgent=true` filter | Test passes | Done |
 | 6.5 | Frontend: AI summary and category badge on ticket detail | Visible for AI-processed tickets |  |
 | 6.6 | Frontend: draft review panel — edit, approve, reject | Agent approves an edited draft |  |
 | 6.7 | Frontend: "Needs agent" filter and escalation reason badge on ticket list | Filter shows refund approvals and AI failures |  |
