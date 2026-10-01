@@ -18,6 +18,8 @@ import { statusChange } from '../tickets/status.ts'
 
 const DRAFT_NOT_FOUND = 'Draft not found'
 const DRAFT_ALREADY_REVIEWED = 'This draft has already been reviewed'
+const DRAFT_CHANGED =
+  'The AI updated this draft after a new message from the student. Review the new version.'
 const REPLY_NOT_SENT = 'The reply could not be sent. Please try again.'
 
 /**
@@ -128,12 +130,21 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
   }
 
   const text = body.body ?? draft.body
+  // The version the agent reviewed is part of the claim (#249): a draft the AI
+  // rewrote since matches nothing, and its newer text is not overwritten.
   const { count } = await prisma.replyDraft.updateMany({
-    where: { id, status: 'pending' },
+    where: { id, status: 'pending', updatedAt: new Date(body.updatedAt) },
     data: { status: 'approved', body: text, reviewedById: reviewerId, reviewedAt: new Date() },
   })
   if (count === 0) {
-    res.status(409).json({ error: DRAFT_ALREADY_REVIEWED })
+    const now = await prisma.replyDraft.findUnique({ where: { id }, select: { status: true } })
+    if (!now) {
+      res.status(404).json({ error: DRAFT_NOT_FOUND })
+      return
+    }
+    res
+      .status(409)
+      .json({ error: now.status === 'pending' ? DRAFT_CHANGED : DRAFT_ALREADY_REVIEWED })
     return
   }
 
@@ -150,10 +161,23 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
   } catch (err) {
     // Back to pending, the edit kept, so the agent can try again. Conditional
     // on this claim, so nothing a later approval wrote is undone.
-    await prisma.replyDraft.updateMany({
-      where: { id, status: 'approved', reviewedById: reviewerId },
-      data: { status: 'pending', reviewedById: null, reviewedAt: null },
-    })
+    try {
+      await prisma.replyDraft.updateMany({
+        where: { id, status: 'approved', reviewedById: reviewerId },
+        data: { status: 'pending', reviewedById: null, reviewedAt: null },
+      })
+    } catch (revertErr) {
+      // Both are logged, the send's first (#249): a failed revert must not
+      // hide why nothing was sent. The draft is then left approved but
+      // unsent, which the log names. Messages only, as everywhere: the error
+      // objects could carry the draft.
+      const describe = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e))
+      console.error(
+        `Draft ${String(id)} not sent (${describe(err)}), and not returned to pending (${describe(revertErr)})`,
+      )
+      res.status(502).json({ error: REPLY_NOT_SENT })
+      return
+    }
     if (!(err instanceof EmailSendError)) throw err
     console.error(err.message)
     res.status(502).json({ error: REPLY_NOT_SENT })

@@ -61,8 +61,14 @@ export const draftIdSchema = ticketIdSchema
  * The body of `POST /api/drafts/:id/approve`. `body` is the agent's edit of the
  * draft; left out, the draft goes as the AI wrote it. Held to an agent reply's
  * rules, since once approved it is one.
+ *
+ * `updatedAt` is the version of the draft the agent reviewed. A student's
+ * follow-up can have the AI rewrite the draft while it is open; approving then
+ * would email the old text and drop the new, so the API refuses an approval
+ * whose version is not the draft's current one (#249).
  */
 export const approveDraftSchema = z.object({
+  updatedAt: z.iso.datetime(),
   body: z
     .string()
     .trim()
