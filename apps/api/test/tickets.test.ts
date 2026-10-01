@@ -441,6 +441,50 @@ describe('GET /api/tickets/assignees', () => {
 })
 
 describe('GET /api/tickets/:id', () => {
+  describe('the pending draft (6.6)', () => {
+    test('carries the draft waiting for review, and whether the sender was verified', async () => {
+      const ticket = await createTicket({ senderVerified: true })
+      const reviewer = await createUser({ email: 'reviewer@example.com' })
+      await prisma.replyDraft.create({
+        data: {
+          ticketId: ticket.id,
+          body: 'An earlier draft, rejected',
+          status: 'rejected',
+          reviewedById: reviewer.id,
+          reviewedAt: day(1),
+        },
+      })
+      const pending = await prisma.replyDraft.create({
+        data: { ticketId: ticket.id, body: 'Your request has been passed to the team.' },
+      })
+
+      const body = (await detail(ticket.id)).body as TicketDetail
+
+      expect(body.senderVerified).toBe(true)
+      expect(body.pendingDraft).toEqual({
+        id: pending.id,
+        body: 'Your request has been passed to the team.',
+        createdAt: pending.createdAt.toISOString(),
+      })
+    })
+
+    test('is null once the draft has been reviewed', async () => {
+      const ticket = await createTicket()
+      const reviewer = await createUser({ email: 'reviewer@example.com' })
+      await prisma.replyDraft.create({
+        data: {
+          ticketId: ticket.id,
+          body: 'Sent',
+          status: 'approved',
+          reviewedById: reviewer.id,
+          reviewedAt: day(1),
+        },
+      })
+
+      expect(((await detail(ticket.id)).body as TicketDetail).pendingDraft).toBeNull()
+    })
+  })
+
   test('returns the ticket with its thread, oldest message first', async () => {
     const replier = await createUser({ email: 'gil@example.com', name: 'Gil Agent' })
     const ticket = await createTicket({
@@ -493,6 +537,8 @@ describe('GET /api/tickets/:id', () => {
       assignee: { id: replier.id, name: 'Gil Agent' },
       summary: 'Quiz 3 scored 0 after submitting',
       autoCloseAt: day(20).toISOString(),
+      senderVerified: false,
+      pendingDraft: null,
       createdAt: day(1).toISOString(),
       updatedAt: day(6).toISOString(),
       messages: [

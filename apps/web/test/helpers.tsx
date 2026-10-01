@@ -62,6 +62,8 @@ export const ticketDetail = (
   ...ticketSummary(overrides),
   summary: null,
   autoCloseAt: null,
+  senderVerified: true,
+  pendingDraft: null,
   messages: [],
   ...overrides,
 })
