@@ -24,6 +24,14 @@ const ALL = 'all'
 
 type AssigneeFilter = ListTicketsQuery['assignee']
 
+type NeedsAgentFilter = ListTicketsQuery['needsAgent']
+
+/** The API takes "true" and "false"; an agent picks between these (6.7). */
+const needsAgentLabels: Record<NonNullable<NeedsAgentFilter>, string> = {
+  true: 'Needs agent',
+  false: 'No agent needed',
+}
+
 /** Whose tickets, in words: the API takes "me" and "none", not a person. */
 const assigneeLabels: Record<NonNullable<AssigneeFilter>, string> = {
   me: 'Assigned to me',
@@ -34,10 +42,12 @@ type Props = {
   status: TicketStatus | undefined
   category: TicketCategory | undefined
   assignee: AssigneeFilter
+  needsAgent: NeedsAgentFilter
   sort: SortChoice
   onStatus: (status: TicketStatus | undefined) => void
   onCategory: (category: TicketCategory | undefined) => void
   onAssignee: (assignee: AssigneeFilter) => void
+  onNeedsAgent: (needsAgent: NeedsAgentFilter) => void
   onSort: (sort: SortChoice) => void
 }
 
@@ -45,10 +55,12 @@ export default function TicketFilters({
   status,
   category,
   assignee,
+  needsAgent,
   sort,
   onStatus,
   onCategory,
   onAssignee,
+  onNeedsAgent,
   onSort,
 }: Props) {
   return (
@@ -85,6 +97,23 @@ export default function TicketFilters({
         {/* Anyone rather than All: it reads as a person, which this filter is about. */}
         <SelectItem value={ALL}>Anyone</SelectItem>
         {Object.entries(assigneeLabels).map(([value, label]) => (
+          <SelectItem key={value} value={value}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectField>
+
+      <SelectField
+        className="w-44"
+        id="filter-needs-agent"
+        label="Needs agent"
+        onChange={(value) => {
+          onNeedsAgent(value === ALL ? undefined : (value as NonNullable<NeedsAgentFilter>))
+        }}
+        value={needsAgent ?? ALL}
+      >
+        <SelectItem value={ALL}>All</SelectItem>
+        {Object.entries(needsAgentLabels).map(([value, label]) => (
           <SelectItem key={value} value={value}>
             {label}
           </SelectItem>
