@@ -9,7 +9,11 @@ function nav() {
 }
 
 test('an agent does not see the Users link', async () => {
-  stubApi({ '/auth/me': responds.currentAgent, '/dashboard': responds.dashboard })
+  stubApi({
+    '/auth/me': responds.currentAgent,
+    '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
+  })
 
   renderRoute('/')
 
@@ -22,7 +26,11 @@ test('an agent does not see the Users link', async () => {
 })
 
 test('an admin sees the Users link', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
+  })
 
   renderRoute('/')
 
@@ -31,7 +39,11 @@ test('an admin sees the Users link', async () => {
 })
 
 test('the nav marks the current route as current', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
+  })
 
   renderRoute('/tickets')
 
@@ -42,7 +54,11 @@ test('the nav marks the current route as current', async () => {
 })
 
 test('a nav link moves between screens without leaving the layout', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
+  })
 
   const router = renderRoute('/')
   await screen.findByText(signedInUser.name)
@@ -54,7 +70,11 @@ test('a nav link moves between screens without leaving the layout', async () => 
 })
 
 test('the Helpdesk name in the header goes home', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
+  })
 
   const router = renderRoute('/tickets')
   await screen.findByText(signedInUser.name)

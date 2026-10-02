@@ -30,7 +30,11 @@ for (const path of ['/tickets', '/tickets/1', '/users']) {
 }
 
 test('the protected route shows a labelled spinner while the session check is in flight', () => {
-  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
+  })
 
   renderRoute('/')
 
@@ -38,7 +42,11 @@ test('the protected route shows a labelled spinner while the session check is in
 })
 
 test('a signed-in visitor stays and sees their name', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
+  })
 
   const router = renderRoute('/')
 
@@ -50,6 +58,7 @@ test('signing out calls the API and returns to /login', async () => {
   const requests = stubApi({
     '/auth/me': responds.currentUser,
     '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
     '/auth/logout': responds.noContent,
   })
 
@@ -68,6 +77,7 @@ test('the session check is not repeated after signing in', async () => {
   const requests = stubApi({
     '/auth/login': responds.currentUser,
     '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
   })
 
   const router = renderRoute('/login')
