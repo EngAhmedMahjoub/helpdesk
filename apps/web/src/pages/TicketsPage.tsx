@@ -21,14 +21,16 @@ import { studentLabel } from '@/lib/tickets'
 // One list for the skeleton and the table, so their headers and widths cannot
 // drift apart. Sums to 100%; Subject gets the most because it runs longest.
 const columns: Column[] = [
-  { label: 'Subject', width: 'w-[24%]' },
+  { label: 'Subject', width: 'w-[22%]' },
   { label: 'Student', width: 'w-[15%]' },
   { label: 'Status', width: 'w-[10%]' },
   { label: 'Category', width: 'w-[11%]' },
   { label: 'Assignee', width: 'w-[13%]' },
   // Wider than a Yes needed: it holds the reason now.
-  { label: 'Needs agent', width: 'w-[14%]' },
-  { label: 'Last activity', width: 'w-[13%]' },
+  { label: 'Needs agent', width: 'w-[13%]' },
+  // Fits "28 Sept 2026, 16:10" at the page's full width; at 13% the year
+  // pushed it past the cell and truncate cut it off.
+  { label: 'Last activity', width: 'w-[16%]' },
 ]
 
 export default function TicketsPage() {
