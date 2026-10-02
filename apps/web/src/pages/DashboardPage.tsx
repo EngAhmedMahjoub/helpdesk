@@ -6,6 +6,7 @@ import {
   type TicketCategory,
   type TicketStatus,
 } from '@helpdesk/shared'
+import CountBarChart from '@/components/count-bar-chart'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDashboard } from '@/hooks/use-dashboard'
@@ -23,6 +24,24 @@ const categoryLabels: Record<TicketCategory, string> = {
   technical: 'Technical',
   refund: 'Refund',
 }
+
+// Fixed to the entity, never to its rank, so Open stays blue whatever the
+// counts. Status and category take different slots, so no colour means two
+// things on one page. Not the destructive red: a colour here names, it does
+// not warn.
+const statusColors: Record<TicketStatus, string> = {
+  open: 'var(--series-1)',
+  resolved: 'var(--series-2)',
+  closed: 'var(--series-3)',
+}
+
+const categoryColors: Record<TicketCategory, string> = {
+  general: 'var(--series-4)',
+  technical: 'var(--series-5)',
+  refund: 'var(--series-6)',
+}
+
+const UNCATEGORIZED_COLOR = 'var(--series-7)'
 
 export default function DashboardPage() {
   const dashboard = useDashboard()
@@ -67,54 +86,33 @@ function Counts({ data }: { data: DashboardResponse }) {
         </CardContent>
       </Card>
 
-      <TileRow
-        heading="By status"
-        tiles={TICKET_STATUSES.map((status) => ({
-          label: statusLabels[status],
-          value: data.byStatus[status],
-        }))}
-        total={data.total}
-      />
+      <div className="grid gap-8 md:grid-cols-2">
+        <CountBarChart
+          bars={TICKET_STATUSES.map((status) => ({
+            label: statusLabels[status],
+            count: data.byStatus[status],
+            color: statusColors[status],
+          }))}
+          heading="By status"
+          total={data.total}
+        />
 
-      <TileRow
-        heading="By category"
-        tiles={[
-          ...TICKET_CATEGORIES.map((category) => ({
-            label: categoryLabels[category],
-            value: data.byCategory[category],
-          })),
-          // Shown, not dropped: a ticket the AI has not reached yet still
-          // belongs in the total the row adds up to.
-          { label: 'Not yet classified', value: data.uncategorized },
-        ]}
-        total={data.total}
-      />
+        <CountBarChart
+          bars={[
+            ...TICKET_CATEGORIES.map((category) => ({
+              label: categoryLabels[category],
+              count: data.byCategory[category],
+              color: categoryColors[category],
+            })),
+            // Shown, not dropped: a ticket the AI has not reached yet still
+            // belongs in the total the bars add up to.
+            { label: 'Not yet classified', count: data.uncategorized, color: UNCATEGORIZED_COLOR },
+          ]}
+          heading="By category"
+          total={data.total}
+        />
+      </div>
     </div>
-  )
-}
-
-type Tile = { label: string; value: number }
-
-function TileRow({ heading, tiles, total }: { heading: string; tiles: Tile[]; total: number }) {
-  return (
-    <section aria-label={heading}>
-      <h2 className="text-lg font-medium text-foreground">
-        {heading}{' '}
-        <span className="text-sm font-normal text-muted-foreground">
-          of {count.format(total)} {total === 1 ? 'ticket' : 'tickets'}
-        </span>
-      </h2>
-      <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {tiles.map((tile) => (
-          // dt and dd straight inside the Card: a dl allows one wrapping div
-          // per term, not the two that CardContent would make.
-          <Card className="gap-1 px-3" key={tile.label} size="sm">
-            <dt className="text-sm text-muted-foreground">{tile.label}</dt>
-            <dd className="text-2xl font-semibold text-foreground">{count.format(tile.value)}</dd>
-          </Card>
-        ))}
-      </dl>
-    </section>
   )
 }
 
@@ -124,13 +122,10 @@ function DashboardSkeleton() {
       <span className="sr-only">Loading the dashboard</span>
       <div aria-hidden="true" className="flex flex-col gap-8">
         <Skeleton className="h-36 w-full rounded-xl" />
-        {[0, 1].map((row) => (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4" key={row}>
-            {[0, 1, 2, 3].map((tile) => (
-              <Skeleton className="h-20 rounded-xl" key={tile} />
-            ))}
-          </div>
-        ))}
+        <div className="grid gap-8 md:grid-cols-2">
+          <Skeleton className="h-56 rounded-xl" />
+          <Skeleton className="h-56 rounded-xl" />
+        </div>
       </div>
     </div>
   )
