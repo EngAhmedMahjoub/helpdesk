@@ -2,7 +2,7 @@ import type { RouteObject } from 'react-router'
 import AppLayout from '@/components/app-layout'
 import RequireAdmin from '@/components/require-admin'
 import RequireAuth from '@/components/require-auth'
-import HomePage from '@/pages/HomePage'
+import DashboardPage from '@/pages/DashboardPage'
 import LoginPage from '@/pages/LoginPage'
 import NotFoundPage from '@/pages/NotFoundPage'
 import TicketDetailPage from '@/pages/TicketDetailPage'
@@ -21,7 +21,7 @@ export const routes: RouteObject[] = [
       {
         Component: AppLayout,
         children: [
-          { index: true, Component: HomePage },
+          { index: true, Component: DashboardPage },
           { path: 'tickets', Component: TicketsPage },
           { path: 'tickets/:id', Component: TicketDetailPage },
           {

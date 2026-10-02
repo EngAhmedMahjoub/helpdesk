@@ -15,7 +15,10 @@ async function fillAndSubmit(email: string, password: string) {
 }
 
 test('posts the credentials and lands on the home page', async () => {
-  const requests = stubApi({ '/auth/login': responds.currentUser, '/health': responds.health })
+  const requests = stubApi({
+    '/auth/login': responds.currentUser,
+    '/dashboard': responds.dashboard,
+  })
 
   const router = renderRoute('/login')
   await fillAndSubmit(signedInUser.email, 'correct horse battery')
@@ -31,7 +34,7 @@ test('posts the credentials and lands on the home page', async () => {
 })
 
 test('replaces the login entry so back does not return to it', async () => {
-  stubApi({ '/auth/login': responds.currentUser, '/health': responds.health })
+  stubApi({ '/auth/login': responds.currentUser, '/dashboard': responds.dashboard })
 
   const router = renderRoute('/login')
   await fillAndSubmit(signedInUser.email, 'correct horse battery')
@@ -86,7 +89,7 @@ test('marks the offending field invalid for assistive tech', async () => {
 })
 
 test("signing in drops whatever the previous person's session left cached", async () => {
-  stubApi({ '/auth/login': responds.currentUser, '/health': responds.health })
+  stubApi({ '/auth/login': responds.currentUser, '/dashboard': responds.dashboard })
 
   // What an expired session leaves behind: /auth/me answers null rather than
   // failing, so no 401 handler ever ran, and their data is still in memory.

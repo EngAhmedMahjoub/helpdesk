@@ -9,7 +9,7 @@ function nav() {
 }
 
 test('an agent does not see the Users link', async () => {
-  stubApi({ '/auth/me': responds.currentAgent, '/health': responds.health })
+  stubApi({ '/auth/me': responds.currentAgent, '/dashboard': responds.dashboard })
 
   renderRoute('/')
 
@@ -22,7 +22,7 @@ test('an agent does not see the Users link', async () => {
 })
 
 test('an admin sees the Users link', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/health': responds.health })
+  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
 
   renderRoute('/')
 
@@ -31,7 +31,7 @@ test('an admin sees the Users link', async () => {
 })
 
 test('the nav marks the current route as current', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/health': responds.health })
+  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
 
   renderRoute('/tickets')
 
@@ -42,7 +42,7 @@ test('the nav marks the current route as current', async () => {
 })
 
 test('a nav link moves between screens without leaving the layout', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/health': responds.health })
+  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
 
   const router = renderRoute('/')
   await screen.findByText(signedInUser.name)
@@ -54,7 +54,7 @@ test('a nav link moves between screens without leaving the layout', async () => 
 })
 
 test('the Helpdesk name in the header goes home', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/health': responds.health })
+  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
 
   const router = renderRoute('/tickets')
   await screen.findByText(signedInUser.name)
