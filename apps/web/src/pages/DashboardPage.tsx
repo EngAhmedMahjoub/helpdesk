@@ -7,6 +7,7 @@ import {
   type TicketStatus,
 } from '@helpdesk/shared'
 import CountBarChart from '@/components/count-bar-chart'
+import RecentTickets from '@/components/recent-tickets'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDashboard } from '@/hooks/use-dashboard'
@@ -60,6 +61,12 @@ export default function DashboardPage() {
         )}
 
         {dashboard.data && <Counts data={dashboard.data} />}
+      </div>
+
+      {/* Its own query, loading and failing apart from the counts: either is
+          worth showing without the other. */}
+      <div className="mt-8">
+        <RecentTickets />
       </div>
     </main>
   )

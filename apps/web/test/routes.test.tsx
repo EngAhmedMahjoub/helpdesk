@@ -3,7 +3,11 @@ import { screen } from '@testing-library/react'
 import { renderRoute, responds, stubApi } from './helpers.tsx'
 
 test('the home route renders the dashboard', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
+  stubApi({
+    '/auth/me': responds.currentUser,
+    '/dashboard': responds.dashboard,
+    '/tickets': responds.noTickets,
+  })
 
   renderRoute('/')
 

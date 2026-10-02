@@ -35,6 +35,28 @@ export function useTickets(query: ListTicketsQuery) {
   })
 }
 
+/** How many tickets the dashboard lists, and the query that fetches them. */
+export const RECENT_TICKETS_QUERY = {
+  sort: 'createdAt',
+  order: 'desc',
+  pageSize: 5,
+} as const satisfies ListTicketsQuery
+
+/**
+ * The newest tickets, for the dashboard (7.3). Stale at once, as the counts
+ * beside it are: a ticket that arrived by email since the last visit should
+ * be in the list as well as in the total.
+ */
+export function useRecentTickets() {
+  const viewerId = useCurrentUser().data?.id
+
+  return useQuery({
+    queryKey: ticketsQueryKey(RECENT_TICKETS_QUERY, viewerId),
+    queryFn: () => fetchTickets(RECENT_TICKETS_QUERY),
+    staleTime: 0,
+  })
+}
+
 /** One ticket with its thread. `id` is already parsed from the URL. */
 export function useTicket(id: number) {
   return useQuery({

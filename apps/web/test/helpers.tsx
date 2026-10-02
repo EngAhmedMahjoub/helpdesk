@@ -95,6 +95,8 @@ export const responds = {
   currentAgent: () => Response.json(agentUser),
   noSession: () => responds.error(401, 'Unauthorized'),
   dashboard: () => Response.json(dashboardCounts()),
+  /** An empty ticket list, e.g. for the dashboard's recent tickets. */
+  noTickets: () => Response.json({ tickets: [], page: 1, pageSize: 20, total: 0 }),
   noContent: () => new Response(null, { status: 204 }),
   /** A failure in the API's own shape: a status and an `error` message. */
   error: (status: number, message: string) => Response.json({ error: message }, { status }),

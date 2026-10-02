@@ -15,10 +15,14 @@ export const dateAndTime = new Intl.DateTimeFormat(undefined, {
   timeStyle: 'short',
 })
 
-/** Short enough for a narrow cell; pair it with {@link fullDateTime} in a title. */
+/**
+ * Short enough for a narrow cell; pair it with {@link fullDateTime} in a title.
+ * The year stays: without it a ticket from last September reads as this one's.
+ */
 export const compactDateTime = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
   month: 'short',
+  year: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
 })
