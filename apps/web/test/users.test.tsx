@@ -78,7 +78,7 @@ test('shows the API message when the list cannot be loaded', async () => {
 })
 
 test('an agent typing /users is sent to the dashboard and never asks for the list', async () => {
-  const requests = stubApi({ '/auth/me': responds.currentAgent, '/health': responds.health })
+  const requests = stubApi({ '/auth/me': responds.currentAgent, '/dashboard': responds.dashboard })
 
   const router = renderRoute('/users')
 
@@ -92,7 +92,7 @@ test('an agent typing /users is sent to the dashboard and never asks for the lis
 })
 
 test('the redirect replaces the entry, so Back does not bounce', async () => {
-  stubApi({ '/auth/me': responds.currentAgent, '/health': responds.health })
+  stubApi({ '/auth/me': responds.currentAgent, '/dashboard': responds.dashboard })
 
   const router = renderRoute('/users')
 

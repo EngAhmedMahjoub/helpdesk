@@ -2,24 +2,12 @@ import { expect, test } from 'bun:test'
 import { screen } from '@testing-library/react'
 import { renderRoute, responds, stubApi } from './helpers.tsx'
 
-test('the home route renders the API health it queried', async () => {
-  stubApi({ '/auth/me': responds.currentUser, '/health': responds.health })
+test('the home route renders the dashboard', async () => {
+  stubApi({ '/auth/me': responds.currentUser, '/dashboard': responds.dashboard })
 
   renderRoute('/')
 
-  const status = await screen.findByText(/API status: ok/)
-  expect(status.textContent).toContain('database: up')
-})
-
-test('the home route reports a failed health query', async () => {
-  stubApi({
-    '/auth/me': responds.currentUser,
-    '/health': () => responds.error(404, 'Not Found'),
-  })
-
-  renderRoute('/')
-
-  expect(await screen.findByText(/API unreachable: Not Found/)).toBeDefined()
+  expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeDefined()
 })
 
 test('the login route renders', () => {

@@ -2,7 +2,7 @@ import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import type {
   CurrentUser,
-  HealthResponse,
+  DashboardResponse,
   TicketDetail,
   TicketMessage,
   TicketSummary,
@@ -79,18 +79,22 @@ export const ticketMessage = (
   ...overrides,
 })
 
-const health: HealthResponse = {
-  status: 'ok',
-  database: 'up',
-  timestamp: '2026-01-01T00:00:00.000Z',
-}
+/** The dashboard's counts: no tickets at all unless told otherwise. */
+export const dashboardCounts = (overrides: Partial<DashboardResponse> = {}): DashboardResponse => ({
+  total: 0,
+  byStatus: { open: 0, resolved: 0, closed: 0 },
+  byCategory: { general: 0, technical: 0, refund: 0 },
+  uncategorized: 0,
+  needsAgent: 0,
+  ...overrides,
+})
 
 /** Canned responses for the endpoints the app calls while rendering. */
 export const responds = {
   currentUser: () => Response.json(signedInUser),
   currentAgent: () => Response.json(agentUser),
   noSession: () => responds.error(401, 'Unauthorized'),
-  health: () => Response.json(health),
+  dashboard: () => Response.json(dashboardCounts()),
   noContent: () => new Response(null, { status: 204 }),
   /** A failure in the API's own shape: a status and an `error` message. */
   error: (status: number, message: string) => Response.json({ error: message }, { status }),
