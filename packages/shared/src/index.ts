@@ -27,6 +27,7 @@ export type UserSummary = {
 }
 
 export * from './ai-output.ts'
+export * from './dashboard.ts'
 export * from './drafts.ts'
 export * from './tickets.ts'
 export * from './user-fields.ts'

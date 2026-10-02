@@ -160,11 +160,11 @@ None.
 
 ## Phase 7 — Dashboard
 
-| ID | Task | Done when |
-|---|---|---|
-| 7.1 | `GET /api/dashboard` — counts by status and category, needs-agent count | Test passes |
-| 7.2 | Frontend: dashboard with counts and link to tickets needing an agent | Counts match database |
-| 7.3 | Frontend: recent tickets on dashboard | Latest tickets listed with links |
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 7.1 | `GET /api/dashboard` — counts by status and category, needs-agent count | Test passes | Done |
+| 7.2 | Frontend: dashboard with counts and link to tickets needing an agent | Counts match database | |
+| 7.3 | Frontend: recent tickets on dashboard | Latest tickets listed with links | |
 
 ## Phase 8 — Deployment
 
