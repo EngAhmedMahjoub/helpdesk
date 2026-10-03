@@ -536,15 +536,17 @@ describe('Phase 6 security fixes (#249)', () => {
       restore = []
     })
 
-    test('still answers 502, and logs both failures without the draft', async () => {
-      const draft = await pendingDraft()
+    /**
+     * Records console.error, and lets the claim go through but fails the
+     * revert that follows a failed send. The model delegate is a proxy a spy
+     * cannot patch, so the whole property is swapped for one that counts its
+     * updateMany calls.
+     */
+    function failTheRevert() {
       errors = []
       const logged = spyOn(console, 'error').mockImplementation((line: unknown) => {
         errors.push(String(line))
       })
-      // The claim goes through; the revert that follows the refused send
-      // fails. The model delegate is a proxy a spy cannot patch, so the whole
-      // property is swapped for one that counts its updateMany calls.
       const real = prisma.replyDraft
       let calls = 0
       const failingRevert = new Proxy(real, {
@@ -563,6 +565,11 @@ describe('Phase 6 security fixes (#249)', () => {
         () => logged.mockRestore(),
         () => Object.defineProperty(prisma, 'replyDraft', { value: real, configurable: true }),
       ]
+    }
+
+    test('still answers 502, and logs both failures without the draft', async () => {
+      const draft = await pendingDraft()
+      failTheRevert()
 
       const res = await approve(appSending({ fail: true }).app, draft.id, { body: 'Edited.' })
 
@@ -572,6 +579,46 @@ describe('Phase 6 security fixes (#249)', () => {
       ])
       expect(errors.join('\n')).not.toContain('Edited.')
     })
+
+    // A send that failed for a reason of ours, not Resend's, with the revert
+    // failing too: still a 502, since the draft is left approved but unsent
+    // and that is what the agent must hear (#271).
+    test('answers 502 even when the send failed for a reason of ours', async () => {
+      const draft = await pendingDraft()
+      failTheRevert()
+      const broken = createApp({
+        sendEmail: () => Promise.reject(new TypeError('bad address object')),
+      })
+
+      const res = await approve(broken, draft.id, { body: 'Edited.' })
+
+      expect(res.status).toBe(502)
+      expect(errors).toEqual([
+        `Draft ${String(draft.id)} not sent (TypeError: bad address object), and not returned to pending (Error: connection lost)`,
+      ])
+    })
+  })
+
+  // A send that failed for a reason of ours, with the revert going through:
+  // the draft is pending again, and the fault is the error handler's 500, not
+  // a 502 blaming Resend (#271).
+  test('a send that fails for a reason of ours answers 500 and leaves the draft pending', async () => {
+    const draft = await pendingDraft()
+    const quiet = spyOn(console, 'error').mockImplementation(() => {})
+    const broken = createApp({
+      sendEmail: () => Promise.reject(new TypeError('bad address object')),
+    })
+
+    try {
+      const res = await approve(broken, draft.id, { body: 'Edited.' })
+
+      expect(res.status).toBe(500)
+      const stored = await prisma.replyDraft.findUniqueOrThrow({ where: { id: draft.id } })
+      expect(stored).toMatchObject({ status: 'pending', body: 'Edited.', reviewedById: null })
+      expect(await prisma.message.count({ where: { direction: 'outbound' } })).toBe(0)
+    } finally {
+      quiet.mockRestore()
+    }
   })
 
   describe('3. state-changing requests from another origin', () => {
