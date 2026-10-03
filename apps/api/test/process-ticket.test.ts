@@ -6,7 +6,7 @@ import type { JobWithMetadata } from 'pg-boss'
 import type { AiOutput, TicketDetail } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
 import { AiFailure } from '../src/ai/failure.ts'
-import { EmailSendError, type OutboundEmail } from '../src/email/outbound.ts'
+import { EmailSendError } from '../src/email/outbound.ts'
 import {
   type ProcessTicketJob,
   processTicket,
@@ -15,6 +15,7 @@ import {
 } from '../src/jobs/process-ticket.ts'
 import { message, stubAnthropic } from './ai-stub.ts'
 import { prisma, resetDatabase } from './db.ts'
+import { fakeSender } from './email-stub.ts'
 import { createMessage, createTicket, createUser, sessionCookieFor } from './fixtures.ts'
 
 beforeEach(resetDatabase)
@@ -38,18 +39,14 @@ const answering = (output: AiOutput) => stubAnthropic(() => message(JSON.stringi
 
 /** Everything the worker needs, with the emails it sends recorded instead of sent. */
 function depsFor(client: ReturnType<typeof stubAnthropic>['client'], { failSend = false } = {}) {
-  const emails: OutboundEmail[] = []
+  const sender = fakeSender({ failing: failSend })
   return {
-    emails,
+    emails: sender.emails,
     deps: {
       prisma,
       client,
       knowledgeBase: '<article file="refunds.md" category="refund">Refunds.</article>',
-      sendEmail: async (email: OutboundEmail) => {
-        if (failSend) throw new EmailSendError('Resend refused the email: rate_limit_exceeded')
-        emails.push(email)
-        return { resendId: 'resend-id' }
-      },
+      sendEmail: sender.sendEmail,
     },
   }
 }

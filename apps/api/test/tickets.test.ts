@@ -8,8 +8,8 @@ import {
   type TicketMessage,
 } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
-import { EmailSendError, type OutboundEmail } from '../src/email/outbound.ts'
 import { prisma, resetDatabase } from './db.ts'
+import { fakeSender } from './email-stub.ts'
 import {
   createMessage,
   createThread,
@@ -18,24 +18,16 @@ import {
   sessionCookieFor,
 } from './fixtures.ts'
 
-// Records what the app emails instead of sending it. With `refuse` set, a send
-// fails the way a refusal from Resend does.
-const outbox: OutboundEmail[] = []
-let refuse = false
+// Records what the app emails instead of sending it, shared by the file's tests.
+const sender = fakeSender()
+const outbox = sender.emails
 
-const app = createApp({
-  sendEmail: async (email) => {
-    if (refuse) throw new EmailSendError('Resend refused the email: validation_error')
-    outbox.push(email)
-    return { resendId: 'resend-1' }
-  },
-})
+const app = createApp({ sendEmail: sender.sendEmail })
 
 let agentCookie: string
 
 beforeEach(async () => {
-  outbox.length = 0
-  refuse = false
+  sender.reset()
   await resetDatabase()
   agentCookie = await sessionCookieFor((await createUser()).id)
 })
@@ -1112,7 +1104,7 @@ describe('POST /api/tickets/:id/replies', () => {
 
   test('answers 502 and saves nothing when the email is refused', async () => {
     const ticket = await createTicket({ updatedAt: day(1) })
-    refuse = true
+    sender.failing = true
 
     const res = await reply(ticket.id, { body: 'On it.' })
 
@@ -1248,7 +1240,7 @@ describe("an agent's reply retires the AI's pending draft (#249)", () => {
       data: { ticketId: ticket.id, body: 'The AI draft' },
     })
 
-    const res = await request(createApp({ sendEmail: async () => ({ resendId: null }) }))
+    const res = await request(createApp({ sendEmail: fakeSender().sendEmail }))
       .post(`/api/tickets/${String(ticket.id)}/replies`)
       .set('Cookie', await sessionCookieFor(agent.id))
       .send({ body: 'I have answered this myself.' })
@@ -1266,13 +1258,7 @@ describe("an agent's reply retires the AI's pending draft (#249)", () => {
       data: { ticketId: ticket.id, body: 'The AI draft' },
     })
 
-    const res = await request(
-      createApp({
-        sendEmail: async () => {
-          throw new EmailSendError('Resend refused the email: rate_limit_exceeded')
-        },
-      }),
-    )
+    const res = await request(createApp({ sendEmail: fakeSender({ failing: true }).sendEmail }))
       .post(`/api/tickets/${String(ticket.id)}/replies`)
       .set('Cookie', await sessionCookieFor(agent.id))
       .send({ body: 'This one fails.' })
