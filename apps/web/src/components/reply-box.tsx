@@ -50,15 +50,15 @@ export default function ReplyBox({ ticketId, student }: { ticketId: number; stud
           {...form.register('body')}
         />
         <FieldDescription id="reply-hint">
-          Saved on the ticket; sending it by email arrives in Phase 4. Up to{' '}
-          {REPLY_MAX_LENGTH.toLocaleString()} characters.
+          Emailed to the student and saved on the ticket. Up to {REPLY_MAX_LENGTH.toLocaleString()}{' '}
+          characters.
         </FieldDescription>
         <FieldError errors={[errors.body]} />
       </Field>
 
       <div className="mt-4 flex items-center gap-4">
         <Button disabled={sendReply.isPending} type="submit">
-          <PendingLabel busy="Saving…" pending={sendReply.isPending}>
+          <PendingLabel busy="Sending…" pending={sendReply.isPending}>
             Send reply
           </PendingLabel>
         </Button>
