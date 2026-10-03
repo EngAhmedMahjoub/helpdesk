@@ -266,8 +266,8 @@ const created = await prisma.$transaction(async (tx) => {
             author: message.author,
             agentId: message.author === 'agent' ? admin.id : null,
             body: message.body,
-            // Student and AI messages travelled by email, so they carry a
-            // Message-ID. Agent replies are not emailed until Phase 4.
+            // Student and AI messages carry a Message-ID, as if they had
+            // travelled by email. Agent replies are left without one.
             emailMessageId:
               message.author === 'agent'
                 ? null
