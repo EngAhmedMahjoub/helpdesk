@@ -21,7 +21,15 @@ test('the seeded admin signs in and reaches the dashboard', async ({ page }) => 
   await submitLogin(page, ADMIN.email, ADMIN.password)
 
   await expect(page).toHaveURL('/')
-  await expect(page.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()
+
+  await test.step('the dashboard shows the needs-agent count and both charts', async () => {
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+    const needsAgent = page.getByRole('term').filter({ hasText: /^Needs an agent$/ })
+    await expect(needsAgent).toBeVisible()
+    await expect(needsAgent.locator('xpath=following-sibling::dd[1]')).toHaveText(/^[\d,]+$/)
+    await expect(page.getByRole('region', { name: 'By status' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'By category' })).toBeVisible()
+  })
 
   const cookie = await sessionCookie(page)
 
