@@ -1,7 +1,9 @@
-import { anthropic } from '../src/ai/client.ts'
+import { anthropic, estimatedCostUsd } from '../src/ai/client.ts'
 import { AiFailure } from '../src/ai/failure.ts'
 import { loadKnowledgeBase } from '../src/ai/knowledge-base.ts'
-import { type TicketForPrompt, analyseTicket } from '../src/ai/prompt.ts'
+import type { EvalCase } from '../src/ai/evaluate.ts'
+import { analyseTicket } from '../src/ai/prompt.ts'
+import { email } from '../eval/samples.ts'
 
 /**
  * Runs the ticket prompt on a handful of sample emails against the real API,
@@ -10,21 +12,7 @@ import { type TicketForPrompt, analyseTicket } from '../src/ai/prompt.ts'
  * larger, scored version of this; here the question is only "does the prompt
  * return output the schema accepts".
  */
-type Sample = {
-  label: string
-  expected: 'general' | 'technical' | 'refund'
-  ticket: TicketForPrompt
-}
-
-const at = new Date('2026-09-01T09:00:00Z')
-const email = (subject: string, body: string, studentName: string | null = 'Sam Student') => ({
-  subject,
-  studentName,
-  studentEmail: 'sam@student.example',
-  messages: [{ author: 'student' as const, body, createdAt: at }],
-})
-
-const samples: Sample[] = [
+const samples: EvalCase[] = [
   {
     label: 'certificate name',
     expected: 'general',
@@ -37,7 +25,8 @@ const samples: Sample[] = [
   },
   {
     label: 'cannot log in',
-    expected: 'technical',
+    // Logins are general, by the brief (5.19, #237).
+    expected: 'general',
     ticket: email(
       'Login',
       'I reset my password twice and the login page still says my details are wrong.',
@@ -112,9 +101,7 @@ for (const sample of samples) {
   }
 }
 
-// Haiku 4.5 at $1 / $5 per million tokens, uncached: the prompt is under its
-// 4,096-token caching minimum, so every call pays full input.
-const cost = (inputTokens * 1 + outputTokens * 5) / 1_000_000
+const cost = estimatedCostUsd(inputTokens, outputTokens)
 console.log(
   `\n${String(valid)} of ${String(samples.length)} valid; ${String(inputTokens)} in, ${String(outputTokens)} out, about $${cost.toFixed(4)}`,
 )

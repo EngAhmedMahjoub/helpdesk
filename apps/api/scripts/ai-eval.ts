@@ -1,4 +1,4 @@
-import { anthropic } from '../src/ai/client.ts'
+import { anthropic, estimatedCostUsd } from '../src/ai/client.ts'
 import { type Score, evaluate, summarise } from '../src/ai/evaluate.ts'
 import { loadKnowledgeBase } from '../src/ai/knowledge-base.ts'
 import { samples } from '../eval/samples.ts'
@@ -24,9 +24,7 @@ for (const result of results) {
 }
 
 const summary = summarise(results)
-// Haiku 4.5 at $1 / $5 per million tokens, uncached: the prompt is under its
-// 4,096-token caching minimum, so every call pays full input.
-const cost = (summary.usage.input * 1 + summary.usage.output * 5) / 1_000_000
+const cost = estimatedCostUsd(summary.usage.input, summary.usage.output)
 
 console.log(`
 Model's category:      ${percent(summary.model)}
