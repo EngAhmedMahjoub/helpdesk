@@ -12,7 +12,7 @@ test('a session deleted on the server sends the next navigation to the login for
   adminPage,
 }) => {
   await adminPage.goto('/')
-  await expect(adminPage.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()
+  await expect(adminPage.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
 
   // What a session cleanup, or an admin ending someone's session, looks like to
   // a browser that is already sitting on a page.

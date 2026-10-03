@@ -19,7 +19,7 @@ export async function signInElsewhere(
   await loginViaApi(page.request, user)
 
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
 
   const { value: token } = await sessionCookie(page)
   return { context, page, token }
