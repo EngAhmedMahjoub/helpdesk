@@ -4,8 +4,8 @@ import type { DraftListResponse } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
 import { env } from '../src/env.ts'
 import { saveDraft } from '../src/jobs/process-ticket.ts'
-import { EmailSendError, type OutboundEmail } from '../src/email/outbound.ts'
 import { prisma, resetDatabase } from './db.ts'
+import { fakeSender } from './email-stub.ts'
 import { createMessage, createTicket, createUser, sessionCookieFor } from './fixtures.ts'
 
 beforeEach(resetDatabase)
@@ -163,15 +163,8 @@ describe('GET /api/drafts', () => {
 
 /** An app whose sends are recorded, or refused with `fail`. */
 function appSending({ fail = false } = {}) {
-  const emails: OutboundEmail[] = []
-  const sending = createApp({
-    sendEmail: async (email) => {
-      if (fail) throw new EmailSendError('Resend refused the email: rate_limit_exceeded')
-      emails.push(email)
-      return { resendId: 'resend-id' }
-    },
-  })
-  return { app: sending, emails }
+  const sender = fakeSender({ failing: fail })
+  return { app: createApp({ sendEmail: sender.sendEmail }), emails: sender.emails }
 }
 
 /** A pending draft on an Open ticket from tom@uni.edu, whose email had a Message-ID. */

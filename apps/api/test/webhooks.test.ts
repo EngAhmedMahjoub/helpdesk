@@ -16,6 +16,7 @@ import {
 import { AUTO_CLOSE_AFTER_MS, statusChange } from '../src/tickets/status.ts'
 import { env } from '../src/env.ts'
 import { prisma, resetDatabase } from './db.ts'
+import { fakeSender } from './email-stub.ts'
 import { createMessage, createTicket } from './fixtures.ts'
 import bounce from './payloads/resend/bounce.json'
 import newEmail from './payloads/resend/new-email.json'
@@ -48,7 +49,7 @@ const boss = createBoss()
 const appWith = (queue: QueueProcessTicket = processTicketQueue(boss)) =>
   createApp({
     fetchReceivedEmail,
-    sendEmail: async () => ({ resendId: null }),
+    sendEmail: fakeSender().sendEmail,
     queueProcessTicket: queue,
   })
 
@@ -475,9 +476,7 @@ describe('POST /api/webhooks/resend: process-ticket jobs', () => {
 
   test('fails the delivery, saving nothing, when the app was given no job queue', async () => {
     const body = eventFor()
-    const res = await request(
-      createApp({ fetchReceivedEmail, sendEmail: async () => ({ resendId: null }) }),
-    )
+    const res = await request(createApp({ fetchReceivedEmail, sendEmail: fakeSender().sendEmail }))
       .post('/api/webhooks/resend')
       .set('Content-Type', 'application/json')
       .set(signed(body))
