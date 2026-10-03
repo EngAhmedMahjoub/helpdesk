@@ -24,9 +24,10 @@ import { escalationReasonLabels } from '@/lib/escalation'
 const UNCLASSIFIED = 'unclassified'
 
 /**
- * The status and category an agent can change, in place of the badges that
- * only reported them. One mutation behind all three controls: the API answers
- * with the whole ticket, so whichever changed, the rest stay as it says.
+ * The status, category, assignee and escalation an agent can change, in place
+ * of the badges that only reported them. One mutation behind all four controls:
+ * the API answers with the whole ticket, so whichever changed, the rest stay as
+ * it says.
  */
 export default function TicketControls({ ticket }: { ticket: TicketDetail }) {
   const update = useUpdateTicket(ticket.id)

@@ -105,8 +105,8 @@ test('pins each timestamp to the instant the API sent, whatever the reader sees'
 
 test('encodes the address in the mailto link', async () => {
   // An address carrying mail headers would otherwise open an agent's client
-  // pre-addressed and pre-written. Nothing writes one today; Phase 4's webhook
-  // will.
+  // pre-addressed and pre-written. The Resend webhook stores the address an
+  // email came from, so a forged one can reach this page.
   stubTicket(
     ticketDetail({
       id: 11,

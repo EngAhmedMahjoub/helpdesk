@@ -8,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useCreateReply } from '@/hooks/use-tickets'
 
 /**
- * An agent's reply, saved as an outbound message on the ticket. Phase 4 is
- * what will email it, so the button says what happens today.
+ * An agent's reply, emailed to the student and saved as an outbound message on
+ * the ticket.
  */
 export default function ReplyBox({ ticketId, student }: { ticketId: number; student: string }) {
   const sendReply = useCreateReply(ticketId)

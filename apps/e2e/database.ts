@@ -11,9 +11,9 @@ import type {
 import { DATABASE_URL } from './config.ts'
 
 /**
- * Direct access to `helpdesk_e2e` for the setup and assertions no endpoint can
- * do yet: there is no user-creation API until Phase 2, and no way at all to ask
- * the API whether a session row exists.
+ * Direct access to `helpdesk_e2e` for the setup and assertions the API does
+ * not offer a spec: tickets arrive only through the Resend webhook, and no
+ * endpoint says whether a session row exists.
  *
  * Reach for this only for what the browser cannot reach. The behaviour under
  * test goes through the UI.
@@ -182,8 +182,8 @@ function directionOf(author: MessageAuthor): MessageDirection {
 /**
  * Creates a ticket, with its thread if the spec wants one.
  *
- * No endpoint makes tickets — Phase 4's webhook is what will — so a spec that
- * needs one to look at builds it here. The address defaults to one of its own
+ * Tickets arrive only through the Resend webhook, so a spec that needs one to
+ * look at builds it here. The address defaults to one of its own
  * so two specs cannot end up sharing a student.
  */
 export async function createTicket({
@@ -220,7 +220,9 @@ export async function createTicket({
           agentId: message.agentId,
           body: message.body,
           createdAt: message.createdAt,
-          // Null until Phase 4 sends the mail, as the API leaves it.
+          // Null on every message, which no spec reads. The API leaves an
+          // outbound one null too: SES sets its own Message-ID and does not
+          // report it back.
           emailMessageId: null,
         })),
       },
