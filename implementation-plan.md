@@ -165,6 +165,7 @@ None.
 | 7.1 | `GET /api/dashboard` — counts by status and category, needs-agent count | Test passes | Done |
 | 7.2 | Frontend: dashboard with counts and link to tickets needing an agent | Counts match database | Done |
 | 7.3 | Frontend: recent tickets on dashboard | Latest tickets listed with links | Done |
+| 7.4 | Phase 7 security review fix (#258): the API stops sending `X-Powered-By` and sends `X-Content-Type-Options: nosniff` on every response | A test fails without it | Done |
 
 ## Phase 8 — Deployment
 
