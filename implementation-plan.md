@@ -166,6 +166,7 @@ None.
 | 7.2 | Frontend: dashboard with counts and link to tickets needing an agent | Counts match database | Done |
 | 7.3 | Frontend: recent tickets on dashboard | Latest tickets listed with links | Done |
 | 7.4 | Phase 7 security review fix (#258): the API stops sending `X-Powered-By` and sends `X-Content-Type-Options: nosniff` on every response | A test fails without it | Done |
+| 7.5 | Phase 7 end-to-end specs (#259): sign-in lands on the dashboard, the counts include a spec's own tickets, View tickets needing an agent, Recent tickets and its links, and the specs the new home page broke | `bun run test:e2e` covers the journeys | Done |
 
 ## Phase 8 — Deployment
 
