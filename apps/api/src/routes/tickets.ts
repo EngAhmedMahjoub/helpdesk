@@ -15,7 +15,7 @@ import { isPrismaError, prisma } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
 import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
-import { parseBody, parseId, parseQuery } from '../http.ts'
+import { parseBody, parseId, parseQuery, signedInUserId } from '../http.ts'
 import { statusChange } from '../tickets/status.ts'
 import { EmailSendError } from '../email/outbound.ts'
 import { replySubject, replyThread } from '../email/reply-thread.ts'
@@ -139,12 +139,11 @@ ticketsRouter.get('/', async (req, res) => {
   const query = parseQuery(listTicketsQuerySchema, req, res)
   if (!query) return
 
-  // requireAuth put the user there. Answered rather than defaulted, as on
-  // replies: an empty id would match nobody's tickets and read as "none yours".
-  const userId = req.user?.id
-  if (query.assignee === 'me' && !userId) {
-    res.status(401).json({ error: 'Unauthorized' })
-    return
+  // Only "me" needs to know who is asking.
+  let userId: string | undefined
+  if (query.assignee === 'me') {
+    userId = signedInUserId(req, res)
+    if (!userId) return
   }
 
   const where: Prisma.TicketWhereInput = {
@@ -274,14 +273,9 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
   const id = parseId(ticketIdSchema, req, res, TICKET_NOT_FOUND)
   if (id === undefined) return
 
-  // requireAuth put the user there; the reply is theirs, whatever the body
-  // says. Answered rather than defaulted: an empty id would reach the foreign
-  // key and surface as a 500 where 401 is the honest answer.
-  const agentId = req.user?.id
-  if (!agentId) {
-    res.status(401).json({ error: 'Unauthorized' })
-    return
-  }
+  // The reply is the signed-in agent's, whatever the body says.
+  const agentId = signedInUserId(req, res)
+  if (!agentId) return
 
   const ticket = await prisma.ticket.findUnique({
     where: { id },

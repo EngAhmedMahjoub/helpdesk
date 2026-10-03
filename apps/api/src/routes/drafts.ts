@@ -13,7 +13,7 @@ import { requireAuth } from '../auth/middleware.ts'
 import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
 import { EmailSendError } from '../email/outbound.ts'
 import { replySubject, replyThread } from '../email/reply-thread.ts'
-import { parseBody, parseId, parseQuery } from '../http.ts'
+import { parseBody, parseId, parseQuery, signedInUserId } from '../http.ts'
 import { resolveIfOpen } from '../tickets/status.ts'
 
 const DRAFT_NOT_FOUND = 'Draft not found'
@@ -112,13 +112,9 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
   const id = parseId(draftIdSchema, req, res, DRAFT_NOT_FOUND)
   if (id === undefined) return
 
-  // requireAuth put the user there. Answered rather than defaulted, as on
-  // replies: the reviewer is a foreign key, and an empty one is a 500.
-  const reviewerId = req.user?.id
-  if (!reviewerId) {
-    res.status(401).json({ error: 'Unauthorized' })
-    return
-  }
+  // The reviewer is a foreign key, so it must be a real user.
+  const reviewerId = signedInUserId(req, res)
+  if (!reviewerId) return
 
   const draft = await prisma.replyDraft.findUnique({
     where: { id },
@@ -235,11 +231,8 @@ draftsRouter.post('/:id/reject', ticketWriteRateLimit, async (req, res) => {
   const id = parseId(draftIdSchema, req, res, DRAFT_NOT_FOUND)
   if (id === undefined) return
 
-  const reviewerId = req.user?.id
-  if (!reviewerId) {
-    res.status(401).json({ error: 'Unauthorized' })
-    return
-  }
+  const reviewerId = signedInUserId(req, res)
+  if (!reviewerId) return
 
   const { count } = await prisma.replyDraft.updateMany({
     where: { id, status: 'pending' },
