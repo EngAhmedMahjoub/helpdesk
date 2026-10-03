@@ -21,7 +21,7 @@ import { isPrismaError } from '../db.ts'
 import type { SendEmail } from '../email/outbound.ts'
 import { replySubject, replyThread } from '../email/reply-thread.ts'
 import type { PrismaClient } from '../generated/prisma/client.ts'
-import { statusChange } from '../tickets/status.ts'
+import { resolveIfOpen } from '../tickets/status.ts'
 
 /** The queue a saved inbound message waits on for the AI (task 5.2). */
 export const PROCESS_TICKET = 'process-ticket'
@@ -316,13 +316,7 @@ async function sendReply(
       where: { id: ticketId },
       data: { category, summary: output.summary },
     })
-    // The status is the statement's own condition rather than read with the
-    // thread, so an agent closing the ticket while the model answered is not
-    // undone. Resolved through statusChange, so the 14-day auto-close timer starts.
-    await tx.ticket.updateMany({
-      where: { id: ticketId, status: 'open' },
-      data: statusChange('resolved'),
-    })
+    await resolveIfOpen(tx, ticketId)
     await tx.message.create({
       data: {
         ticketId,

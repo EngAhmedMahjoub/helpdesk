@@ -14,7 +14,7 @@ import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
 import { EmailSendError } from '../email/outbound.ts'
 import { replySubject, replyThread } from '../email/reply-thread.ts'
 import { parseBody, parseId, parseQuery } from '../http.ts'
-import { statusChange } from '../tickets/status.ts'
+import { resolveIfOpen } from '../tickets/status.ts'
 
 const DRAFT_NOT_FOUND = 'Draft not found'
 const DRAFT_ALREADY_REVIEWED = 'This draft has already been reviewed'
@@ -202,12 +202,7 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
           emailMessageId: null,
         },
       })
-      // The status is the update's own condition, as on the AI's replies: a
-      // Resolved or Closed ticket keeps its status, and its timer.
-      await tx.ticket.updateMany({
-        where: { id: ticket.id, status: 'open' },
-        data: statusChange('resolved'),
-      })
+      await resolveIfOpen(tx, ticket.id)
       return tx.replyDraft.findUniqueOrThrow({ where: { id }, select: draftFields })
     })
   } catch (err) {
