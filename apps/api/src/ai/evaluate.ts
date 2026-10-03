@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { TicketCategory } from '@helpdesk/shared'
 import { AiFailure } from './failure.ts'
 import { type TicketForPrompt, analyseTicket } from './prompt.ts'
-import { decideRouting } from './refund-safeguard.ts'
+import { decideRouting, studentText } from './refund-safeguard.ts'
 
 /** One sample of the evaluation set: a ticket and the category it should get. */
 export type EvalCase = {
@@ -43,13 +43,7 @@ export async function evaluate(
     const base = { label: sample.label, expected: sample.expected }
     try {
       const { output, usage } = await analyseTicket(client, knowledgeBase, sample.ticket)
-      // As processTicket builds it: the subject and the student's own messages.
-      const decision = decideRouting(output, {
-        subject: sample.ticket.subject,
-        studentMessages: sample.ticket.messages
-          .filter((message) => message.author === 'student')
-          .map((message) => message.body),
-      })
+      const decision = decideRouting(output, studentText(sample.ticket))
       results.push({
         ...base,
         model: output.category,

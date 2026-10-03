@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AiOutput } from '@helpdesk/shared'
-import { decideRouting, refundPhrases } from '../src/ai/refund-safeguard.ts'
+import { decideRouting, refundPhrases, studentText } from '../src/ai/refund-safeguard.ts'
 
 describe('refund phrases', () => {
   const caught: [string, string][] = [
@@ -197,5 +197,22 @@ describe('the routing decision', () => {
       `"refund" in the student's email`,
       `"money back" in the student's email`,
     ])
+  })
+})
+
+// One builder for the job and ai:eval (#262).
+describe('the student text', () => {
+  test("keeps the subject and only the student's messages, in order", () => {
+    expect(
+      studentText({
+        subject: 'Cannot log in',
+        messages: [
+          { author: 'student', body: 'First' },
+          { author: 'ai', body: 'Have you tried resetting it?' },
+          { author: 'agent', body: 'Refunds are handled by finance' },
+          { author: 'student', body: 'Second' },
+        ],
+      }),
+    ).toEqual({ subject: 'Cannot log in', studentMessages: ['First', 'Second'] })
   })
 })
