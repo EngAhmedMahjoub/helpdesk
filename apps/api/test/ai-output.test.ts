@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import {
   AI_SUMMARY_MAX_LENGTH,
   REPLY_MAX_LENGTH,
   TICKET_CATEGORIES,
-  aiOutputJsonSchema,
   aiOutputSchema,
 } from '@helpdesk/shared'
 
@@ -86,23 +86,36 @@ describe('the AI output schema', () => {
   })
 })
 
-describe('the JSON Schema the prompt sends', () => {
-  test('describes the same three fields, all required', () => {
-    expect(aiOutputJsonSchema).toMatchObject({
+// What prompt.ts sends, built the same way (#273). The SDK keeps the shape as
+// JSON Schema but turns the enum and the lengths into descriptions, so the
+// model is told those limits rather than held to them; parseOutput's safeParse
+// is what enforces them (ai-failure.test.ts).
+describe('the output format the prompt sends', () => {
+  const sent = zodOutputFormat(aiOutputSchema)
+
+  test('is a JSON Schema of the same three fields, all required, and no others', () => {
+    expect(sent.type).toBe('json_schema')
+    expect(sent.schema).toMatchObject({
       type: 'object',
       required: ['category', 'summary', 'reply'],
-      // Constrains the model to exactly these keys.
+      // The one limit beyond the keys the model is actually held to.
       additionalProperties: false,
+      properties: {
+        category: { type: 'string' },
+        summary: { type: 'string' },
+        reply: { type: 'string' },
+      },
     })
   })
 
-  test('carries the categories and the lengths, so the model is told the limits', () => {
-    expect(aiOutputJsonSchema).toMatchObject({
-      properties: {
-        category: { enum: [...TICKET_CATEGORIES] },
-        summary: { type: 'string', minLength: 1, maxLength: AI_SUMMARY_MAX_LENGTH },
-        reply: { type: 'string', minLength: 1, maxLength: REPLY_MAX_LENGTH },
-      },
-    })
+  test('tells the model the categories and the lengths', () => {
+    const described = (field: 'category' | 'summary' | 'reply') =>
+      (sent.schema.properties as Record<string, { description?: string }>)[field]?.description
+
+    for (const category of TICKET_CATEGORIES) expect(described('category')).toContain(category)
+    expect(described('summary')).toContain(`maxLength: ${String(AI_SUMMARY_MAX_LENGTH)}`)
+    expect(described('summary')).toContain('minLength: 1')
+    expect(described('reply')).toContain(`maxLength: ${String(REPLY_MAX_LENGTH)}`)
+    expect(described('reply')).toContain('minLength: 1')
   })
 })
