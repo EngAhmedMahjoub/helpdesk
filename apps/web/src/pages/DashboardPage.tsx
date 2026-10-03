@@ -11,8 +11,7 @@ import RecentTickets from '@/components/recent-tickets'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDashboard } from '@/hooks/use-dashboard'
-
-const count = new Intl.NumberFormat('en')
+import { countFormat } from '@/lib/format'
 
 const statusLabels: Record<TicketStatus, string> = {
   open: 'Open',
@@ -81,7 +80,7 @@ function Counts({ data }: { data: DashboardResponse }) {
           <dl>
             <dt className="text-base font-medium text-foreground">Needs an agent</dt>
             <dd className="mt-2 text-5xl font-semibold text-foreground">
-              {count.format(data.needsAgent)}
+              {countFormat.format(data.needsAgent)}
             </dd>
           </dl>
           <Link

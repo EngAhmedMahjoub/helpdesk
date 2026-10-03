@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import type { TicketSummary } from '@helpdesk/shared'
 import TableSkeleton, { type Column } from '@/components/table-skeleton'
-import { Badge } from '@/components/ui/badge'
+import { TicketStatusBadge, TicketSubjectLink, Timestamp } from '@/components/ticket-cells'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -12,7 +12,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { RECENT_TICKETS_QUERY, useRecentTickets } from '@/hooks/use-tickets'
-import { compactDateTime, fullDateTime } from '@/lib/format'
 import { studentLabel } from '@/lib/tickets'
 
 // Shared by the skeleton and the table, as on the ticket list, so the columns
@@ -92,28 +91,16 @@ function RecentTable({ tickets }: { tickets: TicketSummary[] }) {
         {tickets.map((ticket) => (
           <TableRow key={ticket.id}>
             <TableCell className="truncate font-medium" title={ticket.subject}>
-              <Link
-                className="text-foreground hover:underline"
-                to={`/tickets/${String(ticket.id)}`}
-              >
-                {ticket.subject}
-              </Link>
+              <TicketSubjectLink ticket={ticket} />
             </TableCell>
             <TableCell className="truncate text-muted-foreground" title={ticket.studentEmail}>
               {studentLabel(ticket)}
             </TableCell>
             <TableCell>
-              <Badge variant={ticket.status === 'open' ? 'default' : 'outline'}>
-                {ticket.status}
-              </Badge>
+              <TicketStatusBadge status={ticket.status} />
             </TableCell>
             <TableCell className="truncate text-muted-foreground">
-              <time
-                dateTime={ticket.createdAt}
-                title={fullDateTime.format(new Date(ticket.createdAt))}
-              >
-                {compactDateTime.format(new Date(ticket.createdAt))}
-              </time>
+              <Timestamp at={ticket.createdAt} />
             </TableCell>
           </TableRow>
         ))}

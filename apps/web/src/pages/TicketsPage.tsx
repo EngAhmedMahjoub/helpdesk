@@ -1,6 +1,6 @@
-import { Link } from 'react-router'
 import type { ListTicketsQuery, TicketListResponse, TicketSummary } from '@helpdesk/shared'
 import TableSkeleton, { type Column } from '@/components/table-skeleton'
+import { TicketStatusBadge, TicketSubjectLink, Timestamp } from '@/components/ticket-cells'
 import TicketFilters, { type SortChoice } from '@/components/ticket-filters'
 import TicketPagination from '@/components/ticket-pagination'
 import { Badge } from '@/components/ui/badge'
@@ -15,7 +15,6 @@ import {
 import { useTicketQuery } from '@/hooks/use-ticket-query'
 import { useTickets } from '@/hooks/use-tickets'
 import { escalationReasonLabels } from '@/lib/escalation'
-import { compactDateTime, fullDateTime } from '@/lib/format'
 import { studentLabel } from '@/lib/tickets'
 
 // One list for the skeleton and the table, so their headers and widths cannot
@@ -127,9 +126,7 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
       {/* Fixed columns cut long text off instead of widening to fit it; title
           keeps the whole value a hover away. */}
       <TableCell className="truncate font-medium" title={ticket.subject}>
-        <Link className="text-foreground hover:underline" to={`/tickets/${String(ticket.id)}`}>
-          {ticket.subject}
-        </Link>
+        <TicketSubjectLink ticket={ticket} />
       </TableCell>
       <TableCell
         className="truncate text-muted-foreground"
@@ -138,9 +135,7 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
         {studentLabel(ticket)}
       </TableCell>
       <TableCell>
-        {/* The word carries the meaning; the colour only seconds it, so a
-            reader who cannot tell two badges apart loses nothing. */}
-        <Badge variant={ticket.status === 'open' ? 'default' : 'outline'}>{ticket.status}</Badge>
+        <TicketStatusBadge status={ticket.status} />
       </TableCell>
       <TableCell className="text-muted-foreground">
         {ticket.category ?? <span className="text-muted-foreground">—</span>}
@@ -161,9 +156,7 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
         )}
       </TableCell>
       <TableCell className="truncate text-muted-foreground">
-        <time dateTime={ticket.updatedAt} title={fullDateTime.format(new Date(ticket.updatedAt))}>
-          {compactDateTime.format(new Date(ticket.updatedAt))}
-        </time>
+        <Timestamp at={ticket.updatedAt} />
       </TableCell>
     </TableRow>
   )
