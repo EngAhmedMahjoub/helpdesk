@@ -1,5 +1,6 @@
 import { prisma as defaultPrisma } from '../db.ts'
 import type { Prisma, PrismaClient } from '../generated/prisma/client.ts'
+import type { OutboundEmail } from './outbound.ts'
 
 // How many of the student's latest emails a reply's References names, besides
 // their first. The IDs become one header, so a ticket that runs to hundreds of
@@ -40,4 +41,52 @@ export async function replyThread(
 /** The ticket's subject as a reply's, without stacking a second "Re:". */
 export function replySubject(subject: string): string {
   return /^re:/i.test(subject.trim()) ? subject : `Re: ${subject}`
+}
+
+/**
+ * The email a reply on this ticket goes out as, whoever wrote it: to the
+ * student, under the ticket's subject, threaded onto their emails. One builder
+ * for an agent's reply, an approved draft and the AI's reply (#267); the AI's
+ * caller adds `automatic`, which a person's reply must not carry.
+ */
+export async function replyEmail(
+  ticket: { id: number; subject: string; studentEmail: string },
+  text: string,
+  prisma: PrismaClient = defaultPrisma,
+): Promise<OutboundEmail> {
+  return {
+    to: ticket.studentEmail,
+    subject: replySubject(ticket.subject),
+    text,
+    thread: await replyThread(ticket.id, prisma),
+  }
+}
+
+/**
+ * The row a sent reply is saved as: an outbound message by the agent who wrote
+ * or approved it, or by the AI. Builds the `data` only; when it is saved, and
+ * in which transaction, stays with each caller.
+ */
+export function outboundMessage({
+  ticketId,
+  author,
+  agentId = null,
+  body,
+}: {
+  ticketId: number
+  author: 'agent' | 'ai'
+  agentId?: string | null
+  body: string
+}) {
+  return {
+    ticketId,
+    direction: 'outbound',
+    author,
+    agentId,
+    body,
+    // Stays null: Resend sends through Amazon SES, which sets its own
+    // Message-ID and does not report it back. A student's reply is matched to
+    // the ticket by the References it carries, not by this.
+    emailMessageId: null,
+  } satisfies Prisma.MessageUncheckedCreateInput
 }
