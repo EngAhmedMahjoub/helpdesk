@@ -6,11 +6,10 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart'
+import { countFormat } from '@/lib/format'
 
 /** One bar. `color` is a CSS colour, e.g. `var(--series-1)`, kept with its entity. */
 export type CountBar = { label: string; count: number; color: string }
-
-const count = new Intl.NumberFormat('en')
 
 // Names the value in the tooltip. Each bar's colour comes with the bar, not
 // from here: no legend, since every bar is named beside it.
@@ -44,7 +43,7 @@ export default function CountBarChart({ heading, bars, total }: CountBarChartPro
           <h2>
             {heading}{' '}
             <span className="font-normal text-muted-foreground">
-              of {count.format(total)} {total === 1 ? 'ticket' : 'tickets'}
+              of {countFormat.format(total)} {total === 1 ? 'ticket' : 'tickets'}
             </span>
           </h2>
         </CardTitle>
@@ -54,7 +53,7 @@ export default function CountBarChart({ heading, bars, total }: CountBarChartPro
           {bars.map((bar) => (
             <div key={bar.label}>
               <dt>{bar.label}</dt>
-              <dd>{count.format(bar.count)}</dd>
+              <dd>{countFormat.format(bar.count)}</dd>
             </div>
           ))}
         </dl>
@@ -77,7 +76,7 @@ export default function CountBarChart({ heading, bars, total }: CountBarChartPro
               <LabelList
                 className="fill-foreground"
                 dataKey="count"
-                formatter={(value) => count.format(Number(value))}
+                formatter={(value) => countFormat.format(Number(value))}
                 position="right"
               />
             </Bar>

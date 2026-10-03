@@ -32,3 +32,10 @@ export const fullDateTime = new Intl.DateTimeFormat(undefined, {
   dateStyle: 'full',
   timeStyle: 'short',
 })
+
+/**
+ * Ticket counts, grouped in thousands. English rather than the reader's
+ * locale, unlike the dates: a count reads the same everywhere, and one format
+ * keeps the dashboard's numbers and their tests in step.
+ */
+export const countFormat = new Intl.NumberFormat('en')
