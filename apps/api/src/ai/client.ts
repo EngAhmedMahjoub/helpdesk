@@ -19,6 +19,16 @@ import { env } from '../env.ts'
 export const AI_MODEL = 'claude-haiku-4-5'
 
 /**
+ * What `AI_MODEL` charges for a run, in US dollars, for the by-hand scripts'
+ * reports. Next to the model because the price belongs to it: Haiku 4.5 at
+ * $1 / $5 per million input / output tokens, uncached, since the prompt is
+ * under its 4,096-token caching minimum and every call pays full input.
+ */
+export function estimatedCostUsd(inputTokens: number, outputTokens: number): number {
+  return (inputTokens * 1 + outputTokens * 5) / 1_000_000
+}
+
+/**
  * One client for the process. The SDK holds a connection pool and retries
  * 429s and 5xx itself, so building one per job would throw both away.
  *

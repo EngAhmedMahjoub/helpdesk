@@ -1,28 +1,9 @@
-import type { TicketCategory } from '@helpdesk/shared'
-import type { TicketForPrompt } from '../src/ai/prompt.ts'
-
-/**
- * The evaluation set (5.18): sample emails written from
- * `knowledge-base-brief.md`, each with the category the brief gives it.
- *
- * The brief decides, not the prompt: where the two disagree, a miss here is
- * the prompt's to fix. Logins are the case in point — the brief and
- * `account-and-login.md` file them under general.
- *
- * Only cases the brief settles are here. "What is your refund policy?" before
- * buying is left out: a question about refunds, not a request for one, and the
- * brief does not say which it counts as.
- */
-export type EvalSample = {
-  label: string
-  expected: TicketCategory
-  ticket: TicketForPrompt
-}
+import type { EvalCase } from '../src/ai/evaluate.ts'
 
 const at = new Date('2026-09-01T09:00:00Z')
 
-/** A ticket holding one email from the student. */
-function email(subject: string, body: string, studentName: string | null = 'Sam Student') {
+/** A ticket holding one email from the student. Shared with `ai:samples`. */
+export function email(subject: string, body: string, studentName: string | null = 'Sam Student') {
   return {
     subject,
     studentName,
@@ -44,7 +25,19 @@ function thread(subject: string, bodies: { author: 'student' | 'ai'; body: strin
   }
 }
 
-export const samples: EvalSample[] = [
+/**
+ * The evaluation set (5.18): sample emails written from
+ * `knowledge-base-brief.md`, each with the category the brief gives it.
+ *
+ * The brief decides, not the prompt: where the two disagree, a miss here is
+ * the prompt's to fix. Logins are the case in point — the brief and
+ * `account-and-login.md` file them under general.
+ *
+ * Only cases the brief settles are here. "What is your refund policy?" before
+ * buying is left out: a question about refunds, not a request for one, and the
+ * brief does not say which it counts as.
+ */
+export const samples: EvalCase[] = [
   // 1. Account and login: general, by the brief.
   {
     label: 'forgot password',
