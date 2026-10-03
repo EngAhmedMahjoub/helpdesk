@@ -12,7 +12,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
 import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
 import { EmailSendError } from '../email/outbound.ts'
-import { replySubject, replyThread } from '../email/reply-thread.ts'
+import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
 import { parseBody, parseId, parseQuery } from '../http.ts'
 import { resolveIfOpen } from '../tickets/status.ts'
 
@@ -152,12 +152,7 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
   try {
     // Not marked automatic: a person approved it, and an auto-responder that
     // writes back to it is answering someone.
-    await req.app.locals.sendEmail({
-      to: ticket.studentEmail,
-      subject: replySubject(ticket.subject),
-      text,
-      thread: await replyThread(ticket.id),
-    })
+    await req.app.locals.sendEmail(await replyEmail(ticket, text))
   } catch (err) {
     // Back to pending, the edit kept, so the agent can try again. Conditional
     // on this claim, so nothing a later approval wrote is undone.
@@ -193,14 +188,12 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
         data: { needsAgent: false, escalationReason: null },
       })
       await tx.message.create({
-        data: {
+        data: outboundMessage({
           ticketId: ticket.id,
-          direction: 'outbound',
           author: 'agent',
           agentId: reviewerId,
           body: text,
-          emailMessageId: null,
-        },
+        }),
       })
       await resolveIfOpen(tx, ticket.id)
       return tx.replyDraft.findUniqueOrThrow({ where: { id }, select: draftFields })
