@@ -25,7 +25,8 @@ const samples: EvalCase[] = [
   },
   {
     label: 'cannot log in',
-    expected: 'technical',
+    // Logins are general, by the brief (5.19, #237).
+    expected: 'general',
     ticket: email(
       'Login',
       'I reset my password twice and the login page still says my details are wrong.',
