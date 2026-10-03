@@ -65,7 +65,7 @@ test('an agent whose email and password the admin changes signs in with the new 
       await submitLoginForm(page, { email: newEmail, password: newPassword })
 
       await expect(page).toHaveURL('/')
-      await expect(page.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
 
       const { value: token } = await sessionCookie(page)
       expect(token).not.toBe(signedIn.token)

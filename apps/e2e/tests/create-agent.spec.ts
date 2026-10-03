@@ -55,7 +55,7 @@ test('an agent an admin adds can sign in with the initial password', async ({
       await submitLoginForm(agentPage, agent)
 
       await expect(agentPage).toHaveURL('/')
-      await expect(agentPage.getByRole('heading', { name: 'Helpdesk' })).toBeVisible()
+      await expect(agentPage.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
       // The API fixes the role rather than reading it from the form, so the
       // account must come out an agent with no way to the users screen.
       const nav = agentPage.getByRole('navigation', { name: 'Main' })

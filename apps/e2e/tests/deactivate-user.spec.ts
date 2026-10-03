@@ -41,10 +41,9 @@ test('an agent the admin deactivates is signed out on their next page load', asy
 
     await test.step('the agent is sent to the login form on their next page load', async () => {
       // There is no push channel: the agent's tab learns nothing until it next
-      // talks to the API. A reload is the realistic trigger, because a fresh
-      // load always asks /auth/me. Clicking to /tickets would not do: the
-      // dashboard's health check is unauthenticated, the placeholder pages make
-      // no request, and the cached current user stays fresh for 30 seconds.
+      // talks to the API. A reload is the realistic trigger, and the one that
+      // depends on nothing cached: a fresh load always asks /auth/me, whereas a
+      // click only finds out if the page it lands on makes a request of its own.
       await signedIn.page.reload()
 
       await expect(signedIn.page).toHaveURL('/login')
