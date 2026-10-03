@@ -146,9 +146,9 @@ export async function analyseTicket(
 
 /**
  * The answer's text as `AiOutput`, or an `invalid_output` failure. Retryable:
- * structured output constrains the shape, but the length limits are only
- * described to the model, not enforced, so a second answer can come back
- * inside them where the first did not.
+ * structured output holds the model to the keys, but the categories and the
+ * length limits are only described to it, not enforced (#273), so a second
+ * answer can come back inside them where the first did not.
  */
 function parseOutput(response: Anthropic.Message): AiOutput {
   const text = response.content

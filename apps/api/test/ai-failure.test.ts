@@ -88,8 +88,8 @@ describe('an answer that finished but is not usable', () => {
     ['a category that is not ours', JSON.stringify({ ...valid, category: 'billing' }), 'category'],
     ['no reply', JSON.stringify({ category: 'technical', summary: 'Videos.' }), 'reply'],
     ['a blank summary', JSON.stringify({ ...valid, summary: '   ' }), 'summary'],
-    // Structured output constrains the shape but only describes the lengths,
-    // so this is the one the schema has to catch after the fact.
+    // Structured output holds the model to the keys but only describes the
+    // categories and the lengths, so the schema catches these two after the fact.
     [
       'a summary over 300 characters',
       JSON.stringify({ ...valid, summary: 'a'.repeat(301) }),

@@ -18,7 +18,7 @@ export const AI_SUMMARY_MAX_LENGTH = 300
  * (5.10). A drift between any two of those is a bug nothing else would catch.
  *
  * A plain object, not `strictObject`: Zod emits `additionalProperties: false`
- * for both, so the model is constrained either way, but parsing an extra field
+ * for both, so the model is held to these keys either way, but parsing an extra field
  * strips it rather than failing a job over a key nobody reads.
  */
 export const aiOutputSchema = z.object({
@@ -30,10 +30,3 @@ export const aiOutputSchema = z.object({
 })
 
 export type AiOutput = z.infer<typeof aiOutputSchema>
-
-/**
- * The same shape as JSON Schema, for the model's structured output. Derived
- * rather than written twice, so what the prompt asks for and what the job
- * accepts cannot drift.
- */
-export const aiOutputJsonSchema = z.toJSONSchema(aiOutputSchema)
