@@ -15,7 +15,7 @@ import {
 import { AiFailure } from '../ai/failure.ts'
 import { atSendLimit, overCallBudget, withinBudget } from '../ai/limits.ts'
 import { analyseTicket } from '../ai/prompt.ts'
-import { decideRouting } from '../ai/refund-safeguard.ts'
+import { decideRouting, studentText } from '../ai/refund-safeguard.ts'
 import { usageLine } from '../ai/usage.ts'
 import { isPrismaError } from '../db.ts'
 import type { SendEmail } from '../email/outbound.ts'
@@ -161,12 +161,9 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
 
   // The model's category stands unless the student or the draft talks about
   // money back, in which case a person approves the reply before it goes out.
-  const decision = decideRouting(output, {
-    subject: ticket.subject,
-    studentMessages: messages
-      .filter((message) => message.author === 'student')
-      .map((message) => message.body),
-  })
+  // The trimmed thread, not ticket.messages: the safeguard reads what the
+  // model was shown.
+  const decision = decideRouting(output, studentText({ subject: ticket.subject, messages }))
 
   // A refund already waiting for approval keeps the ticket with agents, even
   // when this message says nothing about money: the model may have caught a

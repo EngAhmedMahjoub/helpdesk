@@ -1,4 +1,4 @@
-import type { AiOutput, TicketCategory } from '@helpdesk/shared'
+import type { AiOutput, MessageAuthor, TicketCategory } from '@helpdesk/shared'
 
 /**
  * Phrases that mean money back, in the words students actually use. Matched
@@ -68,6 +68,24 @@ export type StudentText = {
   subject: string
   /** Every message the student wrote in the thread, not only the newest. */
   studentMessages: string[]
+}
+
+/**
+ * What the safeguard reads from a ticket: its subject and every message the
+ * student wrote, in the order given. One builder for the job and `ai:eval`
+ * (#262), so the evaluation scores the safeguard production runs; two copies
+ * kept in step by hand could drift, and the score would then measure neither.
+ */
+export function studentText(ticket: {
+  subject: string
+  messages: { author: MessageAuthor; body: string }[]
+}): StudentText {
+  return {
+    subject: ticket.subject,
+    studentMessages: ticket.messages
+      .filter((message) => message.author === 'student')
+      .map((message) => message.body),
+  }
 }
 
 /**
