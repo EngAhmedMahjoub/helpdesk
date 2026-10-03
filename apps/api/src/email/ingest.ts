@@ -1,6 +1,6 @@
 import { isPrismaError, prisma } from '../db.ts'
 import type { QueueProcessTicket } from '../jobs/process-ticket.ts'
-import { AUTO_CLOSE_AFTER_MS } from '../tickets/status.ts'
+import { statusChange } from '../tickets/status.ts'
 import { isAutomatedEmail, parseInboundEmail, passedDmarc, type ReceivedEmail } from './inbound.ts'
 import { inboundTicketFields } from './inbound-fields.ts'
 import { isStorableMessageId } from './message-id.ts'
@@ -147,9 +147,11 @@ export async function ingestInboundEmail(
         // own condition rather than read beforehand, so an agent changing it at
         // the same moment cannot leave a timer on a ticket that is no longer
         // Resolved. Closed and Open tickets have no timer to reset.
+        // Through statusChange, as every status write is: setting Resolved on a
+        // ticket the condition already holds Resolved changes only the timer.
         await tx.ticket.updateMany({
           where: { id: ticketId, status: 'resolved' },
-          data: { autoCloseAt: new Date(now.getTime() + AUTO_CLOSE_AFTER_MS) },
+          data: statusChange('resolved', now),
         })
         await queueProcessTicket({ ticketId, messageId: saved.id }, tx)
       })
