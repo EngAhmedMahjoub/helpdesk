@@ -25,6 +25,36 @@ describe('unknown /api routes', () => {
   })
 })
 
+// From the Phase 7 security review (#258).
+describe('response headers', () => {
+  const paths = [
+    ['a success', '/api/health', 200],
+    ['an unauthenticated refusal', '/api/dashboard', 401],
+    ['a 404', '/api/does-not-exist', 404],
+  ] as const
+
+  for (const [kind, path, status] of paths) {
+    test(`${kind} does not name the framework and forbids sniffing`, async () => {
+      const res = await request(app).get(path)
+
+      expect(res.status).toBe(status)
+      expect(res.headers['x-powered-by']).toBeUndefined()
+      expect(res.headers['x-content-type-options']).toBe('nosniff')
+    })
+  }
+
+  test('a malformed body answered by the error handler carries them too', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .send('{not json')
+
+    expect(res.status).toBe(400)
+    expect(res.headers['x-powered-by']).toBeUndefined()
+    expect(res.headers['x-content-type-options']).toBe('nosniff')
+  })
+})
+
 describe('malformed requests', () => {
   /** Captures everything the handler writes, so the assertions can read it back. */
   function captureLogs() {

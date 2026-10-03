@@ -86,6 +86,17 @@ export function createApp({
   app.locals.fetchReceivedEmail = fetchReceivedEmail
   app.locals.queueProcessTicket = queueProcessTicket
 
+  // First, so every answer carries them: the webhook, a refused origin, a 404
+  // and the error handler's included (#258). X-Powered-By named the framework,
+  // and so which known flaws to try; nosniff makes a browser trust
+  // Content-Type rather than guess. Two lines rather than helmet: the API
+  // serves JSON only, so most of helmet's headers guard HTML it never sends.
+  app.disable('x-powered-by')
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    next()
+  })
+
   // credentials: true is what lets the session cookie cross from app.<domain>
   // to api.<domain> in production. Without it the browser sends the cookie on
   // no cross-origin request, and refuses to expose the response of one that
