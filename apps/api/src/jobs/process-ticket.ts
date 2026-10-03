@@ -76,6 +76,39 @@ export type ProcessTicketDeps = {
   sendEmail: SendEmail
 }
 
+/** What decides whether the AI's answer is emailed or held for an agent. */
+export type HoldFacts = {
+  /** The model or the refund safeguard routed the ticket to an agent. */
+  routedToAgent: boolean
+  /** The ticket is already waiting on a refund approval, or has a draft pending. */
+  refundWaiting: boolean
+  senderVerified: boolean
+  escalationReason: EscalationReason | null
+  assigned: boolean
+  /** The AI has emailed this ticket, or everyone, as often as it may for now. */
+  sendLimited: boolean
+}
+
+/**
+ * Why the AI's answer waits for an agent instead of being emailed, or null to
+ * send it (#263). When several apply, the first wins, in the order
+ * tech-stack.md "AI limits and holds" documents.
+ */
+export function holdReason(facts: HoldFacts): EscalationReason | null {
+  // A refund already waiting for approval keeps the ticket with agents, even
+  // when this message says nothing about money: the model may have caught a
+  // refund the keyword list could not, and answering the follow-up would
+  // resolve the ticket, and in time auto-close it, with the draft unseen.
+  if (facts.routedToAgent || facts.refundWaiting) return 'refund_approval'
+  if (!facts.senderVerified) return 'unverified_sender'
+  // One that failed the AI before is with an agent already (6.9).
+  if (facts.escalationReason === 'ai_failed') return 'ai_failed'
+  // An agent already on the ticket answers it, not the AI over their head (6.9).
+  if (facts.assigned) return 'agent_assigned'
+  if (facts.sendLimited) return 'auto_reply_limit'
+  return null
+}
+
 /**
  * Asks the model about a ticket's thread and acts on the answer (5.13). A
  * refund, by the model's word or the safeguard's, is saved as a draft for an
@@ -165,26 +198,14 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   // model was shown.
   const decision = decideRouting(output, studentText({ subject: ticket.subject, messages }))
 
-  // A refund already waiting for approval keeps the ticket with agents, even
-  // when this message says nothing about money: the model may have caught a
-  // refund the keyword list could not, and answering the follow-up would
-  // resolve the ticket, and in time auto-close it, with the draft unseen.
-  const refundWaiting =
-    ticket.escalationReason === 'refund_approval' || ticket.replyDrafts.length > 0
-  // An agent already on the ticket answers it, not the AI over their head,
-  // and one that failed the AI before is with an agent already (6.9).
-  const heldFor: EscalationReason | null =
-    decision.route === 'agent' || refundWaiting
-      ? 'refund_approval'
-      : !ticket.senderVerified
-        ? 'unverified_sender'
-        : ticket.escalationReason === 'ai_failed'
-          ? 'ai_failed'
-          : ticket.assigneeId !== null
-            ? 'agent_assigned'
-            : sendLimited
-              ? 'auto_reply_limit'
-              : null
+  const heldFor = holdReason({
+    routedToAgent: decision.route === 'agent',
+    refundWaiting: ticket.escalationReason === 'refund_approval' || ticket.replyDrafts.length > 0,
+    senderVerified: ticket.senderVerified,
+    escalationReason: ticket.escalationReason,
+    assigned: ticket.assigneeId !== null,
+    sendLimited,
+  })
 
   // Logged once the call is paid for, before anything is saved: a save that
   // fails afterwards does not make the call free. The safeguard's override is
