@@ -241,6 +241,7 @@ From search results, not verified on providers' pricing pages:
 
 - **Frontend:** Vercel builds and deploys on push.
 - **Backend:** GitHub Actions → build image → run `prisma migrate deploy` against Neon → deploy to Koyeb.
+- **API image:** `apps/api/Dockerfile`, built from the repo root (`docker build -f apps/api/Dockerfile .`) because the API imports `packages/shared`. Multi-stage on `oven/bun:1.4.2-slim`, pinned to the Bun the repo is tested on: one stage generates the Prisma client, the release stage takes production dependencies only and runs as the `bun` user. No Prisma CLI in the image; migrations are the pipeline's step above.
 - **Scheduled tasks:** GitHub Actions workflow on a schedule calls `POST /api/tasks/auto-close` and `POST /api/tasks/cleanup-sessions`, protected by a shared secret.
 
 When an API change and a frontend change ship together, deploy the backend first.
