@@ -101,7 +101,7 @@ describe('requests from any other origin', () => {
 
 describe('the allowed origin', () => {
   test('is configuration, not a hardcoded localhost', () => {
-    // Production sets this to https://app.<domain>; the default only covers
+    // Production sets this to https://app.helpdesk.mahjoub.io; the default only covers
     // local development.
     expect(env.WEB_ORIGIN).toBe(process.env.WEB_ORIGIN ?? 'http://localhost:5173')
   })

@@ -15,7 +15,7 @@ Based on `project-scope.md` and `tech-stack.md`. Each task is small enough for o
 | Knowledge base content | Written with Claude Code as part of Phase 5. |
 | Hosting | Free tiers: Vercel (frontend), Koyeb (API + background jobs in one process), Neon (Postgres), Resend (email), GitHub Actions (CI/CD and scheduled tasks). |
 | Runtime and package manager | Bun, with Bun workspaces |
-| Custom domain | Already owned. Referred to as `<domain>` in these docs. |
+| Custom domain | `helpdesk.mahjoub.io`, a subdomain of the owned `mahjoub.io` and already the Resend domain: the app on `app.helpdesk.mahjoub.io`, the API on `api.helpdesk.mahjoub.io`. The root stays free for personal use. |
 
 ## Decisions Still Needed
 
@@ -172,14 +172,14 @@ None.
 
 | ID | Task | Done when |
 |---|---|---|
-| 8.1 | DNS records for `app.<domain>` and `api.<domain>` | Both subdomains resolve |
+| 8.1 | DNS records for `app.helpdesk.mahjoub.io` and `api.helpdesk.mahjoub.io` | Both subdomains resolve |
 | 8.2 | Multi-stage Dockerfile for the API based on `oven/bun` | Image builds and runs locally |
 | 8.3 | Neon project and production database | API connects to Neon |
 | 8.4 | Koyeb service from the Docker image, with secrets (database URL, Resend API key, Resend webhook secret, tasks secret, Anthropic key, admin seed) | App starts on Koyeb |
-| 8.5 | Custom domain `api.<domain>` on Koyeb | `https://api.<domain>/api/health` returns 200 |
+| 8.5 | Custom domain `api.helpdesk.mahjoub.io` on Koyeb | `https://api.helpdesk.mahjoub.io/api/health` returns 200 |
 | 8.6 | Confirm background jobs run on Koyeb | A test job completes in production |
 | 8.7 | GitHub Actions backend pipeline: build image, run `prisma migrate deploy` against Neon, deploy to Koyeb | Merge to `main` deploys the backend |
-| 8.8 | Vercel project for `apps/web` on `app.<domain>` with `VITE_API_URL` | App loads on the custom domain |
+| 8.8 | Vercel project for `apps/web` on `app.helpdesk.mahjoub.io` with `VITE_API_URL` | App loads on the custom domain |
 | 8.9 | Cross-subdomain login test | Login works in Chrome, Safari, and Firefox |
 | 8.10 | Point Resend receiving webhook at production | Real email creates a production ticket |
 | 8.11 | GitHub Actions scheduled workflow calling the auto-close and session-cleanup endpoints | Workflow run closes an expired Resolved ticket |
