@@ -18,7 +18,7 @@ import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
 import { parseBody, parseId, parseQuery, signedInUserId } from '../http.ts'
 import { statusChange } from '../tickets/status.ts'
 import { EmailSendError } from '../email/outbound.ts'
-import { replySubject, replyThread } from '../email/reply-thread.ts'
+import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
 
 /** The columns the list exposes. Explicit, so a column added later stays out until chosen. */
 const summaryFields = {
@@ -290,12 +290,7 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
   // the thread that the student never received, with nothing to show it; this
   // way a failed send saves nothing, and the agent sees the error and resends.
   try {
-    await req.app.locals.sendEmail({
-      to: ticket.studentEmail,
-      subject: replySubject(ticket.subject),
-      text: body.body,
-      thread: await replyThread(id),
-    })
+    await req.app.locals.sendEmail(await replyEmail({ id, ...ticket }, body.body))
   } catch (err) {
     // Only a refusal from Resend is a 502. Anything else is a fault of ours,
     // and the error handler's 500 is the honest answer for it.
@@ -321,17 +316,7 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
       })
 
       return tx.message.create({
-        data: {
-          ticketId: id,
-          direction: 'outbound',
-          author: 'agent',
-          agentId,
-          body: body.body,
-          // Stays null: Resend sends through Amazon SES, which sets its own
-          // Message-ID and does not report it back. A student's reply is matched
-          // to the ticket by the References it carries, not by this.
-          emailMessageId: null,
-        },
+        data: outboundMessage({ ticketId: id, author: 'agent', agentId, body: body.body }),
         select: messageFields,
       })
     })

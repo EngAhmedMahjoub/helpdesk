@@ -19,7 +19,7 @@ import { decideRouting, studentText } from '../ai/refund-safeguard.ts'
 import { usageLine } from '../ai/usage.ts'
 import { isPrismaError } from '../db.ts'
 import type { SendEmail } from '../email/outbound.ts'
-import { replySubject, replyThread } from '../email/reply-thread.ts'
+import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
 import type { PrismaClient } from '../generated/prisma/client.ts'
 import { resolveIfOpen } from '../tickets/status.ts'
 
@@ -304,10 +304,8 @@ async function sendReply(
   category: TicketCategory,
 ): Promise<void> {
   await deps.sendEmail({
-    to: ticket.studentEmail,
-    subject: replySubject(ticket.subject),
-    text: output.reply,
-    thread: await replyThread(ticketId, deps.prisma),
+    ...(await replyEmail({ id: ticketId, ...ticket }, output.reply, deps.prisma)),
+    // Machine-sent, so marked for auto-responders not to answer (#239).
     automatic: true,
   })
 
@@ -318,15 +316,7 @@ async function sendReply(
     })
     await resolveIfOpen(tx, ticketId)
     await tx.message.create({
-      data: {
-        ticketId,
-        direction: 'outbound',
-        author: 'ai',
-        body: output.reply,
-        // Null, as on an agent's reply: Amazon SES sets the Message-ID and
-        // does not report it back.
-        emailMessageId: null,
-      },
+      data: outboundMessage({ ticketId, author: 'ai', body: output.reply }),
     })
   })
 }

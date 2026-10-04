@@ -12,7 +12,7 @@ import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
 import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
 import { EmailSendError } from '../email/outbound.ts'
-import { replySubject, replyThread } from '../email/reply-thread.ts'
+import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
 import { parseBody, parseId, parseQuery, signedInUserId } from '../http.ts'
 import { resolveIfOpen } from '../tickets/status.ts'
 
@@ -57,6 +57,34 @@ function toSummary(
     createdAt: draft.createdAt.toISOString(),
     updatedAt: draft.updatedAt.toISOString(),
   }
+}
+
+/**
+ * Puts a draft whose email did not go out back to pending, the edit kept, so
+ * the agent can try again. Conditional on this reviewer's claim, so nothing a
+ * later approval wrote is undone.
+ *
+ * Answers the error if the revert itself failed, rather than throwing it: the
+ * caller must still report why the send failed first (#271).
+ */
+async function releaseClaim(id: number, reviewerId: string): Promise<unknown> {
+  try {
+    await prisma.replyDraft.updateMany({
+      where: { id, status: 'approved', reviewedById: reviewerId },
+      data: { status: 'pending', reviewedById: null, reviewedAt: null },
+    })
+    return undefined
+  } catch (error) {
+    return error
+  }
+}
+
+/**
+ * An error's name and message, for the approval's failure log. Never the
+ * error object, which could carry the draft.
+ */
+function nameAndMessage(error: unknown): string {
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error)
 }
 
 export const draftsRouter = Router()
@@ -148,28 +176,16 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
   try {
     // Not marked automatic: a person approved it, and an auto-responder that
     // writes back to it is answering someone.
-    await req.app.locals.sendEmail({
-      to: ticket.studentEmail,
-      subject: replySubject(ticket.subject),
-      text,
-      thread: await replyThread(ticket.id),
-    })
+    await req.app.locals.sendEmail(await replyEmail(ticket, text))
   } catch (err) {
-    // Back to pending, the edit kept, so the agent can try again. Conditional
-    // on this claim, so nothing a later approval wrote is undone.
-    try {
-      await prisma.replyDraft.updateMany({
-        where: { id, status: 'approved', reviewedById: reviewerId },
-        data: { status: 'pending', reviewedById: null, reviewedAt: null },
-      })
-    } catch (revertErr) {
+    const revertErr = await releaseClaim(id, reviewerId)
+    if (revertErr !== undefined) {
       // Both are logged, the send's first (#249): a failed revert must not
-      // hide why nothing was sent. The draft is then left approved but
-      // unsent, which the log names. Messages only, as everywhere: the error
-      // objects could carry the draft.
-      const describe = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e))
+      // hide why nothing was sent. The draft is then left approved but unsent,
+      // which the log names, and the agent hears 502 whatever the send's error
+      // was, since nothing went out.
       console.error(
-        `Draft ${String(id)} not sent (${describe(err)}), and not returned to pending (${describe(revertErr)})`,
+        `Draft ${String(id)} not sent (${nameAndMessage(err)}), and not returned to pending (${nameAndMessage(revertErr)})`,
       )
       res.status(502).json({ error: REPLY_NOT_SENT })
       return
@@ -189,14 +205,12 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
         data: { needsAgent: false, escalationReason: null },
       })
       await tx.message.create({
-        data: {
+        data: outboundMessage({
           ticketId: ticket.id,
-          direction: 'outbound',
           author: 'agent',
           agentId: reviewerId,
           body: text,
-          emailMessageId: null,
-        },
+        }),
       })
       await resolveIfOpen(tx, ticket.id)
       return tx.replyDraft.findUniqueOrThrow({ where: { id }, select: draftFields })
