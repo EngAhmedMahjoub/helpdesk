@@ -1,0 +1,13 @@
+# The build context is the repo root (apps/api/Dockerfile). Keep out what the
+# image builds for itself, and anything holding secrets.
+**/node_modules
+**/dist
+**/src/generated
+.git
+.env
+**/.env
+**/.env.*
+!**/.env.example
+*.key
+apps/e2e/test-results
+apps/e2e/playwright-report
