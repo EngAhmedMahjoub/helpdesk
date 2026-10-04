@@ -113,7 +113,14 @@ function UsersTable({
               {user.email}
             </TableCell>
             <TableCell>
-              <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
+              {/* Cased by CSS, like the ticket status badge: the stored value
+                  stays what tests and screen readers get. */}
+              <Badge
+                className="capitalize"
+                variant={user.role === 'admin' ? 'default' : 'secondary'}
+              >
+                {user.role}
+              </Badge>
             </TableCell>
             <TableCell>
               {/* The word carries the meaning; the colour only seconds it, so a
