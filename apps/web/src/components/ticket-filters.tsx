@@ -153,7 +153,13 @@ function Filter({
   onChange: (value: string) => void
 }) {
   return (
-    <SelectField id={id} label={label} onChange={onChange} value={value}>
+    <SelectField
+      className="w-40 capitalize"
+      id={id}
+      label={label}
+      onChange={onChange}
+      value={value}
+    >
       <SelectItem value={ALL}>All</SelectItem>
       {options.map((option) => (
         <SelectItem className="capitalize" key={option} value={option}>

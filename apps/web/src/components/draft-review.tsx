@@ -87,10 +87,11 @@ function DraftForm({
   return (
     <section
       aria-labelledby="draft-heading"
-      className="mt-8 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4"
+      // Dashed, unlike the thread's solid messages: a draft must never read as sent mail.
+      className="mt-8 rounded-md border border-dashed border-input bg-card p-5"
     >
-      <h2 className="flex items-center gap-2 font-medium text-foreground" id="draft-heading">
-        <Badge variant="secondary">AI</Badge>
+      <h2 className="flex items-center gap-2 font-semibold" id="draft-heading">
+        <Badge className="rounded-sm">AI</Badge>
         Draft reply awaiting review
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">

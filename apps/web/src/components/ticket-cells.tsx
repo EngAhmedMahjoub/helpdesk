@@ -23,7 +23,13 @@ export function TicketSubjectLink({ ticket }: { ticket: Pick<TicketSummary, 'id'
  * it, so a reader who cannot tell two badges apart loses nothing.
  */
 export function TicketStatusBadge({ status }: { status: TicketStatus }) {
-  return <Badge variant={status === 'open' ? 'default' : 'outline'}>{status}</Badge>
+  return (
+    // Cased by CSS, not in the text: the stored value stays what tests and
+    // screen readers get, the way the selects already do it.
+    <Badge className="capitalize" variant={status === 'open' ? 'default' : 'outline'}>
+      {status}
+    </Badge>
+  )
 }
 
 /** A stamp short enough for a narrow cell, spelled out in full on hover. */
