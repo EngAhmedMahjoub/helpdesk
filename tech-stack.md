@@ -78,7 +78,7 @@ Hiding screens in the UI is not access control. Express enforces permissions on 
 | Local database | `docker compose up -d --wait` at the repo root starts Postgres 18 on `localhost:5432` (user, password, and database `helpdesk`); copy `apps/api/.env.example` to `apps/api/.env` |
 | Background jobs | pg-boss 12, running inside the API process (Koyeb's free instance cannot run a separate worker). `createBoss` in `apps/api/src/jobs/boss.ts`: its own `pgboss` schema in the same database, created on start (Prisma migrates `public` only); a pool of 3 beside Prisma's, labelled `helpdesk-jobs`; an `error` listener, since an unhandled one would crash the process. `src/index.ts` starts it before the API listens and stops it gracefully on SIGTERM, giving a running job 10 seconds. Verified on Bun 1.4.2, with Prisma's `?schema=public` left on the connection string. Queues: `process-ticket` (`apps/api/src/jobs/process-ticket.ts`), created on start; a job carries `{ ticketId, messageId }`, ids only, and is queued inside the transaction that saves the inbound message, through pg-boss's `fromPrisma` adapter, so the two commit or roll back together. Queued separately, a failure between them would leave a message no job picks up, and Resend's redelivery would be dropped as a duplicate. `createApp` takes the queue from `src/index.ts` and has no default: without one, an inbound email fails with a 500 and is redelivered |
 | Scheduled tasks | GitHub Actions scheduled workflow calls protected endpoints (the API sleeps when idle, so in-process schedules are unreliable). The workflow itself is 8.11. The endpoints are under `/api/tasks` (`apps/api/src/routes/tasks.ts`), with no session: the caller sends `Authorization: Bearer <TASKS_SECRET>`, required at boot and at least 32 characters. Both sides are SHA-256 hashed and compared with `timingSafeEqual`, so neither the secret nor its length leaks through timing; every refusal is the same 401, and a signed-in admin is refused too. `POST /api/tasks/auto-close` (5.16) sets every Resolved ticket whose `autoCloseAt` has passed to Closed through `statusChange`, in one `updateMany` whose condition is the status and the timer, so a ticket reopened or given a fresh timer meanwhile is left alone; it answers `{ closed: n }` and is safe to repeat. `POST /api/tasks/cleanup-sessions` (5.16a) deletes expired sessions and answers `{ deleted: n }` |
-| CORS | `cors` package, single origin from `WEB_ORIGIN` (`https://app.<domain>` in production, `http://localhost:5173` locally), `credentials: true` |
+| CORS | `cors` package, single origin from `WEB_ORIGIN` (`https://app.helpdesk.mahjoub.io` in production, `http://localhost:5173` locally), `credentials: true` |
 | Response headers | `createApp` disables `X-Powered-By` and sets `X-Content-Type-Options: nosniff` on every response, before any router, so the webhook, refusals, 404s and the error handler's answers carry it too (#258, from the Phase 7 security review). The first named the framework to anyone probing; the second makes a browser trust `Content-Type` rather than guess. Two lines rather than `helmet`: the API serves JSON only, so CSP and frame options would guard HTML it never sends. The web app's own headers are Vercel's (8.8) |
 | Error handling | A body-parser failure answers its own status (400 unparseable, 413 over the 100KB default) and logs only the error type. The error object is never logged for a client error: `express.json()` attaches the raw body, which for a truncated login POST means a cleartext password in the log |
 | End-to-end tests | Playwright in `apps/e2e`, Chromium. Starts its own API on 3100 and web server on 5273 against a third database, `helpdesk_e2e`, so a run cannot reach the development servers or their data. `bun run test:e2e` prepares the database before Playwright starts, because Playwright launches `webServer` ahead of `globalSetup` |
@@ -92,7 +92,7 @@ Database sessions.
 |---|---|
 | Session table | Prisma `Session` model: `id`, `tokenHash`, `userId`, `expiresAt`, `createdAt` |
 | Token | 32 random bytes (`crypto.randomBytes`); raw token in the cookie, SHA-256 hash in the database |
-| Cookie | `httpOnly`, `Secure`, `SameSite=Lax`, set by `api.<domain>` |
+| Cookie | `httpOnly`, `Secure`, `SameSite=Lax`, set by `api.helpdesk.mahjoub.io` |
 | Passwords | `Bun.password` (argon2id, m=65536 KiB, t=2, p=1); no argon2 or bcrypt dependency |
 | Expiry | 8 hours; expired sessions deleted by a scheduled task, `POST /api/tasks/cleanup-sessions` (5.16a). `requireAuth` already refuses them, so the cleanup only removes dead rows. Expired means `expiresAt` at or before now, the same test `requireAuth` applies |
 | Login | `POST /api/auth/login` creates a session and sets the cookie |
@@ -209,8 +209,8 @@ All free tiers.
 
 | Piece | Provider |
 |---|---|
-| Frontend | Vercel (Hobby) on `app.<domain>` |
-| API + background jobs | Koyeb free instance, Docker image based on `oven/bun`, on `api.<domain>` |
+| Frontend | Vercel (Hobby) on `app.helpdesk.mahjoub.io` |
+| API + background jobs | Koyeb free instance, Docker image based on `oven/bun`, on `api.helpdesk.mahjoub.io` |
 | Database | Neon free Postgres |
 | Email | Resend free |
 | Scheduled tasks | GitHub Actions scheduled workflow |
@@ -220,10 +220,12 @@ Not free: Anthropic API usage. The custom domain is already owned.
 
 ### Domains
 
-Frontend and API must be subdomains of one custom domain so the session cookie works:
+Frontend and API must be subdomains of one custom domain so the session cookie works. Both sit under `helpdesk.mahjoub.io`, the Resend domain, so the project keeps to one subdomain and the root `mahjoub.io` stays free:
 
-- `app.<domain>` → Vercel
-- `api.<domain>` → Koyeb
+- `app.helpdesk.mahjoub.io` → Vercel
+- `api.helpdesk.mahjoub.io` → Koyeb
+
+Both are CNAMEs in Cloudflare, DNS only like the Resend records: Koyeb and Vercel each issue the certificate for their name, which a Cloudflare proxy in front would get in the way of. Each target comes from its host when the custom domain is added there (tasks 8.5 and 8.8), so each record is added then. Resend's MX sits on `helpdesk.mahjoub.io` itself and does not reach these names.
 
 Do not serve the app from `*.vercel.app` in production; the browser treats it as a different site and blocks the session cookie. Vercel preview deployments cannot log in; use them for UI review only.
 
