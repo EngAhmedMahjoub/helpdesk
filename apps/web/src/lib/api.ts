@@ -3,7 +3,7 @@ import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios'
 /**
  * Base origin for API calls. Empty in development, where the Vite dev server
  * proxies /api to the API and keeps requests same-origin; in production it
- * points at api.<domain>, a different origin from the app.
+ * points at api.helpdesk.mahjoub.io, a different origin from the app.
  */
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? ''
 

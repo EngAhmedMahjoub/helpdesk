@@ -97,8 +97,8 @@ export function createApp({
     next()
   })
 
-  // credentials: true is what lets the session cookie cross from app.<domain>
-  // to api.<domain> in production. Without it the browser sends the cookie on
+  // credentials: true is what lets the session cookie cross from app.helpdesk.mahjoub.io
+  // to api.helpdesk.mahjoub.io in production. Without it the browser sends the cookie on
   // no cross-origin request, and refuses to expose the response of one that
   // tries. Locally the Vite proxy makes /api same-origin, so this only bites
   // when the frontend talks to the API directly.
