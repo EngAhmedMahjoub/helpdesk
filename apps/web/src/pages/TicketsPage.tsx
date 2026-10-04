@@ -137,7 +137,7 @@ function TicketRow({ ticket }: { ticket: TicketSummary }) {
       <TableCell>
         <TicketStatusBadge status={ticket.status} />
       </TableCell>
-      <TableCell className="text-muted-foreground">
+      <TableCell className="text-muted-foreground capitalize">
         {ticket.category ?? <span className="text-muted-foreground">—</span>}
       </TableCell>
       <TableCell className="truncate text-muted-foreground" title={ticket.assignee?.name}>
