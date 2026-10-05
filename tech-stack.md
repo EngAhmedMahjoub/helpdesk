@@ -169,7 +169,7 @@ Free tier limits (from search results, not verified on Resend's pricing page): 3
 | Concern | Choice |
 |---|---|
 | Model | `claude-haiku-4-5` via the Anthropic TypeScript SDK, pinned in `apps/api/src/ai/client.ts` — one model for classification, summary and reply, so the evaluation set in 5.18 measures one thing. Chosen on measurement over Sonnet 5 and Opus 5 against this knowledge base: ~2.9s and ~$2.23 per thousand tickets, against ~3.7s / $5.02 and ~5.2s / $15.36. Haiku takes no `effort` parameter and does no adaptive thinking, which is most of the difference. The cost is judgement — on a technical complaint ending "just refund me" it answered `technical` where Opus answered `refund`, which the keyword safeguard below has to catch |
-| Key | `ANTHROPIC_API_KEY`, validated by `env.ts` at boot like the Resend keys, so a missing or malformed key fails the deploy rather than a job at 3am. It must be **workspace-scoped**: an organisation-level key is refused with a 400 asking for an `anthropic-workspace-id` header. Set the monthly spend limit on that workspace (8.13) |
+| Key | `ANTHROPIC_API_KEY`, validated by `env.ts` at boot like the Resend keys, so a missing or malformed key fails the deploy rather than a job at 3am. It must be **workspace-scoped**: an organisation-level key is refused with a 400 asking for an `anthropic-workspace-id` header. Set the monthly spend limit on that workspace (8.13): $15 a month, set 2026-10-05 |
 | Checking the key | `bun --filter '@helpdesk/api' ai:ping` makes one small real call and prints the model, stop reason, tokens and latency. By hand only: it costs money and needs the network, which is why nothing in `bun test` reaches the API |
 | Call | One call per new inbound message, returning category, summary, and reply draft as structured JSON |
 | Output shape | `aiOutputSchema` in `packages/shared/src/ai-output.ts`: category, a summary capped at 300 characters because it is one line on the ticket list, and a reply under the same 10,000-character ceiling an agent's reply has. The prompt sends it as `zodOutputFormat(aiOutputSchema)`, so what the model is asked for and what the job accepts cannot drift. That format holds the model to the three keys (`required`, `additionalProperties: false`), but the SDK turns the category enum and the lengths into descriptions: the model is told them, not held to them. `aiOutputSchema.safeParse` enforces them on the way back, and an answer outside them is `invalid_output`, retried once (#273). Parsing strips an unexpected field rather than failing the job over a key nobody reads |
@@ -216,7 +216,7 @@ All free tiers.
 | Scheduled tasks | GitHub Actions scheduled workflow |
 | CI/CD | GitHub Actions. `.github/workflows/ci.yml` runs on every PR and push to `main`: Bun 1.4.2, `bun install --frozen-lockfile`, `prisma generate` (the client is gitignored), then lint, typecheck, test, format:check. A `postgres:18` service container backs the database tests |
 
-Not free: Anthropic API usage. The custom domain is already owned.
+Not free: Anthropic API usage, capped by a $15 monthly spend limit in the Claude Console (8.13). The app's own caps allow about $5 a day at worst (AI limits and holds, above), so a burst of heavy traffic could reach the limit in about three days; a call refused past it is retried twice, then the ticket waits for an agent as `ai_failed`, as any failed call does (not yet seen against a real limit). The custom domain is already owned.
 
 ### Domains
 
