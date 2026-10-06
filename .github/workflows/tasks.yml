@@ -1,0 +1,43 @@
+name: Scheduled tasks
+
+# Task 8.11: the housekeeping the API does not schedule for itself, since its
+# free Render instance sleeps when idle and would miss any in-process timer.
+# Daily is enough: auto-close waits 14 days, and an expired session is already
+# refused by requireAuth, so cleanup is only tidying.
+on:
+  schedule:
+    # Off the hour: GitHub delays runs most when every repo starts at :00.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-tasks
+  cancel-in-progress: false
+
+env:
+  API_URL: https://api.helpdesk.mahjoub.io
+
+jobs:
+  tasks:
+    runs-on: ubuntu-latest
+    steps:
+      # Retried because the first call may meet the API asleep: Render takes
+      # about a minute to wake it. Both tasks are safe to repeat, since a closed
+      # ticket or a deleted session no longer matches.
+      - name: Close Resolved tickets past their 14 days
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            --retry 5 --retry-delay 20 --retry-all-errors \
+            -X POST -H "Authorization: Bearer $TASKS_SECRET" \
+            "$API_URL/api/tasks/auto-close"
+        env:
+          TASKS_SECRET: ${{ secrets.TASKS_SECRET }}
+
+      - name: Delete expired sessions
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            --retry 5 --retry-delay 20 --retry-all-errors \
+            -X POST -H "Authorization: Bearer $TASKS_SECRET" \
+            "$API_URL/api/tasks/cleanup-sessions"
+        env:
+          TASKS_SECRET: ${{ secrets.TASKS_SECRET }}
