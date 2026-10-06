@@ -9,6 +9,15 @@ import { z } from 'zod'
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  // How many proxies stand between the client and the API, for Express's
+  // `trust proxy`, so req.ip is the client and the login limit keys on them.
+  // Render is 3, measured on 2026-10-06 (#87): Cloudflare, Render's load
+  // balancer, and a proxy beside the app on localhost. Too low and every client
+  // shares a proxy's address and one login budget; too high and an
+  // X-Forwarded-For entry the client wrote is believed, so anyone could reset
+  // their own budget. 0 trusts none, which is right wherever nothing sits in
+  // front: locally and in tests.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
   DATABASE_URL: z
     .url({ protocol: /^postgres(ql)?$/ })
     .describe('PostgreSQL connection string, e.g. postgresql://user:password@host:5432/db'),
