@@ -211,7 +211,7 @@ All free tiers.
 |---|---|
 | Frontend | Vercel (Hobby) on `app.helpdesk.mahjoub.io` |
 | API + background jobs | Koyeb free instance, Docker image based on `oven/bun`, on `api.helpdesk.mahjoub.io` |
-| Database | Neon free Postgres |
+| Database | Neon free Postgres, project `square-bar-54875678`, branch `production`, database `neondb`: Postgres 18 like local and test, in AWS `eu-central-1` (Frankfurt) beside Koyeb's free region. One direct `DATABASE_URL`, never the `-pooler` one, for the app and for `prisma migrate deploy`: Neon's PgBouncer runs in transaction mode, without the advisory locks and `LISTEN` pg-boss uses, and one long-running server with a few connections gains nothing from pooling. Locally the production string lives in `apps/api/.env.production` (gitignored). Connecting from far away (about 330 ms to Frankfurt from the dev machine) needs `NODE_OPTIONS=--network-family-autoselection-attempt-timeout=2000`: the default 250 ms per address cuts off every attempt, while Koyeb, in Frankfurt, connects within it |
 | Email | Resend free |
 | Scheduled tasks | GitHub Actions scheduled workflow |
 | CI/CD | GitHub Actions. `.github/workflows/ci.yml` runs on every PR and push to `main`: Bun 1.4.2, `bun install --frozen-lockfile`, `prisma generate` (the client is gitignored), then lint, typecheck, test, format:check. A `postgres:18` service container backs the database tests |
@@ -236,7 +236,7 @@ From search results, not verified on providers' pricing pages:
 | Provider | Limit | Effect |
 |---|---|---|
 | Koyeb | One instance, 512 MB RAM, 0.1 vCPU; sleeps after 1 hour without traffic | First request after idle is slow; background jobs run only while awake |
-| Neon | 0.5 GB storage, 100 compute-hours/month; sleeps when idle | Enough for a portfolio |
+| Neon | 0.5 GB storage, 100 CU-hours/month; compute scales to zero after 5 minutes idle and can't be kept on (Neon docs, 2026-10-06) | pg-boss polls, so the database is awake whenever the API is; Koyeb sleeping after an hour bounds that. Compute fixed at 0.25 CU (lowered from the default 0.25–2 CU autoscaling on 2026-10-06): about 400 awake hours a month, where 2 CU could leave as few as 50 |
 | Resend | 3,000 emails/month, 100/day (sent + received) | Enough for a demo |
 
 ### Pipelines
