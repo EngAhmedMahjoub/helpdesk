@@ -21,7 +21,7 @@ import { env } from '../env.ts'
  *
  * A factory, so the limiter's own tests can build one that enforces regardless.
  *
- * Production note: Koyeb puts a proxy in front of the API, so `req.ip` will be
+ * Production note: Render puts a proxy in front of the API, so `req.ip` will be
  * the proxy's until `trust proxy` is configured. Until then the IP half of the
  * key is constant and only the address half discriminates. Task 8.5 should set
  * it to the exact number of proxies — `true` would let anyone spoof their key

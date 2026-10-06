@@ -33,7 +33,7 @@ const server = createApp({ queueProcessTicket: processTicketQueue(boss) }).liste
   console.log(`API listening on http://localhost:${env.PORT}`)
 })
 
-// Koyeb stops an instance with SIGTERM. Stop taking requests, then let a job
+// Render stops an instance with SIGTERM. Stop taking requests, then let a job
 // already running finish, within the timeout, rather than cut it off mid-way.
 async function shutdown(signal: string) {
   console.log(`${signal} received, shutting down`)

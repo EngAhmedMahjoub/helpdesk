@@ -2,8 +2,8 @@ import { PgBoss } from 'pg-boss'
 import { env } from '../env.ts'
 
 /**
- * The background job queue: pg-boss, in the API process itself, since Koyeb's
- * free instance runs one service with no room for a separate worker. Its tables
+ * The background job queue: pg-boss, in the API process itself, since Render's
+ * free plan runs web services only, with no room for a separate worker. Its tables
  * live in their own `pgboss` schema in the same database, which it creates on
  * start; Prisma migrates `public` only, so the two never touch.
  *
