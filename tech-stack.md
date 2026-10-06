@@ -236,7 +236,7 @@ From search results, not verified on providers' pricing pages:
 | Provider | Limit | Effect |
 |---|---|---|
 | Koyeb | One instance, 512 MB RAM, 0.1 vCPU; sleeps after 1 hour without traffic | First request after idle is slow; background jobs run only while awake |
-| Neon | 0.5 GB storage, 100 CU-hours/month; compute scales to zero after 5 minutes idle and can't be kept on (Neon docs, 2026-10-06) | pg-boss polls, so the database is awake whenever the API is; Koyeb sleeping after an hour bounds that. Keep compute fixed at 0.25 CU, about 400 awake hours a month, rather than autoscaling to 2 CU and as few as 50 |
+| Neon | 0.5 GB storage, 100 CU-hours/month; compute scales to zero after 5 minutes idle and can't be kept on (Neon docs, 2026-10-06) | pg-boss polls, so the database is awake whenever the API is; Koyeb sleeping after an hour bounds that. Compute fixed at 0.25 CU (lowered from the default 0.25–2 CU autoscaling on 2026-10-06): about 400 awake hours a month, where 2 CU could leave as few as 50 |
 | Resend | 3,000 emails/month, 100/day (sent + received) | Enough for a demo |
 
 ### Pipelines
