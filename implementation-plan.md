@@ -13,7 +13,7 @@ Based on `project-scope.md` and `tech-stack.md`. Each task is small enough for o
 | AI call fails after retries | Escalate to a human agent: ticket stays Open and is flagged as needing an agent. |
 | Ticket assignment | A ticket has at most one assignee, an active agent or admin. Assignment is a label, not a permission: any agent or admin can assign, reassign or clear it, and anyone can still reply or change status. Deactivating a user clears their assignments. |
 | Knowledge base content | Written with Claude Code as part of Phase 5. |
-| Hosting | Free tiers: Vercel (frontend), Koyeb (API + background jobs in one process), Neon (Postgres), Resend (email), GitHub Actions (CI/CD and scheduled tasks). |
+| Hosting | Free tiers: Vercel (frontend), Render (API + background jobs in one process; Koyeb until its free plan closed to new users), Neon (Postgres), Resend (email), GitHub Actions (CI/CD and scheduled tasks). |
 | Runtime and package manager | Bun, with Bun workspaces |
 | Custom domain | `helpdesk.mahjoub.io`, a subdomain of the owned `mahjoub.io` and already the Resend domain: the app on `app.helpdesk.mahjoub.io`, the API on `api.helpdesk.mahjoub.io`. The root stays free for personal use. |
 
@@ -175,10 +175,10 @@ None.
 | 8.1 | DNS records for `app.helpdesk.mahjoub.io` and `api.helpdesk.mahjoub.io` | Both subdomains resolve |
 | 8.2 | Multi-stage Dockerfile for the API based on `oven/bun` | Image builds and runs locally |
 | 8.3 | Neon project and production database | API connects to Neon |
-| 8.4 | Koyeb service from the Docker image, with secrets (database URL, Resend API key, Resend webhook secret, tasks secret, Anthropic key, admin seed) | App starts on Koyeb |
-| 8.5 | Custom domain `api.helpdesk.mahjoub.io` on Koyeb | `https://api.helpdesk.mahjoub.io/api/health` returns 200 |
-| 8.6 | Confirm background jobs run on Koyeb | A test job completes in production |
-| 8.7 | GitHub Actions backend pipeline: build image, run `prisma migrate deploy` against Neon, deploy to Koyeb | Merge to `main` deploys the backend |
+| 8.4 | Render web service from the Docker image in GitHub Container Registry, with secrets (database URL, Resend API key, Resend webhook secret, tasks secret, Anthropic key); the admin seeded into Neon from a dev machine, since the image has no Prisma CLI | App starts on Render |
+| 8.5 | Custom domain `api.helpdesk.mahjoub.io` on Render, and `trust proxy` for Render's proxy | `https://api.helpdesk.mahjoub.io/api/health` returns 200 |
+| 8.6 | Confirm background jobs run on Render | A test job completes in production |
+| 8.7 | GitHub Actions backend pipeline: build image, run `prisma migrate deploy` against Neon, deploy to Render through its deploy hook | Merge to `main` deploys the backend |
 | 8.8 | Vercel project for `apps/web` on `app.helpdesk.mahjoub.io` with `VITE_API_URL` | App loads on the custom domain |
 | 8.9 | Cross-subdomain login test | Login works in Chrome, Safari, and Firefox |
 | 8.10 | Point Resend receiving webhook at production | Real email creates a production ticket |
@@ -189,4 +189,4 @@ None.
 ## Notes
 
 - Test the cross-subdomain cookie (8.9) as early as possible — a throwaway deploy of the Phase 1 login is enough.
-- Koyeb's free instance sleeps after 1 hour without traffic. The Resend webhook wakes it; queued jobs are stored in Postgres and run once it is awake.
+- Render's free web service spins down after 15 minutes without traffic and takes about a minute to wake. The Resend webhook wakes it; queued jobs are stored in Postgres and run once it is awake.
