@@ -16,6 +16,18 @@ describe('GET /api/health', () => {
   })
 })
 
+// #87. The limiter's tests prove what 3 does; these prove createApp applies it.
+describe('trust proxy', () => {
+  test('trusts no proxy unless told how many there are', () => {
+    // .env.test sets no TRUST_PROXY_HOPS, so this is the default.
+    expect(createApp().get('trust proxy')).toBe(0)
+  })
+
+  test('trusts the number of proxies it is given', () => {
+    expect(createApp({ trustProxyHops: 3 }).get('trust proxy')).toBe(3)
+  })
+})
+
 describe('unknown /api routes', () => {
   test('return a 404 JSON body', async () => {
     const res = await request(app).get('/api/does-not-exist')

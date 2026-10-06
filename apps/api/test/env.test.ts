@@ -120,4 +120,13 @@ describe('environment validation', () => {
     expect(exitCode).not.toBe(0)
     expect(stderr).toContain('EMAIL_FROM')
   })
+
+  test('refuses a TRUST_PROXY_HOPS that is not a count', async () => {
+    // "true" above all: Express would read it as trust every hop, so the
+    // client's own X-Forwarded-For entry would name it (#87).
+    const { exitCode, stderr } = await bootWith({ ...valid, TRUST_PROXY_HOPS: 'true' })
+
+    expect(exitCode).not.toBe(0)
+    expect(stderr).toContain('TRUST_PROXY_HOPS')
+  })
 })

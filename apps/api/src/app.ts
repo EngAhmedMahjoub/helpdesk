@@ -68,6 +68,8 @@ type AppOptions = {
    * and Resend redelivers it, rather than being saved with no job to answer it.
    */
   queueProcessTicket?: QueueProcessTicket
+  /** Proxies to trust for the client's address; see TRUST_PROXY_HOPS in env.ts. */
+  trustProxyHops?: number
 }
 
 const noJobQueue: QueueProcessTicket = () => {
@@ -78,8 +80,12 @@ export function createApp({
   sendEmail = resendSendEmail,
   fetchReceivedEmail = resendFetchReceivedEmail,
   queueProcessTicket = noJobQueue,
+  trustProxyHops = env.TRUST_PROXY_HOPS,
 }: AppOptions = {}) {
   const app = express()
+  // A count, never true: true believes the leftmost X-Forwarded-For entry,
+  // which the client writes itself.
+  app.set('trust proxy', trustProxyHops)
   // On app.locals rather than imported by the routes, so a test can hand the
   // app a fake without mocking modules.
   app.locals.sendEmail = sendEmail

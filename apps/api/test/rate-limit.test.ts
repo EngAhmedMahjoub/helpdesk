@@ -68,6 +68,49 @@ describe('login rate limit', () => {
 })
 
 /**
+ * The limiter behind Render's three proxies (#87), as measured there: each
+ * request reaches the app with `X-Forwarded-For: <client>, <Cloudflare>,
+ * <Render's balancer>` from a proxy on localhost, which supertest's own socket
+ * stands in for.
+ */
+describe('behind three proxies', () => {
+  function appBehindProxies() {
+    const proxied = appWithLimiter()
+    proxied.set('trust proxy', 3)
+    return proxied
+  }
+
+  const viaProxies = (target: ReturnType<typeof appWithLimiter>, xff: string) =>
+    request(target)
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', `${xff}, 172.70.251.12, 10.196.1.145`)
+      .send({ email: 'agent@example.com', password: 'wrong password' })
+
+  test('a client cannot reset its budget by writing its own X-Forwarded-For', async () => {
+    const proxied = appBehindProxies()
+    // A fresh made-up entry ahead of the real address on every attempt: were it
+    // believed, each would key a new budget.
+    for (let i = 0; i < 10; i += 1) {
+      expect((await viaProxies(proxied, `203.0.113.${String(i)}, 198.51.100.1`)).status).toBe(401)
+    }
+
+    const blocked = await viaProxies(proxied, '203.0.113.99, 198.51.100.1')
+
+    expect(blocked.status).toBe(429)
+  })
+
+  test('two clients behind the same proxies keep separate budgets', async () => {
+    const proxied = appBehindProxies()
+    for (let i = 0; i < 11; i += 1) await viaProxies(proxied, '198.51.100.1')
+
+    // Same account, another client: the proxies' addresses are not the key.
+    const other = await viaProxies(proxied, '198.51.100.2')
+
+    expect(other.status).toBe(401)
+  })
+})
+
+/**
  * Runs `source` in a fresh Bun process under `nodeEnv` and reports whether the
  * last status it printed was 429.
  *
