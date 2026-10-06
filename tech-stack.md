@@ -92,7 +92,7 @@ Database sessions.
 |---|---|
 | Session table | Prisma `Session` model: `id`, `tokenHash`, `userId`, `expiresAt`, `createdAt` |
 | Token | 32 random bytes (`crypto.randomBytes`); raw token in the cookie, SHA-256 hash in the database |
-| Cookie | `httpOnly`, `Secure`, `SameSite=Lax`, set by `api.helpdesk.mahjoub.io` |
+| Cookie | `httpOnly`, `Secure`, `SameSite=Lax`, set by `api.helpdesk.mahjoub.io` with no `Domain` attribute, so it belongs to that host alone. The app at `app.helpdesk.mahjoub.io` is the same site, so the browser sends it on the app's requests to the API; sign-in verified in Chrome, Firefox and Safari (#91) |
 | Passwords | `Bun.password` (argon2id, m=65536 KiB, t=2, p=1); no argon2 or bcrypt dependency |
 | Expiry | 8 hours; expired sessions deleted by a scheduled task, `POST /api/tasks/cleanup-sessions` (5.16a). `requireAuth` already refuses them, so the cleanup only removes dead rows. Expired means `expiresAt` at or before now, the same test `requireAuth` applies |
 | Login | `POST /api/auth/login` creates a session and sets the cookie |
@@ -259,4 +259,4 @@ Not checked against current documentation:
 - Library versions and APIs: React Router, TanStack Query, Tailwind CSS, shadcn/ui, Zod, pg-boss, Resend SDK.
 - Bun compatibility: Prisma (client and `migrate dev`), Supertest, `Bun.password` and pg-boss are confirmed working on Bun; `bun test` replaced Vitest, and `Bun.password` removed the need for an argon2 or bcrypt dependency.
 - Free tier limits for Render, Neon, and Resend on their pricing pages.
-- Cross-subdomain session cookie between Vercel and Render — test a real login early.
+- ~~Cross-subdomain session cookie between Vercel and Render~~ — verified 2026-10-06 (#91): signing in at `app.helpdesk.mahjoub.io` against `api.helpdesk.mahjoub.io` works in Chrome, Firefox (laptop) and Safari (iPhone).
