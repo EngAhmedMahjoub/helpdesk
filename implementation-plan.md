@@ -186,6 +186,16 @@ None.
 | 8.12 | Check Neon's free-tier backup/restore options and test one restore | Restore succeeds |
 | 8.13 | Anthropic API key with a monthly spend limit set in the Claude Console | Limit visible in Console |
 
+## Phase 9 — Error Logging
+
+The app is in production, and its failures are visible only in Render's logs. Sentry's free tier collects them from both apps. With this phase the MVP is complete.
+
+| ID | Task | Done when |
+|---|---|---|
+| 9.1 | Sentry free-tier organisation with two projects, one for the API and one for the web app | Both projects exist and each has a DSN |
+| 9.2 | API errors to Sentry (#302): `@sentry/bun`, initialised only when `SENTRY_DSN` is set; 500s, failed jobs and caught route failures reported, 4xx not; no request body, cookie, auth header or student email content in an event; environment and release on each event | Test: a 500 reaches Sentry, a 4xx and a request body do not; a deliberate production error appears without them |
+| 9.3 | Web app errors to Sentry (#303): `@sentry/react`, initialised only when `VITE_SENTRY_DSN` is set; an error boundary with a fallback screen; hidden source maps uploaded from the Vercel build and not served | Test: the boundary renders its fallback; a deliberate production error appears with a readable stack trace |
+
 ## Notes
 
 - Test the cross-subdomain cookie (8.9) as early as possible — a throwaway deploy of the Phase 1 login is enough.
