@@ -47,6 +47,10 @@ COPY --from=build /app/apps/api/src/generated apps/api/src/generated
 # Read from disk at startup; the API refuses to start without it.
 COPY apps/api/knowledge-base apps/api/knowledge-base
 
+# The commit's short SHA, passed by the deploy workflow, so a Sentry event
+# names the deploy it came from. Empty in an image built by hand.
+ARG SENTRY_RELEASE=
+ENV SENTRY_RELEASE=$SENTRY_RELEASE
 WORKDIR /app/apps/api
 USER bun
 EXPOSE 3000
