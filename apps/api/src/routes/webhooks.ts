@@ -4,6 +4,7 @@ import { env } from '../env.ts'
 import { ingestInboundEmail } from '../email/ingest.ts'
 import { EmailFetchError } from '../email/receiving.ts'
 import { resend } from '../email/resend.ts'
+import { reportError } from '../sentry.ts'
 
 /** The reason alone, never the payload: that names the student and their subject. */
 function reject(res: Response, reason: string) {
@@ -61,6 +62,7 @@ webhooksRouter.post(
       // Not acknowledged, so Resend delivers the event again later, by when a
       // passing outage may be over.
       console.error(err.message)
+      reportError(err)
       res.status(502).json({ error: 'Could not read the email from Resend' })
       return
     }

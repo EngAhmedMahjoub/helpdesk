@@ -19,6 +19,7 @@ import { parseBody, parseId, parseQuery, signedInUserId } from '../http.ts'
 import { statusChange } from '../tickets/status.ts'
 import { EmailSendError } from '../email/outbound.ts'
 import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
+import { reportError } from '../sentry.ts'
 
 /** The columns the list exposes. Explicit, so a column added later stays out until chosen. */
 const summaryFields = {
@@ -296,6 +297,7 @@ ticketsRouter.post('/:id/replies', ticketWriteRateLimit, async (req, res) => {
     // and the error handler's 500 is the honest answer for it.
     if (!(err instanceof EmailSendError)) throw err
     console.error(err.message)
+    reportError(err, { ticketId: id })
     res.status(502).json({ error: REPLY_NOT_SENT })
     return
   }

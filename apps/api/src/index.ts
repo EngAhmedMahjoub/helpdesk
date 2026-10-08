@@ -1,3 +1,4 @@
+import './instrument.ts'
 import { anthropic } from './ai/client.ts'
 import { loadKnowledgeBase } from './ai/knowledge-base.ts'
 import { createApp } from './app.ts'
