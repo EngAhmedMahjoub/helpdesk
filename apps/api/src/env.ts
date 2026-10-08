@@ -53,6 +53,20 @@ const envSchema = z.object({
     .string()
     .min(32)
     .describe('Shared secret the scheduled workflow sends, e.g. from `openssl rand -hex 32`'),
+  // Optional, unlike the keys above: without it the API works exactly as
+  // before and only stops reporting errors, and development, the tests and the
+  // e2e servers must not report at all.
+  SENTRY_DSN: z
+    .url({ protocol: /^https$/ })
+    .optional()
+    .describe("The API project's DSN from Sentry, e.g. https://abc@o1.ingest.sentry.io/2"),
+  // The commit the image was built from, baked in by the deploy workflow, so
+  // an event names the deploy it came from. Empty in an image built by hand
+  // without it, which means none rather than a release called ''.
+  SENTRY_RELEASE: z
+    .string()
+    .optional()
+    .transform((release) => release || undefined),
 })
 
 type Env = z.infer<typeof envSchema>
