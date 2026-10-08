@@ -15,6 +15,7 @@ import { EmailSendError } from '../email/outbound.ts'
 import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
 import { parseBody, parseId, parseQuery, signedInUserId } from '../http.ts'
 import { resolveIfOpen } from '../tickets/status.ts'
+import { reportError } from '../sentry.ts'
 
 const DRAFT_NOT_FOUND = 'Draft not found'
 const DRAFT_ALREADY_REVIEWED = 'This draft has already been reviewed'
@@ -187,11 +188,14 @@ draftsRouter.post('/:id/approve', ticketWriteRateLimit, async (req, res) => {
       console.error(
         `Draft ${String(id)} not sent (${nameAndMessage(err)}), and not returned to pending (${nameAndMessage(revertErr)})`,
       )
+      reportError(err, { draftId: id })
+      reportError(revertErr, { draftId: id })
       res.status(502).json({ error: REPLY_NOT_SENT })
       return
     }
     if (!(err instanceof EmailSendError)) throw err
     console.error(err.message)
+    reportError(err, { draftId: id })
     res.status(502).json({ error: REPLY_NOT_SENT })
     return
   }

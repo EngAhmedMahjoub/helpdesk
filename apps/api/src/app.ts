@@ -11,6 +11,7 @@ import {
 } from './email/receiving.ts'
 import type { QueueProcessTicket } from './jobs/process-ticket.ts'
 import { refuseForeignOrigin } from './auth/origin.ts'
+import { reportError } from './sentry.ts'
 import { authRouter } from './routes/auth.ts'
 import { dashboardRouter } from './routes/dashboard.ts'
 import { draftsRouter } from './routes/drafts.ts'
@@ -163,6 +164,7 @@ export function createApp({
     }
 
     console.error(err)
+    reportError(err)
     res.status(500).json({ error: 'Internal Server Error' })
   }
   app.use(errorHandler)

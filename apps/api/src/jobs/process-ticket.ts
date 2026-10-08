@@ -22,6 +22,7 @@ import type { SendEmail } from '../email/outbound.ts'
 import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
 import type { PrismaClient } from '../generated/prisma/client.ts'
 import { resolveIfOpen } from '../tickets/status.ts'
+import { reportError } from '../sentry.ts'
 
 /** The queue a saved inbound message waits on for the AI (task 5.2). */
 export const PROCESS_TICKET = 'process-ticket'
@@ -343,6 +344,7 @@ export function processTicketWorker(
         const retryable = !(error instanceof AiFailure) || error.retryable
         if (retryable && job.retryCount < job.retryLimit) throw error
         console.error(`Ticket ${String(job.data.ticketId)} sent to an agent: ${describe(error)}`)
+        reportError(error, { ticketId: job.data.ticketId })
         await escalate(deps.prisma, job.data.ticketId)
       }
     }

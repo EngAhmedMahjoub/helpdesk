@@ -1,5 +1,6 @@
 import { PgBoss } from 'pg-boss'
 import { env } from '../env.ts'
+import { reportError } from '../sentry.ts'
 
 /**
  * The background job queue: pg-boss, in the API process itself, since Render's
@@ -22,6 +23,9 @@ export function createBoss(connectionString: string = env.DATABASE_URL): PgBoss 
   // pg-boss emits errors from its own polling and maintenance rather than
   // throwing them; an EventEmitter with no 'error' listener would crash the
   // process on the first one. The message only: the error can carry the query.
-  boss.on('error', (err: Error) => console.error(`pg-boss error: ${err.message}`))
+  boss.on('error', (err: Error) => {
+    console.error(`pg-boss error: ${err.message}`)
+    reportError(err)
+  })
   return boss
 }
