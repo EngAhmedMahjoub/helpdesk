@@ -190,24 +190,24 @@ None.
 
 The app is in production, and its failures are visible only in Render's logs. Sentry's free tier collects them from both apps. With this phase the MVP is complete.
 
-| ID | Task | Done when |
-|---|---|---|
-| 9.1 | Sentry free-tier organisation with two projects, one for the API and one for the web app | Both projects exist and each has a DSN |
-| 9.2 | API errors to Sentry (#302): `@sentry/bun`, initialised only when `SENTRY_DSN` is set; 500s, failed jobs and caught route failures reported, 4xx not; no request body, cookie, auth header or student email content in an event; environment and release on each event | Test: a 500 reaches Sentry, a 4xx and a request body do not; a deliberate production error appears without them |
-| 9.3 | Web app errors to Sentry (#303): `@sentry/react`, initialised only when `VITE_SENTRY_DSN` is set; an error boundary with a fallback screen; hidden source maps uploaded from the Vercel build and not served | Test: the boundary renders its fallback; a deliberate production error appears with a readable stack trace |
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 9.1 | Sentry free-tier organisation with two projects, one for the API and one for the web app | Both projects exist and each has a DSN | |
+| 9.2 | API errors to Sentry (#302): `@sentry/bun`, initialised only when `SENTRY_DSN` is set; 500s, failed jobs and caught route failures reported, 4xx not; no request body, cookie, auth header or student email content in an event; environment and release on each event | Test: a 500 reaches Sentry, a 4xx and a request body do not; a deliberate production error appears without them | Done |
+| 9.3 | Web app errors to Sentry (#303): `@sentry/react`, initialised only when `VITE_SENTRY_DSN` is set; an error boundary with a fallback screen; hidden source maps uploaded from the Vercel build and not served | Test: the boundary renders its fallback; a deliberate production error appears with a readable stack trace | Done |
 
 ## Phase 10 — App Metadata
 
 The MVP is complete, but the app still introduces itself as a Vite scaffold: a tab titled `web`, Vite's favicon, no preview when a link is shared, and no way to tell which build is running.
 
-| ID | Task | Done when |
-|---|---|---|
-| 10.1 | Vite defaults in `index.html` replaced (#306): title, description, `color-scheme`, and `theme-color` for light and dark | Tab reads `Helpdesk`; browser UI colour follows the theme |
-| 10.2 | Brand favicon, app icons and web manifest (#307): Campus desk SVG favicon, apple-touch and 192/512 icons, `site.webmanifest`; no service worker | Vite bolt gone; Chrome's Manifest panel shows no errors |
-| 10.3 | Per-page tab titles (#308): `usePageTitle` hook on every page; ticket detail shows `#<id> <subject>` once loaded | Test: the hook sets and restores the title; each route shows its own title |
-| 10.4 | Social preview tags and `robots.txt` (#309): Open Graph and Twitter card tags with a 1200×630 image; `Disallow: /` and `noindex`, since the app is behind a login | A link-preview debugger shows the card for the production URL; `robots.txt` is served |
-| 10.5 | App version and commit visible (#310): real package versions; `version` and `commit` on `/api/health`; version and short SHA in the web app | Test: health returns both; production health SHA matches the Sentry release |
-| 10.6 | Repository and package metadata (#311): root `package.json` description, repository, author, license, homepage; GitHub description, website and topics | Repo page shows description, link and topics |
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 10.1 | Vite defaults in `index.html` replaced (#306): title, description, `color-scheme`, and `theme-color` for light and dark | Tab reads `Helpdesk`; browser UI colour follows the theme | Done |
+| 10.2 | Brand favicon, app icons and web manifest (#307): Campus desk SVG favicon, apple-touch and 192/512 icons, `site.webmanifest`; no service worker | Vite bolt gone; Chrome's Manifest panel shows no errors | |
+| 10.3 | Per-page tab titles (#308): `usePageTitle` hook on every page; ticket detail shows `#<id> <subject>` once loaded | Test: the hook sets and restores the title; each route shows its own title | |
+| 10.4 | Social preview tags and `robots.txt` (#309): Open Graph and Twitter card tags with a 1200×630 image; `Disallow: /` and `noindex`, since the app is behind a login | A link-preview debugger shows the card for the production URL; `robots.txt` is served | |
+| 10.5 | App version and commit visible (#310): real package versions; `version` and `commit` on `/api/health`; version and short SHA in the web app | Test: health returns both; production health SHA matches the Sentry release | |
+| 10.6 | Repository and package metadata (#311): root `package.json` description, repository, author, license, homepage; GitHub description, website and topics | Repo page shows description, link and topics | |
 
 ## Notes
 
