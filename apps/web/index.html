@@ -4,7 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <meta
+      name="description"
+      content="Support desk for student email: Claude classifies each ticket and drafts a reply for an agent to review."
+    />
+    <!-- Only until the stylesheet loads; index.css then sets color-scheme from the in-app theme. -->
+    <meta name="color-scheme" content="light dark" />
+    <!-- The sidebar navy of each theme, so the browser chrome continues the sidebar. Follows the
+         system setting rather than the in-app toggle. -->
+    <meta name="theme-color" content="#16243d" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d1522" media="(prefers-color-scheme: dark)" />
+    <title>Helpdesk</title>
     <!-- Before the stylesheet paints, so a dark choice does not flash light on
          load. Same key and rule as src/hooks/use-theme.ts. -->
     <script>
