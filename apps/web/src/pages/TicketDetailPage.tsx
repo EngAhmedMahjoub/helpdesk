@@ -8,6 +8,7 @@ import TicketControls from '@/components/ticket-controls'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { useTicket } from '@/hooks/use-tickets'
 import { dateAndTime } from '@/lib/format'
 import { studentLabel } from '@/lib/tickets'
@@ -30,13 +31,22 @@ export default function TicketDetailPage() {
         </Link>
       </Button>
 
-      {parsed.success ? <Ticket id={parsed.data} /> : <NotFound />}
+      {parsed.success ? <Ticket id={parsed.data} /> : <InvalidId />}
     </main>
   )
 }
 
 function Ticket({ id }: { id: number }) {
   const ticket = useTicket(id)
+  // Decided here rather than in NotFound as well: React runs a child's effect before its
+  // parent's, so two callers on one screen would leave the parent's title, not the child's.
+  usePageTitle(
+    ticket.data
+      ? `#${ticket.data.id} ${ticket.data.subject}`
+      : isApiError(ticket.error, 404)
+        ? 'Ticket not found'
+        : 'Ticket',
+  )
 
   if (ticket.isPending) return <Loading />
 
@@ -138,6 +148,12 @@ function Loading() {
       <Skeleton aria-hidden className="h-24 w-full" />
     </div>
   )
+}
+
+// An id the API would refuse never reaches Ticket, so it titles itself.
+function InvalidId() {
+  usePageTitle('Ticket not found')
+  return <NotFound />
 }
 
 function NotFound() {

@@ -11,6 +11,7 @@ import RecentTickets from '@/components/recent-tickets'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDashboard } from '@/hooks/use-dashboard'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { countFormat } from '@/lib/format'
 
 const statusLabels: Record<TicketStatus, string> = {
@@ -44,6 +45,7 @@ const categoryColors: Record<TicketCategory, string> = {
 const UNCATEGORIZED_COLOR = 'var(--series-7)'
 
 export default function DashboardPage() {
+  usePageTitle('Dashboard')
   const dashboard = useDashboard()
 
   return (

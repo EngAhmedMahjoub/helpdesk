@@ -203,7 +203,7 @@ The MVP is complete, but the app still introduces itself as a Vite scaffold: a t
 | ID | Task | Done when | Status |
 |---|---|---|---|
 | 10.1 | Vite defaults in `index.html` replaced (#306): title, description, `color-scheme`, and `theme-color` for light and dark | Tab reads `Helpdesk`; browser UI colour follows the theme | Done |
-| 10.2 | Brand favicon, app icons and web manifest (#307): Campus desk SVG favicon, apple-touch and 192/512 icons, `site.webmanifest`; no service worker | Vite bolt gone; Chrome's Manifest panel shows no errors | |
+| 10.2 | Brand favicon, app icons and web manifest (#307): Campus desk SVG favicon, apple-touch and 192/512 icons, `site.webmanifest`; no service worker | Vite bolt gone; Chrome's Manifest panel shows no errors | Done |
 | 10.3 | Per-page tab titles (#308): `usePageTitle` hook on every page; ticket detail shows `#<id> <subject>` once loaded | Test: the hook sets and restores the title; each route shows its own title | |
 | 10.4 | Social preview tags and `robots.txt` (#309): Open Graph and Twitter card tags with a 1200×630 image; `Disallow: /` and `noindex`, since the app is behind a login | A link-preview debugger shows the card for the production URL; `robots.txt` is served | |
 | 10.5 | App version and commit visible (#310): real package versions; `version` and `commit` on `/api/health`; version and short SHA in the web app | Test: health returns both; production health SHA matches the Sentry release | |

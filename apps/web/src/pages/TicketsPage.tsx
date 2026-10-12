@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { useTicketQuery } from '@/hooks/use-ticket-query'
 import { useTickets } from '@/hooks/use-tickets'
 import { escalationReasonLabels } from '@/lib/escalation'
@@ -33,6 +34,7 @@ const columns: Column[] = [
 ]
 
 export default function TicketsPage() {
+  usePageTitle('Tickets')
   const { query, update } = useTicketQuery()
   const tickets = useTickets(query)
 
