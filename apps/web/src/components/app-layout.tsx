@@ -33,9 +33,12 @@ export default function AppLayout() {
           {/* Link, not NavLink: the brand is a way home, not a nav item, so it
               never takes the current-page styling Dashboard already shows. */}
           <Link
-            className="rounded-sm text-lg font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="inline-flex items-center gap-2 rounded-sm text-lg font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             to="/"
           >
+            {/* The favicon, so there is one copy of the mark. Empty alt: the name beside it is the
+                link's text. */}
+            <img alt="" className="size-7" src="/favicon.svg" />
             Helpdesk
           </Link>
           <p className="text-sm text-sidebar-foreground/80">Student Support Office</p>
