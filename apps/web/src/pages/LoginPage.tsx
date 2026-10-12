@@ -47,7 +47,16 @@ export default function LoginPage() {
   const errors = form.formState.errors
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-6">
+    <main className="flex min-h-svh flex-col items-center justify-center gap-6 p-6">
+      <div className="flex items-center gap-3">
+        {/* Empty alt: the name beside it says the same. */}
+        <img alt="" className="size-12" src="/favicon.svg" />
+        <div>
+          <p className="text-xl font-semibold text-foreground">Helpdesk</p>
+          <p className="text-sm text-muted-foreground">Student Support Office</p>
+        </div>
+      </div>
+
       <Card className="w-full max-w-sm">
         <CardHeader>
           {/* CardTitle renders a div; the ARIA role gives the page a real heading. */}
