@@ -15,9 +15,11 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { FieldGroup } from '@/components/ui/field'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { currentUserQueryKey, login } from '@/lib/auth'
 
 export default function LoginPage() {
+  usePageTitle('Sign in')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 

@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useCurrentUser } from '@/hooks/use-auth'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { useUsers } from '@/hooks/use-users'
 import { dateOnly } from '@/lib/format'
 
@@ -28,6 +29,7 @@ const columns: Column[] = [
 ]
 
 export default function UsersPage() {
+  usePageTitle('Users')
   const users = useUsers()
   const currentUser = useCurrentUser()
   const [announcement, setAnnouncement] = useState('')
