@@ -7,6 +7,11 @@ interface ImportMetaEnv {
   readonly VITE_SENTRY_DSN?: string
 }
 
+/** The web app's package version, from vite.config.ts. */
+declare const __APP_VERSION__: string
+/** Short SHA of the commit Vercel built; null in a build without one, such as development. */
+declare const __APP_COMMIT__: string | null
+
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }

@@ -81,6 +81,10 @@ export default function AppLayout() {
               </PendingLabel>
             </Button>
           </div>
+          <p className="text-xs text-sidebar-foreground/80">
+            v{__APP_VERSION__}
+            {__APP_COMMIT__ && ` · ${__APP_COMMIT__}`}
+          </p>
         </div>
       </aside>
 
