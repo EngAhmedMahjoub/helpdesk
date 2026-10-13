@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import request from 'supertest'
+import apiPackage from '../package.json'
 import { createApp } from '../src/app.ts'
 
 // Runs against the real test database (see .env.test), so the health check
@@ -13,6 +14,14 @@ describe('GET /api/health', () => {
     expect(res.status).toBe(200)
     expect(res.body.status).toBe('ok')
     expect(res.body.database).toBe('up')
+  })
+
+  test('names the version and, without a release baked in, no commit', async () => {
+    const res = await request(app).get('/api/health')
+
+    expect(res.body.version).toBe(apiPackage.version)
+    // .env.test sets no SENTRY_RELEASE, as in development.
+    expect(res.body.commit).toBeNull()
   })
 })
 

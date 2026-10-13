@@ -19,6 +19,10 @@ if (!url) {
 // before the request was even built.
 GlobalRegistrator.register({ url })
 
+// Vite's define replaces these at build time; bun test runs the source without Vite, so a
+// component that names them needs them as globals. A development build's values: no commit.
+Object.assign(globalThis, { __APP_VERSION__: '0.0.0-test', __APP_COMMIT__: null })
+
 // The suite's floor: no test reaches the network. Put back after every test,
 // so a stub one test installs with stubApi never answers the next.
 //

@@ -3,11 +3,16 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import webPackage from './package.json' with { type: 'json' }
 
 // Only Vercel's production build has the token, so only it makes source maps
 // and uploads them; a local or CI build stays as it was. SENTRY_ORG and
 // SENTRY_PROJECT come from the environment beside it.
 const uploadSourceMaps = Boolean(process.env.SENTRY_AUTH_TOKEN)
+
+// The short SHA, the same name the API's events carry for a deploy. Vercel sets the variable;
+// a local or CI build has none.
+const commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7)
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -17,13 +22,17 @@ export default defineConfig({
     // Last, as the plugin asks, so it sees the final bundle.
     uploadSourceMaps &&
       sentryVitePlugin({
-        // The short SHA, the same name the API's events carry for a deploy.
-        release: { name: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7), setCommits: false },
+        release: { name: commit, setCommits: false },
         // Uploaded, then deleted, so Vercel never serves the original source.
         sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
         telemetry: false,
       }),
   ],
+  // Baked in at build time, so the sidebar can say which build is running.
+  define: {
+    __APP_VERSION__: JSON.stringify(webPackage.version),
+    __APP_COMMIT__: JSON.stringify(commit ?? null),
+  },
   build: {
     // Hidden: the bundle carries no sourceMappingURL comment pointing at them.
     sourcemap: uploadSourceMaps ? 'hidden' : false,
