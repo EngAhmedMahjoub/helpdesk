@@ -10,6 +10,24 @@
       name="description"
       content="Support desk for student email: Claude classifies each ticket and drafts a reply for an agent to review."
     />
+    <!-- Vercel also sends X-Robots-Tag: noindex (vercel.json); this meta covers other hosts. -->
+    <meta name="robots" content="noindex" />
+    <!-- Link previews. Scrapers ignore relative URLs, so these are absolute and always name
+         production, even on a Vercel preview deploy. og:description repeats the description
+         above verbatim so the two cannot drift. The image is rendered from public/og-image.svg. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Helpdesk" />
+    <meta property="og:title" content="Helpdesk" />
+    <meta
+      property="og:description"
+      content="Support desk for student email: Claude classifies each ticket and drafts a reply for an agent to review."
+    />
+    <meta property="og:url" content="https://app.helpdesk.mahjoub.io/" />
+    <meta property="og:image" content="https://app.helpdesk.mahjoub.io/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Helpdesk: student email in, drafted replies out." />
+    <meta name="twitter:card" content="summary_large_image" />
     <!-- Only until the stylesheet loads; index.css then sets color-scheme from the in-app theme. -->
     <meta name="color-scheme" content="light dark" />
     <!-- The sidebar navy of each theme, so the browser chrome continues the sidebar. Follows the
