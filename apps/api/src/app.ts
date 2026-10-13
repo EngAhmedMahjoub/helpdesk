@@ -4,6 +4,7 @@ import cors from 'cors'
 import type { HealthResponse } from '@helpdesk/shared'
 import { prisma } from './db.ts'
 import { env } from './env.ts'
+import { version } from '../package.json'
 import { type SendEmail, sendEmail as resendSendEmail } from './email/outbound.ts'
 import {
   type FetchReceivedEmail,
@@ -133,6 +134,9 @@ export function createApp({
       status: database === 'up' ? 'ok' : 'error',
       database,
       timestamp: new Date().toISOString(),
+      version,
+      // The release name Sentry already gets, so the two always agree on which deploy this is.
+      commit: env.SENTRY_RELEASE ?? null,
     }
     res.status(database === 'up' ? 200 : 503).json(body)
   })

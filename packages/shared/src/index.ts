@@ -2,6 +2,10 @@ export type HealthResponse = {
   status: 'ok' | 'error'
   database: 'up' | 'down'
   timestamp: string
+  /** The API's package version. */
+  version: string
+  /** Short SHA of the deployed commit; null in a build without one, such as development. */
+  commit: string | null
 }
 
 export type Role = 'admin' | 'agent'
