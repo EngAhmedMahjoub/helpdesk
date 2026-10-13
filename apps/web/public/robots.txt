@@ -1,0 +1,4 @@
+# Not Disallow: a crawler that cannot fetch a page never sees its noindex, and link-preview
+# bots may honour Disallow. Keeping the app out of search is X-Robots-Tag in vercel.json.
+User-agent: *
+Allow: /
