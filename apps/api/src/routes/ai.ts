@@ -18,8 +18,8 @@ aiRouter.use(requireAuth)
  * Tidies an agent's text with Claude (#323) and answers it. Nothing is saved
  * or sent: the agent reads the result in the box and sends it themselves.
  *
- * The limit runs before the body is read, so a malformed request spends the
- * budget too; it reaches no model, but a caller scripting them should still
+ * The limit runs before the body is validated, so a malformed request spends
+ * the budget too; it reaches no model, but a caller scripting them should still
  * meet the same wall.
  */
 aiRouter.post('/polish', polishRateLimit, async (req, res) => {

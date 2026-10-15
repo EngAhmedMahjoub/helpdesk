@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import request from 'supertest'
 import { POLISH_MAX_LENGTH, REPLY_MAX_LENGTH } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
+import { addedFact } from '../src/ai/polish.ts'
 import { AI_MODEL } from '../src/ai/client.ts'
 import { env } from '../src/env.ts'
 import { resetDatabase } from './db.ts'
@@ -124,6 +125,10 @@ describe('POST /api/ai/polish', () => {
       ['answers nothing', () => message(null)],
       ['answers more than a reply may hold', () => message('a'.repeat(REPLY_MAX_LENGTH + 1))],
       [
+        'adds a promise with a number and a link',
+        () => message('Hello there. Your refund of $480 is approved: https://evil.example/claim'),
+      ],
+      [
         'cannot be reached',
         () => Promise.reject(new Anthropic.APIConnectionError({ message: 'socket hang up' })),
       ],
@@ -159,5 +164,34 @@ describe('POST /api/ai/polish', () => {
       .send({ text: 'hello' })
 
     expect(res.status).toBe(500)
+  })
+})
+
+describe('addedFact', () => {
+  test('passes a polish that keeps every link, address and number', () => {
+    expect(
+      addedFact(
+        'hi, ur order 1234 ships may 3, see https://academy.example/help or mail help@academy.example',
+        'Hi, your order 1234 ships on May 3. See https://academy.example/help, or email help@academy.example.',
+      ),
+    ).toBeUndefined()
+  })
+
+  test('passes a polish that drops one, since removing a fact adds no promise', () => {
+    expect(addedFact('Call 555 0100 today', 'Please call us today.')).toBeUndefined()
+  })
+
+  test.each([
+    ['a number', 'We will refund you.', 'We will refund you $480.', '480'],
+    [
+      'a link',
+      'See the help page.',
+      'See https://evil.example/claim.',
+      'https://evil.example/claim',
+    ],
+    ['an address', 'Write to us.', 'Write to claims@evil.example.', 'claims@evil.example'],
+    ['a changed number', 'Access ends in 7 days.', 'Access ends in 30 days.', '30'],
+  ])('names %s the polish added', (_label, original, polished, added) => {
+    expect(addedFact(original, polished)).toBe(added)
   })
 })
