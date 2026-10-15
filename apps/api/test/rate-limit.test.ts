@@ -3,6 +3,8 @@ import express from 'express'
 import request from 'supertest'
 import {
   createLoginRateLimit,
+  createPolishDailyLimit,
+  createPolishRateLimit,
   createTicketWriteRateLimit,
   createUserWriteRateLimit,
 } from '../src/auth/rate-limit.ts'
@@ -370,5 +372,153 @@ describe('which environments enforce the ticket write limit', () => {
 
   test('does not enforce in development', async () => {
     expect(await ticketRepliesEnforcedUnder('development')).toBe(false)
+  })
+})
+
+describe('polish limit', () => {
+  /** A stand-in for POST /api/ai/polish behind an enforcing limiter, as for the others. */
+  function appWithPolishLimiter() {
+    const app = express()
+    app.use((req, _res, next) => {
+      req.user = { id: String(req.headers['x-agent']), email: '', name: '', role: 'agent' }
+      next()
+    })
+    app.post('/polish', createPolishRateLimit(), (_req, res) => {
+      res.status(200).end()
+    })
+    return app
+  }
+
+  const polish = (app: ReturnType<typeof appWithPolishLimiter>, agent: string) =>
+    request(app).post('/polish').set('x-agent', agent)
+
+  test('refuses an agent further polishes once their budget is spent', async () => {
+    const app = appWithPolishLimiter()
+    for (let i = 0; i < 30; i += 1) {
+      expect((await polish(app, 'agent-1')).status).toBe(200)
+    }
+
+    const blocked = await polish(app, 'agent-1')
+
+    expect(blocked.status).toBe(429)
+    expect(blocked.body).toEqual({ error: 'Too many polish requests, please try again later' })
+  })
+
+  test('budgets each agent separately', async () => {
+    const app = appWithPolishLimiter()
+    for (let i = 0; i < 31; i += 1) await polish(app, 'agent-1')
+
+    expect((await polish(app, 'agent-2')).status).toBe(200)
+  })
+})
+
+describe('which environments enforce the polish limit', () => {
+  /** As for the others: a child process, since the wiring is read at import. */
+  async function polishEnforcedUnder(nodeEnv: string) {
+    const source = `
+      const { polishRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
+      const express = (await import('express')).default
+      const app = express()
+      app.use((req, _res, next) => { req.user = { id: 'agent-1' }; next() })
+      app.post('/polish', polishRateLimit, (_req, res) => res.status(200).end())
+      const server = app.listen(0)
+      const { port } = server.address()
+      let last = 0
+      for (let i = 0; i < 31; i += 1) {
+        last = (await fetch(\`http://localhost:\${port}/polish\`, { method: 'POST' })).status
+      }
+      server.close()
+      console.log(String(last))
+    `
+
+    return lastStatusIs429(source, nodeEnv)
+  }
+
+  test('enforces in production', async () => {
+    expect(await polishEnforcedUnder('production')).toBe(true)
+  })
+
+  test('does not enforce in test', async () => {
+    expect(await polishEnforcedUnder('test')).toBe(false)
+  })
+})
+
+describe('polish daily limit', () => {
+  /** A stand-in for POST /api/ai/polish behind both limits, in the route's order. */
+  function appWithPolishLimits() {
+    const app = express()
+    app.use((req, _res, next) => {
+      req.user = { id: String(req.headers['x-agent']), email: '', name: '', role: 'agent' }
+      next()
+    })
+    app.post('/polish', createPolishRateLimit(), createPolishDailyLimit(), (_req, res) => {
+      res.status(200).end()
+    })
+    return app
+  }
+
+  const polish = (app: ReturnType<typeof appWithPolishLimits>, agent: string) =>
+    request(app).post('/polish').set('x-agent', agent)
+
+  test('refuses everybody once all users together have spent the day', async () => {
+    const app = appWithPolishLimits()
+    // 34 agents at 30 each stay inside their own limits and spend 1,020 in all.
+    let ok = 0
+    for (let agent = 0; agent < 34; agent += 1) {
+      for (let i = 0; i < 30; i += 1) {
+        if ((await polish(app, `agent-${String(agent)}`)).status === 200) ok += 1
+      }
+    }
+    expect(ok).toBe(1000)
+
+    const blocked = await polish(app, 'agent-fresh')
+
+    expect(blocked.status).toBe(429)
+    expect(blocked.body).toEqual({
+      error: 'Polish has reached its daily limit, please try again tomorrow',
+    })
+    // A thousand requests are the point, and take seconds under a loaded suite.
+  }, 30_000)
+
+  test('a request one user is refused for spends none of the shared budget', async () => {
+    const app = appWithPolishLimits()
+    // Ten past agent-1's own limit, each refused before the daily count.
+    for (let i = 0; i < 40; i += 1) await polish(app, 'agent-1')
+
+    // agent-1 spent 30 of the day's 1,000; 970 remain for everybody else.
+    const other = await polish(app, 'agent-2')
+
+    expect(other.status).toBe(200)
+    expect(other.headers['ratelimit']).toContain('remaining=969')
+  })
+})
+
+describe('which environments enforce the polish daily limit', () => {
+  /** As for the others: is the 1,001st polish of the day, from many users, refused? */
+  async function dailyEnforcedUnder(nodeEnv: string) {
+    const source = `
+      const { polishDailyLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
+      const express = (await import('express')).default
+      const app = express()
+      app.post('/polish', polishDailyLimit, (_req, res) => res.status(200).end())
+      const server = app.listen(0)
+      const { port } = server.address()
+      let last = 0
+      for (let i = 0; i < 1001; i += 1) {
+        last = (await fetch(\`http://localhost:\${port}/polish\`, { method: 'POST' })).status
+      }
+      server.close()
+      console.log(String(last))
+    `
+
+    return lastStatusIs429(source, nodeEnv)
+  }
+
+  test('enforces in production', async () => {
+    expect(await dailyEnforcedUnder('production')).toBe(true)
+  })
+
+  test('does not enforce in test', async () => {
+    expect(await dailyEnforcedUnder('test')).toBe(false)
   })
 })

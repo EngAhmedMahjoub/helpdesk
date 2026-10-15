@@ -117,3 +117,54 @@ export const createTicketWriteRateLimit = perUserRateLimit(
 export const ticketWriteRateLimit = createTicketWriteRateLimit({
   skip: env.NODE_ENV !== 'production',
 })
+
+/**
+ * Caps Polish (#323) per acting user. Every call is a billed model request, so
+ * this is a bound on what one agent session, stolen or scripted, can spend:
+ * at Haiku's prices and the 5,000-character input cap, about $0.01 a call.
+ *
+ * Thirty in fifteen minutes is a polish every thirty seconds — more than an
+ * agent writing replies by hand will reach.
+ *
+ * Keyed and gated like the ticket-write limit: the acting user's id behind
+ * requireAuth, and production only.
+ */
+export const createPolishRateLimit = perUserRateLimit(
+  30,
+  'Too many polish requests, please try again later',
+)
+
+export const polishRateLimit = createPolishRateLimit({
+  skip: env.NODE_ENV !== 'production',
+})
+
+/**
+ * Caps Polish across every user, per day. The per-user limit bounds one
+ * account at about $35 a day; this bounds them all together, which nothing
+ * else does — the ticket pipeline has AI_LIMITS.callsPerDay, Polish had no
+ * counterpart.
+ *
+ * 1,000 is about $12 a day at the worst case of ~$0.012 a call (output at
+ * the 2,048-token cap), and some ten times what a busy day of real use needs.
+ *
+ * One key for everybody, so it is a shared budget, not a per-caller one. In
+ * memory like the others: a restart resets it and each instance counts on
+ * its own, so the Anthropic Console's spend limit stays the hard cap.
+ *
+ * Production only, like the rest.
+ */
+export function createPolishDailyLimit(options: { skip?: boolean } = {}): RateLimitRequestHandler {
+  return rateLimit({
+    windowMs: 24 * 60 * 60 * 1000,
+    limit: 1000,
+    skip: () => options.skip ?? false,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: () => 'polish',
+    message: { error: 'Polish has reached its daily limit, please try again tomorrow' },
+  })
+}
+
+export const polishDailyLimit = createPolishDailyLimit({
+  skip: env.NODE_ENV !== 'production',
+})

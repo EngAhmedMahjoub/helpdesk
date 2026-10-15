@@ -1,3 +1,4 @@
+import type Anthropic from '@anthropic-ai/sdk'
 import express, { type ErrorRequestHandler } from 'express'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
@@ -13,6 +14,7 @@ import {
 import type { QueueProcessTicket } from './jobs/process-ticket.ts'
 import { refuseForeignOrigin } from './auth/origin.ts'
 import { reportError } from './sentry.ts'
+import { aiRouter } from './routes/ai.ts'
 import { authRouter } from './routes/auth.ts'
 import { dashboardRouter } from './routes/dashboard.ts'
 import { draftsRouter } from './routes/drafts.ts'
@@ -56,6 +58,7 @@ declare global {
       sendEmail: SendEmail
       fetchReceivedEmail: FetchReceivedEmail
       queueProcessTicket: QueueProcessTicket
+      anthropic: Anthropic
     }
   }
 }
@@ -70,6 +73,12 @@ type AppOptions = {
    * and Resend redelivers it, rather than being saved with no job to answer it.
    */
   queueProcessTicket?: QueueProcessTicket
+  /**
+   * The Anthropic client Polish calls (#323). No default, as for the queue:
+   * src/index.ts passes the real one, and a test that forgets its stub gets a
+   * 500 rather than a billed call.
+   */
+  anthropic?: Anthropic
   /** Proxies to trust for the client's address; see TRUST_PROXY_HOPS in env.ts. */
   trustProxyHops?: number
 }
@@ -78,10 +87,19 @@ const noJobQueue: QueueProcessTicket = () => {
   throw new Error('No job queue: createApp was not given queueProcessTicket')
 }
 
+const noAnthropic = {
+  messages: {
+    create: () => {
+      throw new Error('No Anthropic client: createApp was not given anthropic')
+    },
+  },
+} as unknown as Anthropic
+
 export function createApp({
   sendEmail = resendSendEmail,
   fetchReceivedEmail = resendFetchReceivedEmail,
   queueProcessTicket = noJobQueue,
+  anthropic = noAnthropic,
   trustProxyHops = env.TRUST_PROXY_HOPS,
 }: AppOptions = {}) {
   const app = express()
@@ -93,6 +111,7 @@ export function createApp({
   app.locals.sendEmail = sendEmail
   app.locals.fetchReceivedEmail = fetchReceivedEmail
   app.locals.queueProcessTicket = queueProcessTicket
+  app.locals.anthropic = anthropic
 
   // First, so every answer carries them: the webhook, a refused origin, a 404
   // and the error handler's included (#258). X-Powered-By named the framework,
@@ -146,6 +165,7 @@ export function createApp({
   app.use('/api/tickets', ticketsRouter)
   app.use('/api/drafts', draftsRouter)
   app.use('/api/dashboard', dashboardRouter)
+  app.use('/api/ai', aiRouter)
   // No session: the scheduled workflow proves itself with TASKS_SECRET.
   app.use('/api/tasks', tasksRouter)
 

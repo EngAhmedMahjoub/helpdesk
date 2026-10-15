@@ -30,7 +30,10 @@ await boss.work(
 )
 console.log('Background jobs started')
 
-const server = createApp({ queueProcessTicket: processTicketQueue(boss) }).listen(env.PORT, () => {
+const server = createApp({
+  queueProcessTicket: processTicketQueue(boss),
+  anthropic,
+}).listen(env.PORT, () => {
   console.log(`API listening on http://localhost:${env.PORT}`)
 })
 

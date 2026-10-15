@@ -187,7 +187,7 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
     // A refused or cut-off answer is billed like any other, so it is counted
     // too. Failures without usage never reached the model, and cost nothing.
     if (error instanceof AiFailure && error.usage) {
-      console.log(usageLine(job.ticketId, error.usage, `failed_${error.reason}`))
+      console.log(usageLine({ ticket: job.ticketId }, error.usage, `failed_${error.reason}`))
     }
     throw error
   }
@@ -214,7 +214,7 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   const outcome =
     heldFor === null ? 'reply' : heldFor === 'refund_approval' ? 'refund_draft' : `held_${heldFor}`
   const forced = decision.forcedBy.length > 0 ? ` forced_by=${decision.forcedBy.length}` : ''
-  console.log(`${usageLine(job.ticketId, usage, outcome)}${forced}`)
+  console.log(`${usageLine({ ticket: job.ticketId }, usage, outcome)}${forced}`)
 
   try {
     if (heldFor) {
