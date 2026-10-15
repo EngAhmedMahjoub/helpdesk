@@ -2,9 +2,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { type CreateReplyRequest, REPLY_MAX_LENGTH, createReplySchema } from '@helpdesk/shared'
 import { PendingLabel } from '@/components/page-spinner'
+import { PolishControl, PolishError } from '@/components/polish-control'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
+import { usePolish } from '@/hooks/use-polish'
 import { useCreateReply } from '@/hooks/use-tickets'
 
 /**
@@ -21,6 +23,7 @@ export default function ReplyBox({ ticketId, student }: { ticketId: number; stud
   })
 
   const errors = form.formState.errors
+  const polish = usePolish(form)
 
   function submit(values: CreateReplyRequest) {
     sendReply.mutate(values, {
@@ -46,6 +49,9 @@ export default function ReplyBox({ ticketId, student }: { ticketId: number; stud
           aria-describedby="reply-hint"
           aria-invalid={Boolean(errors.body)}
           id="reply-body"
+          // Held while polishing, so what the agent types meanwhile is not
+          // overwritten by the polished text when it arrives.
+          readOnly={polish.isPending}
           rows={5}
           {...form.register('body')}
         />
@@ -57,11 +63,12 @@ export default function ReplyBox({ ticketId, student }: { ticketId: number; stud
       </Field>
 
       <div className="mt-4 flex items-center gap-4">
-        <Button disabled={sendReply.isPending} type="submit">
+        <Button disabled={sendReply.isPending || polish.isPending} type="submit">
           <PendingLabel busy="Sending…" pending={sendReply.isPending}>
             Send reply
           </PendingLabel>
         </Button>
+        <PolishControl disabled={sendReply.isPending} polish={polish} />
 
         {/* Always rendered: a live region added and filled at once is announced
             by neither of the two most common screen readers. */}
@@ -69,6 +76,7 @@ export default function ReplyBox({ ticketId, student }: { ticketId: number; stud
           {sendReply.isSuccess ? 'Reply added to the thread.' : ''}
         </p>
       </div>
+      <PolishError polish={polish} />
     </form>
   )
 }

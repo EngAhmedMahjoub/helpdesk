@@ -7,11 +7,13 @@ import {
   approveDraftSchema,
 } from '@helpdesk/shared'
 import { PendingLabel } from '@/components/page-spinner'
+import { PolishControl, PolishError } from '@/components/polish-control'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { useApproveDraft, useRejectDraft } from '@/hooks/use-drafts'
+import { usePolish } from '@/hooks/use-polish'
 
 // The API's own rule for an approved body, made required: the box always
 // holds the text that will be sent, so an emptied box is an error here rather
@@ -81,6 +83,7 @@ function DraftForm({
     defaultValues: { body: draft.body },
   })
   const errors = form.formState.errors
+  const polish = usePolish(form)
   const busy = approve.isPending || reject.isPending
   const failure = approve.error ?? reject.error
 
@@ -128,6 +131,8 @@ function DraftForm({
             aria-invalid={Boolean(errors.body)}
             disabled={busy}
             id="draft-body"
+            // Held while polishing, as in the reply box.
+            readOnly={polish.isPending}
             rows={8}
             {...form.register('body')}
           />
@@ -139,11 +144,12 @@ function DraftForm({
         </Field>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button disabled={busy} type="submit">
+          <Button disabled={busy || polish.isPending} type="submit">
             <PendingLabel busy="Sending…" pending={approve.isPending}>
               Approve and send
             </PendingLabel>
           </Button>
+          <PolishControl disabled={busy} polish={polish} />
           <Button
             disabled={busy}
             onClick={() => {
@@ -157,6 +163,7 @@ function DraftForm({
             </PendingLabel>
           </Button>
         </div>
+        <PolishError polish={polish} />
       </form>
     </section>
   )
