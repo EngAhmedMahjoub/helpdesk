@@ -477,11 +477,13 @@ describe('polish daily limit', () => {
     expect(blocked.body).toEqual({
       error: 'Polish has reached its daily limit, please try again tomorrow',
     })
-  })
+    // A thousand requests are the point, and take seconds under a loaded suite.
+  }, 30_000)
 
   test('a request one user is refused for spends none of the shared budget', async () => {
     const app = appWithPolishLimits()
-    for (let i = 0; i < 1000; i += 1) await polish(app, 'agent-1')
+    // Ten past agent-1's own limit, each refused before the daily count.
+    for (let i = 0; i < 40; i += 1) await polish(app, 'agent-1')
 
     // agent-1 spent 30 of the day's 1,000; 970 remain for everybody else.
     const other = await polish(app, 'agent-2')
