@@ -10,12 +10,19 @@ import type Anthropic from '@anthropic-ai/sdk'
  * minimum. The SDK reports them as null when a request marks no cache, so
  * null is logged as 0 rather than left out, keeping every line the same shape.
  *
- * Never the ticket's text or the reply: the id is enough to find the ticket,
- * and a log is the wrong place for a student's email.
+ * `subject` names what the call was for: `{ ticket }` for the ticket job, or
+ * `{ polish_by }` for an agent's Polish (#323), so the two never share a field.
+ *
+ * Never the ticket's text, the reply or the polished text: an id is enough to
+ * find the source, and a log is the wrong place for a student's email.
  */
-export function usageLine(ticketId: number, usage: Anthropic.Usage, outcome: string): string {
+export function usageLine(
+  subject: { ticket: number } | { polish_by: string },
+  usage: Anthropic.Usage,
+  outcome: string,
+): string {
   const fields = {
-    ticket: ticketId,
+    ...subject,
     outcome,
     input: usage.input_tokens,
     output: usage.output_tokens,
