@@ -117,3 +117,23 @@ export const createTicketWriteRateLimit = perUserRateLimit(
 export const ticketWriteRateLimit = createTicketWriteRateLimit({
   skip: env.NODE_ENV !== 'production',
 })
+
+/**
+ * Caps Polish (#323) per acting user. Every call is a billed model request, so
+ * this is a bound on what one agent session, stolen or scripted, can spend:
+ * at Haiku's prices and the 5,000-character input cap, about $0.01 a call.
+ *
+ * Thirty in fifteen minutes is a polish every thirty seconds — more than an
+ * agent writing replies by hand will reach.
+ *
+ * Keyed and gated like the ticket-write limit: the acting user's id behind
+ * requireAuth, and production only.
+ */
+export const createPolishRateLimit = perUserRateLimit(
+  30,
+  'Too many polish requests, please try again later',
+)
+
+export const polishRateLimit = createPolishRateLimit({
+  skip: env.NODE_ENV !== 'production',
+})
