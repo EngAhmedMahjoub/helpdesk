@@ -25,7 +25,8 @@ A portfolio project, running on free tiers.
    approve: refunds, senders whose email failed DMARC, tickets an agent is
    already working, and replies past the send limits.
 4. Agents see the queue, approve or edit drafts, reply, and change status.
-   Resolved tickets close themselves after 14 days.
+   A Polish button has Claude tidy an agent's reply or edited draft before they
+   send it. Resolved tickets close themselves after 14 days.
 
 ## Stack
 

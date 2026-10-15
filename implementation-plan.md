@@ -210,6 +210,14 @@ The MVP is complete, but the app still introduces itself as a Vite scaffold: a t
 | 10.6 | Repository and package metadata (#311): root `package.json` description, repository, author, license, homepage; GitHub description, website and topics | Repo page shows description, link and topics | Done |
 | 10.7 | Brand mark on screen (#315): the favicon mark above the Sign in card and beside the sidebar's "Helpdesk" link, `alt=""` beside the name | Mark shows on the sign-in page and in the sidebar, light and dark, desktop and phone | Done |
 
+## Phase 11 — Agent Writing Aids
+
+Claude already drafts replies for students; this phase turns it on the agents' own writing.
+
+| ID | Task | Done when | Status |
+|---|---|---|---|
+| 11.1 | Polish button (#323): `POST /api/ai/polish` tidies an agent's text with Claude — grammar, clarity, tone — and the reply box and draft review put it back in the box with Undo. Nothing is sent automatically. Bounded at 5,000 characters, 30 a user per 15 minutes and 1,000 a day overall; a polish that adds a link, address or number is refused | API and component tests pass; Polish works in both boxes in the running app | |
+
 ## Notes
 
 - Test the cross-subdomain cookie (8.9) as early as possible — a throwaway deploy of the Phase 1 login is enough.
