@@ -4,7 +4,7 @@ import { AiFailure } from '../ai/failure.ts'
 import { polishText } from '../ai/polish.ts'
 import { usageLine } from '../ai/usage.ts'
 import { requireAuth } from '../auth/middleware.ts'
-import { polishRateLimit } from '../auth/rate-limit.ts'
+import { polishDailyLimit, polishRateLimit } from '../auth/rate-limit.ts'
 import { parseBody, signedInUserId } from '../http.ts'
 
 const NOT_POLISHED = 'Claude could not polish this text. Your text is unchanged.'
@@ -21,8 +21,11 @@ aiRouter.use(requireAuth)
  * The limit runs before the body is validated, so a malformed request spends
  * the budget too; it reaches no model, but a caller scripting them should still
  * meet the same wall.
+ *
+ * Per user before the daily cap, so a request one user's own limit refuses
+ * does not also spend everybody's.
  */
-aiRouter.post('/polish', polishRateLimit, async (req, res) => {
+aiRouter.post('/polish', polishRateLimit, polishDailyLimit, async (req, res) => {
   const userId = signedInUserId(req, res)
   if (!userId) return
 
