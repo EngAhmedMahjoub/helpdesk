@@ -6,7 +6,7 @@ This file is loaded every session, so it routes rather than repeats:
 
 - **`implementation-plan.md`** — the task list by phase, and what is built. Check it before assuming a screen or endpoint exists.
 - **`tech-stack.md`** — every technical decision and the reason for it.
-- **`.claude/rules/git-workflow.md`** — one issue, one branch, one PR. `main` is protected; a direct push is refused.
+- **`.claude/rules/git-workflow.md`** — one issue, one branch, one PR into `dev`; a release PR takes `dev` into `main`.
 
 ## Commands
 
