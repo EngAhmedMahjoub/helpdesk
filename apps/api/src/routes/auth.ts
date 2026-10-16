@@ -3,7 +3,7 @@ import { loginSchema } from '@helpdesk/shared'
 import { prisma } from '../db.ts'
 import { verifyAgainstDummyHash, verifyPassword } from '../auth/password.ts'
 import { requireAuth, toCurrentUser } from '../auth/middleware.ts'
-import { loginRateLimit } from '../auth/rate-limit.ts'
+import { loginIpRateLimit, loginRateLimit } from '../auth/rate-limit.ts'
 import {
   clearSessionCookie,
   createSession,
@@ -15,7 +15,8 @@ import { parseBody } from '../http.ts'
 
 export const authRouter = Router()
 
-authRouter.post('/login', loginRateLimit, async (req, res) => {
+// Per IP first: a request refused there spends none of the account's budget.
+authRouter.post('/login', loginIpRateLimit, loginRateLimit, async (req, res) => {
   const body = parseBody(loginSchema, req, res)
   if (!body) return
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import express from 'express'
 import request from 'supertest'
 import {
+  createLoginIpRateLimit,
   createLoginRateLimit,
   createPolishDailyLimit,
   createPolishRateLimit,
@@ -66,6 +67,43 @@ describe('login rate limit', () => {
     const res = await attempt('agent@example.com')
 
     expect(res.headers['ratelimit']).toContain('remaining=9')
+  })
+})
+
+describe('login per-IP limit', () => {
+  /** The login stand-in behind both limits, in the route's order. */
+  function appWithBothLimiters() {
+    const both = express()
+    both.use(express.json())
+    both.post('/api/auth/login', createLoginIpRateLimit(), createLoginRateLimit(), (_req, res) => {
+      res.status(401).json({ error: 'Invalid email or password' })
+    })
+    return both
+  }
+
+  const attemptOn = (target: ReturnType<typeof appWithBothLimiters>, email: string) =>
+    request(target).post('/api/auth/login').send({ email, password: 'wrong password' })
+
+  test('refuses one IP that names a new address on every attempt', async () => {
+    const both = appWithBothLimiters()
+    // Each address is fresh to the per-account limit, so only the IP limit counts.
+    for (let i = 0; i < 30; i += 1) {
+      expect((await attemptOn(both, `agent-${String(i)}@example.com`)).status).toBe(401)
+    }
+
+    const blocked = await attemptOn(both, 'agent-30@example.com')
+
+    expect(blocked.status).toBe(429)
+    expect(blocked.body).toEqual({ error: 'Too many login attempts, please try again later' })
+  })
+
+  test('leaves the per-account limit first to refuse a single account', async () => {
+    const both = appWithBothLimiters()
+    for (let i = 0; i < 10; i += 1) await attemptOn(both, 'agent@example.com')
+
+    expect((await attemptOn(both, 'agent@example.com')).status).toBe(429)
+    // That account is spent, but the IP has budget left for a colleague.
+    expect((await attemptOn(both, 'colleague@example.com')).status).toBe(401)
   })
 })
 
@@ -188,6 +226,42 @@ describe('which environments enforce it', () => {
   test('does not enforce in test', async () => {
     // A live limiter here would fail unrelated assertions by ordering.
     expect(await enforcesUnder('test')).toBe(false)
+  })
+})
+
+describe('which environments enforce the login per-IP limit', () => {
+  /** As enforcesUnder above: is a 31st attempt, each naming a new address, refused? */
+  async function ipLimitEnforcedUnder(nodeEnv: string) {
+    const source = `
+      const { loginIpRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
+      const express = (await import('express')).default
+      const app = express()
+      app.use(express.json())
+      app.post('/login', loginIpRateLimit, (_req, res) => res.status(401).end())
+      const server = app.listen(0)
+      const { port } = server.address()
+      let last = 0
+      for (let i = 0; i < 31; i += 1) {
+        const res = await fetch(\`http://localhost:\${port}/login\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: \`agent-\${i}@example.com\`, password: 'wrong' }),
+        })
+        last = res.status
+      }
+      server.close()
+      console.log(String(last))
+    `
+
+    return lastStatusIs429(source, nodeEnv)
+  }
+
+  test('enforces in production', async () => {
+    expect(await ipLimitEnforcedUnder('production')).toBe(true)
+  })
+
+  test('does not enforce in test', async () => {
+    expect(await ipLimitEnforcedUnder('test')).toBe(false)
   })
 })
 
