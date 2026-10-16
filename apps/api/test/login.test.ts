@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import request from 'supertest'
+import { PASSWORD_MAX_LENGTH } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
 import { SESSION_TTL_MS, hashToken } from '../src/auth/session.ts'
 import { prisma, resetDatabase } from './db.ts'
@@ -176,6 +177,11 @@ describe('POST /api/auth/login with an invalid body', () => {
     ['a malformed email', { email: 'not-an-email', password }],
     ['an empty password', { email: 'agent@example.com', password: '' }],
     ['a missing password', { email: 'agent@example.com' }],
+    // Refused before argon2 sees it (#326): no stored password is this long.
+    [
+      'a password over the maximum',
+      { email: 'agent@example.com', password: 'x'.repeat(PASSWORD_MAX_LENGTH + 1) },
+    ],
     ['no fields at all', {}],
   ])('returns 400 for %s', async (_label, body) => {
     const res = await request(app).post('/api/auth/login').send(body)

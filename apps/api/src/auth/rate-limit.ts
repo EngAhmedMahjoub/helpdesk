@@ -49,6 +49,34 @@ export function createLoginRateLimit(options: { skip?: boolean } = {}): RateLimi
 export const loginRateLimit = createLoginRateLimit({ skip: env.NODE_ENV !== 'production' })
 
 /**
+ * Caps `/api/auth/login` per IP alone, ahead of the per-account limit above.
+ *
+ * That limit gives each address its own budget, so one IP sending a new email
+ * on every request was never refused — and each request still costs an argon2
+ * verification at 64 MiB, against the dummy hash when no account exists (#326).
+ * This bounds what one client can make the API hash, whichever accounts it names.
+ *
+ * Thirty in fifteen minutes is three accounts' worth of the per-account budget:
+ * room for an office behind one NAT signing in at the start of a shift, and a
+ * small fraction of the unbounded work it replaces.
+ *
+ * Production only, and behind the same trust-proxy setting, as the limit above.
+ */
+export function createLoginIpRateLimit(options: { skip?: boolean } = {}): RateLimitRequestHandler {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    skip: () => options.skip ?? false,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => ipKeyGenerator(req.ip ?? 'unknown'),
+    message: { error: 'Too many login attempts, please try again later' },
+  })
+}
+
+export const loginIpRateLimit = createLoginIpRateLimit({ skip: env.NODE_ENV !== 'production' })
+
+/**
  * A limiter keyed by whoever is acting, for the writes behind requireAuth.
  *
  * The IP fallback never fires there; it is what keeps a route wired without

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PASSWORD_MIN_LENGTH } from '@helpdesk/shared'
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '@helpdesk/shared'
 import { prisma } from '../src/db.ts'
 import { hashPassword } from '../src/auth/password.ts'
 
@@ -8,8 +8,9 @@ import { hashPassword } from '../src/auth/password.ts'
 // without admin credentials it never uses.
 const seedEnvSchema = z.object({
   ADMIN_EMAIL: z.email(),
-  // No weaker than the agents this admin creates; see PASSWORD_MIN_LENGTH.
-  ADMIN_PASSWORD: z.string().min(PASSWORD_MIN_LENGTH),
+  // No weaker than the agents this admin creates; see PASSWORD_MIN_LENGTH. No
+  // longer than login accepts either, or the seeded admin could never sign in.
+  ADMIN_PASSWORD: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
 })
 
 const result = seedEnvSchema.safeParse(process.env)
