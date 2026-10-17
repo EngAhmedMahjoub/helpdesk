@@ -10,4 +10,5 @@ export const escalationReasonLabels: Record<EscalationReason, string> = {
   unverified_sender: 'sender not verified',
   auto_reply_limit: 'AI reply limit reached',
   agent_assigned: 'assigned agent to reply',
+  unknown_link: 'reply has an unknown link',
 }

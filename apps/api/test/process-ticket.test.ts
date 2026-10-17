@@ -876,3 +876,59 @@ describe('Phase 5 review follow-ups (#250)', () => {
     })
   })
 })
+
+describe('a reply carrying a link (#328)', () => {
+  /** A general answer whose reply is `reply`, as an injected email might talk the model into. */
+  const general = (reply: string): AiOutput => ({
+    category: 'general',
+    summary: 'Asks how to verify their account.',
+    reply,
+  })
+
+  /** Runs the job against a knowledge base that names one help page. */
+  async function answerWith(reply: string) {
+    const { ticket, job } = await ticketWithEmail('How do I verify my account?')
+    const { deps, emails } = depsFor(answering(general(reply)).client)
+    deps.knowledgeBase =
+      '<article file="account-and-login.md">See https://help.academy.example/verify.</article>'
+    await processTicket(deps, job)
+    return { ticket, emails }
+  }
+
+  test.each([
+    ['a link of its own', 'Verify your account at https://evil.example/verify-account.'],
+    ['a bare domain', 'Verify your account at evil.example/verify.'],
+    ['an address to write to', 'Send your password to verify@evil.example.'],
+    ["the student's own domain", 'Reset it at uni.edu/reset.'],
+    [
+      'a look-alike of the academy domain',
+      'Go to https://helpdesk.example.com.evil.example/login.',
+    ],
+  ])('holds a reply with %s as a draft, and emails nothing', async (_label, reply) => {
+    const { ticket, emails } = await answerWith(reply)
+
+    expect(emails).toHaveLength(0)
+    expect(await stored(ticket.id)).toMatchObject({
+      status: 'open',
+      // The model's own category: a link is not a refund.
+      category: 'general',
+      needsAgent: true,
+      escalationReason: 'unknown_link',
+    })
+    expect(await prisma.replyDraft.findMany({ where: { ticketId: ticket.id } })).toMatchObject([
+      { body: reply, status: 'pending' },
+    ])
+  })
+
+  test.each([
+    ['a link the knowledge base names', 'Follow https://help.academy.example/verify to verify.'],
+    ['an address on the academy domain', 'Write to support@helpdesk.example.com for help.'],
+    ["the student's own address", 'We have sent the link to tom@uni.edu.'],
+    ['no link at all', 'Open Settings, then Account, and choose Verify.'],
+  ])('still sends a reply with %s', async (_label, reply) => {
+    const { emails } = await answerWith(reply)
+
+    expect(emails).toHaveLength(1)
+    expect(emails[0]?.text).toBe(reply)
+  })
+})

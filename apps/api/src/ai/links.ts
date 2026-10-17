@@ -33,6 +33,16 @@ export function linkHost(token: string): string {
     .split(/[/?#:]/)[0]!
 }
 
+/** The hosts of every link in `text`: what the knowledge base already sends students to. */
+export function knownHosts(text: string): string[] {
+  return linkTokens(text).map(linkHost)
+}
+
+/** The domain of a sender like `Helpdesk <support@helpdesk.example.com>`, or a bare address. */
+export function domainOf(sender: string): string {
+  return (/@([^>\s]+)>?\s*$/.exec(sender)?.[1] ?? '').toLowerCase()
+}
+
 /** Whether `host` is `domain` or one of its subdomains. */
 function within(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`)
