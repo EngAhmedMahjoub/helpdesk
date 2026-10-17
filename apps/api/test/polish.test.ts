@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import request from 'supertest'
 import { POLISH_MAX_LENGTH, REPLY_MAX_LENGTH } from '@helpdesk/shared'
 import { createApp } from '../src/app.ts'
-import { addedFact } from '../src/ai/polish.ts'
+import { addedFact, addedPromise } from '../src/ai/polish.ts'
 import { AI_MODEL } from '../src/ai/client.ts'
 import { env } from '../src/env.ts'
 import { resetDatabase } from './db.ts'
@@ -141,6 +141,26 @@ describe('POST /api/ai/polish', () => {
       })
     })
 
+    test('answers 502 when it writes an approval the agent did not, with no number or link', async () => {
+      // The review's reuse case (#327): every number and link here is the agent's own.
+      const { res } = await polishAs({ text: 'We cannot refund the 480 charge.' }, () =>
+        message('Good news: your refund of 480 is approved.'),
+      )
+
+      expect(res.status).toBe(502)
+      expect(res.body).toEqual({
+        error: 'Claude could not polish this text. Your text is unchanged.',
+      })
+    })
+
+    test('answers 502 when it adds refund wording to text that had none', async () => {
+      const { res } = await polishAs({ text: 'we r checking ur account' }, () =>
+        message('We are checking your account, and your refund is approved.'),
+      )
+
+      expect(res.status).toBe(502)
+    })
+
     test('still logs the tokens of an answer it could not use, and never the text', async () => {
       const { user } = await polishAs({ text: 'my secret reply' }, () =>
         message('My secret', 'max_tokens'),
@@ -182,7 +202,7 @@ describe('addedFact', () => {
   })
 
   test.each([
-    ['a number', 'We will refund you.', 'We will refund you $480.', '480'],
+    ['a number', 'We will refund you.', 'We will refund you 480.', '480'],
     [
       'a link',
       'See the help page.',
@@ -191,7 +211,82 @@ describe('addedFact', () => {
     ],
     ['an address', 'Write to us.', 'Write to claims@evil.example.', 'claims@evil.example'],
     ['a changed number', 'Access ends in 7 days.', 'Access ends in 30 days.', '30'],
+    // The gaps the security review got through (#327).
+    [
+      'a bare domain',
+      'See the help page.',
+      'Claim it at mahjoub-refunds.com/claim.',
+      'mahjoub-refunds.com/claim',
+    ],
+    [
+      'a spelled-out amount',
+      'We will look into it.',
+      'You will receive four hundred eighty dollars.',
+      'dollars',
+    ],
+    ['Arabic-Indic digits', 'We will look into it.', 'You will receive ٤٨٠.', '٤٨٠'],
+    ['full-width digits', 'We will look into it.', 'You will receive ４８０.', '４８０'],
+    ['a currency sign on a kept number', 'Order 480 is late.', 'Order $480 is late.', '$'],
   ])('names %s the polish added', (_label, original, polished, added) => {
     expect(addedFact(original, polished)).toBe(added)
+  })
+
+  test.each([
+    ['an abbreviation', 'pls see the notes, e.g. week 3', 'Please see the notes, e.g. week 3.'],
+    ['a decimal', 'version 3.5 is out', 'Version 3.5 is out.'],
+    ['a kept domain', 'go to academy.example', 'Please go to academy.example.'],
+  ])('is not fooled by %s', (_label, original, polished) => {
+    expect(addedFact(original, polished)).toBeUndefined()
+  })
+})
+
+describe('addedPromise', () => {
+  test.each([
+    [
+      'a tidied reply',
+      'thx for wating, ur acess is fixed',
+      'Thank you for waiting. Your access is fixed.',
+    ],
+    [
+      'a refusal kept a refusal',
+      'sorry we cant refund this course',
+      'Unfortunately, we cannot refund this course.',
+    ],
+    [
+      'refund wording the agent wrote',
+      'ur refund was approved yesterday',
+      'Your refund was approved yesterday.',
+    ],
+  ])('passes %s', (_label, original, polished) => {
+    expect(addedPromise(original, polished)).toBeUndefined()
+  })
+
+  test.each([
+    [
+      'a refusal turned into an approval with the same number',
+      'We cannot refund the 480 charge.',
+      'Your refund of 480 is approved.',
+      'commitment "approved"',
+    ],
+    [
+      'refund wording the agent never wrote',
+      'We are looking into your account.',
+      'We are looking into your account, and your refund is on its way.',
+      'refund wording "refund"',
+    ],
+    [
+      'a granted discount',
+      'Thanks for your patience.',
+      'Thanks for your patience; we have applied a discount.',
+      'commitment "discount"',
+    ],
+    [
+      'a refusal with its "not" dropped',
+      'Your access will not be extended.',
+      'Your access will be extended.',
+      'a refusal made a yes',
+    ],
+  ])('names %s', (_label, original, polished, reason) => {
+    expect(addedPromise(original, polished)).toBe(reason)
   })
 })
