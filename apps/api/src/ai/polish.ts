@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { REPLY_MAX_LENGTH } from '@helpdesk/shared'
 import { AI_MODEL } from './client.ts'
 import { AiFailure, failureForError, failureForStop } from './failure.ts'
+import { refundPhrases } from './refund-safeguard.ts'
 
 /**
  * Room for the longest text Polish accepts — 5,000 characters is about 1,250
@@ -52,12 +53,26 @@ export function buildPolishMessage(text: string): string {
 }
 
 /**
- * The links, email addresses and numbers in `text`, as the rules forbid a
- * polish to change them. Trailing punctuation is dropped, so a link that ends
- * a sentence is the same link with or without the full stop.
+ * The facts the rules forbid a polish to change: links, email addresses, bare
+ * domains, numbers and currency. Trailing punctuation is dropped, so a link
+ * that ends a sentence is the same link with or without the full stop.
+ *
+ * Each kind closed a gap the security review found getting through (#327):
+ * - Bare domains (`refunds-desk.com/claim`): a link a student can click
+ *   without any `https://`. The letters-only ending keeps "e.g." and "3.5" out.
+ * - Digits in any script (`\p{Nd}`): `٤٨٠` and `４８０` are 480 to a reader,
+ *   and `\d` sees only ASCII.
+ * - Currency, as a sign or a word: "four hundred eighty dollars" carries no
+ *   digit at all, but its "dollars" is new.
+ *
+ * Alternatives are tried in order at each position, so an email address or a
+ * URL is taken whole before its domain could be taken alone.
  */
+const FACT =
+  /https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b(?:\/\S*)?|\p{Nd}+|[$€£¥]|\b(?:usd|eur|gbp|dollars?|euros?|pounds?|cents?)\b/giu
+
 function factTokens(text: string): Set<string> {
-  const found = text.match(/https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\d+/gi) ?? []
+  const found = text.match(FACT) ?? []
   return new Set(found.map((token) => token.replace(/[.,;:!?)\]'"]+$/, '').toLowerCase()))
 }
 
@@ -75,6 +90,44 @@ function factTokens(text: string): Set<string> {
 export function addedFact(original: string, polished: string): string | undefined {
   const allowed = factTokens(original)
   return [...factTokens(polished)].find((token) => !allowed.has(token))
+}
+
+/**
+ * Words that grant something. A polish that brings one in has made an offer
+ * the agent did not write, whatever numbers it kept.
+ */
+const COMMITMENT = /\b(?:approv|grant|guarante|promis|waiv|discount|compensat)\w*/giu
+
+/**
+ * Words that refuse or hedge. A refusal that loses every one of them now
+ * reads as a yes, even when each word and number it kept was the agent's own.
+ */
+// cant, dont, wont: agents type them, and a polish adds the apostrophe.
+const NEGATION = /\b(?:not|never|cannot|unable|unfortunately|cant|dont|wont)\b|n't\b/iu
+
+/**
+ * Why `polished` promises more than `original`, or undefined when it does not.
+ *
+ * addedFact cannot see this. "We cannot refund the 480 charge." made "Your
+ * refund of 480 is approved." adds no number and no link, and only the prompt
+ * stood between the two (#327). These are crude by design, as the refund
+ * safeguard's patterns are: a false alarm — a polish that turned "don't
+ * worry" into "rest assured" — costs the agent a retry; a miss puts a promise
+ * under their name.
+ */
+export function addedPromise(original: string, polished: string): string | undefined {
+  const before = new Set(refundPhrases(original))
+  const refund = refundPhrases(polished).find((phrase) => !before.has(phrase))
+  if (refund) return `refund wording "${refund}"`
+
+  const granted = new Set((original.match(COMMITMENT) ?? []).map((word) => word.toLowerCase()))
+  const commitment = (polished.match(COMMITMENT) ?? []).find(
+    (word) => !granted.has(word.toLowerCase()),
+  )
+  if (commitment) return `commitment "${commitment.toLowerCase()}"`
+
+  if (NEGATION.test(original) && !NEGATION.test(polished)) return 'a refusal made a yes'
+  return undefined
 }
 
 /** What one polish produced: the tidied text, and what it cost. */
@@ -121,6 +174,7 @@ export async function polishText(client: Anthropic, text: string): Promise<Polis
   if (polished.length > REPLY_MAX_LENGTH) throw invalid('longer than a reply may be')
   // The message names no token: it would be the text, and failures are logged.
   if (addedFact(text, polished) !== undefined) throw invalid('it added a link, address or number')
+  if (addedPromise(text, polished) !== undefined) throw invalid('it promised more than the text')
 
   return { text: polished, usage: response.usage }
 }
