@@ -3,7 +3,12 @@ name: Deploy backend
 # Task 8.7: a merge to main ships the API. It starts only once CI has passed on
 # that commit, so a red main never reaches production; workflow_dispatch
 # redeploys main by hand.
-on:
+#
+# workflow_run is risky when it runs a pull request's code with secrets. Here
+# it cannot (#330): `branches` matches a fork PR whose branch is named main, but
+# the build job also requires the upstream event to be a push, which only a
+# merge to main produces, and migrate and deploy need build.
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -16,6 +21,10 @@ on:
 concurrency:
   group: deploy-production
   cancel-in-progress: false
+
+# Nothing by default (#330): migrate holds the production database URL and
+# deploy the Render hook, so neither should also hold a token it never uses.
+permissions: {}
 
 env:
   IMAGE: ghcr.io/engahmedmahjoub/helpdesk-api
@@ -37,6 +46,8 @@ jobs:
       # The commit CI tested, not whatever main has moved on to since.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          # Nothing after checkout runs git with the job token (#330).
+          persist-credentials: false
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # Seven characters, the same tags pushed by hand before this pipeline.
@@ -63,9 +74,14 @@ jobs:
   migrate:
     needs: build
     runs-on: ubuntu-latest
+    # The checkout only.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          # Nothing after checkout runs git with the job token (#330).
+          persist-credentials: false
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
