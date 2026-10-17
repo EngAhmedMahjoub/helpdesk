@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { REPLY_MAX_LENGTH } from '@helpdesk/shared'
 import { AI_MODEL } from './client.ts'
 import { AiFailure, failureForError, failureForStop } from './failure.ts'
+import { LINK, normaliseToken } from './links.ts'
 import { refundPhrases } from './refund-safeguard.ts'
 
 /**
@@ -65,15 +66,15 @@ export function buildPolishMessage(text: string): string {
  * - Currency, as a sign or a word: "four hundred eighty dollars" carries no
  *   digit at all, but its "dollars" is new.
  *
- * Alternatives are tried in order at each position, so an email address or a
- * URL is taken whole before its domain could be taken alone.
+ * Links first, from the pattern the hold on automatic replies uses too (#328).
  */
-const FACT =
-  /https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b(?:\/\S*)?|\p{Nd}+|[$€£¥]|\b(?:usd|eur|gbp|dollars?|euros?|pounds?|cents?)\b/giu
+const FACT = new RegExp(
+  `${LINK.source}|\\p{Nd}+|[$€£¥]|\\b(?:usd|eur|gbp|dollars?|euros?|pounds?|cents?)\\b`,
+  'giu',
+)
 
 function factTokens(text: string): Set<string> {
-  const found = text.match(FACT) ?? []
-  return new Set(found.map((token) => token.replace(/[.,;:!?)\]'"]+$/, '').toLowerCase()))
+  return new Set((text.match(FACT) ?? []).map(normaliseToken))
 }
 
 /**
