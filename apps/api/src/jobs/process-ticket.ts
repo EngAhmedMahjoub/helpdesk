@@ -15,11 +15,13 @@ import {
 import { AiFailure } from '../ai/failure.ts'
 import { atSendLimit, overCallBudget, withinBudget } from '../ai/limits.ts'
 import { analyseTicket } from '../ai/prompt.ts'
+import { domainOf, knownHosts, unknownLink } from '../ai/links.ts'
 import { decideRouting, studentText } from '../ai/refund-safeguard.ts'
 import { usageLine } from '../ai/usage.ts'
 import { isPrismaError } from '../db.ts'
 import type { SendEmail } from '../email/outbound.ts'
 import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
+import { env } from '../env.ts'
 import type { PrismaClient } from '../generated/prisma/client.ts'
 import { resolveIfOpen } from '../tickets/status.ts'
 import { reportError } from '../sentry.ts'
@@ -83,6 +85,8 @@ export type HoldFacts = {
   routedToAgent: boolean
   /** The ticket is already waiting on a refund approval, or has a draft pending. */
   refundWaiting: boolean
+  /** The reply carries a link that is neither the academy's nor in the knowledge base. */
+  unknownLink: boolean
   senderVerified: boolean
   escalationReason: EscalationReason | null
   assigned: boolean
@@ -101,6 +105,9 @@ export function holdReason(facts: HoldFacts): EscalationReason | null {
   // refund the keyword list could not, and answering the follow-up would
   // resolve the ticket, and in time auto-close it, with the draft unseen.
   if (facts.routedToAgent || facts.refundWaiting) return 'refund_approval'
+  // Next, as the other hold about what the reply says rather than who it is
+  // for: the agent should know the link is why it waits (#328).
+  if (facts.unknownLink) return 'unknown_link'
   if (!facts.senderVerified) return 'unverified_sender'
   // One that failed the AI before is with an agent already (6.9).
   if (facts.escalationReason === 'ai_failed') return 'ai_failed'
@@ -120,10 +127,10 @@ export function holdReason(facts: HoldFacts): EscalationReason | null {
  * updates the category and summary, but keeps its status (5.14): the student
  * writing back has not reopened it, as the inbound webhook already holds (4.9).
  *
- * Before anything is emailed, four checks can hold the reply for an agent
- * instead (#239): a refund draft already waiting, a sender who did not pass
- * DMARC, the AI's send limits, and, before the model is even asked, its call
- * budget.
+ * Before anything is emailed, checks can hold the reply for an agent instead
+ * (#239): a refund draft already waiting, a link the academy does not know
+ * (#328), a sender who did not pass DMARC, the AI's send limits, and, before
+ * the model is even asked, its call budget.
  *
  * An `AiFailure` or an `EmailSendError` is thrown on; the worker below
  * decides between a retry and handing the ticket to an agent.
@@ -199,9 +206,20 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   // model was shown.
   const decision = decideRouting(output, studentText({ subject: ticket.subject, messages }))
 
+  // A sender who passes DMARC can still write an email that talks the model
+  // into a link of theirs, which would then go out signed by the academy
+  // (#328). Their own address may be repeated back to them; their domain is
+  // not the academy's to vouch for.
+  const linkUnknown =
+    unknownLink(output.reply, {
+      hosts: [...knownHosts(deps.knowledgeBase), domainOf(env.EMAIL_FROM)],
+      addresses: [ticket.studentEmail],
+    }) !== undefined
+
   const heldFor = holdReason({
     routedToAgent: decision.route === 'agent',
     refundWaiting: ticket.escalationReason === 'refund_approval' || ticket.replyDrafts.length > 0,
+    unknownLink: linkUnknown,
     senderVerified: ticket.senderVerified,
     escalationReason: ticket.escalationReason,
     assigned: ticket.assigneeId !== null,

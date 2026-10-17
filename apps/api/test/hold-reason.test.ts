@@ -6,6 +6,7 @@ import { type HoldFacts, holdReason } from '../src/jobs/process-ticket.ts'
 const clear: HoldFacts = {
   routedToAgent: false,
   refundWaiting: false,
+  unknownLink: false,
   senderVerified: true,
   escalationReason: null,
   assigned: false,
@@ -19,6 +20,7 @@ const clear: HoldFacts = {
  */
 const holds: [EscalationReason, Partial<HoldFacts>][] = [
   ['refund_approval', { routedToAgent: true }],
+  ['unknown_link', { unknownLink: true }],
   ['unverified_sender', { senderVerified: false }],
   ['ai_failed', { escalationReason: 'ai_failed' }],
   ['agent_assigned', { assigned: true }],
