@@ -74,6 +74,10 @@ enum EscalationReason {
   // An agent is assigned to the ticket, so the AI's reply waits for them
   // rather than answering over their head (6.9).
   agent_assigned
+  // The AI's reply carries a link, domain or address that is neither the
+  // academy's nor in the knowledge base, so a person sees it before it goes
+  // out signed by the academy (#328).
+  unknown_link
 }
 
 model Ticket {

@@ -3,7 +3,16 @@ import type { CookieOptions, Request, Response } from 'express'
 import { prisma } from '../db.ts'
 import { env } from '../env.ts'
 
-export const SESSION_COOKIE = 'session'
+/**
+ * `__Host-` in production (#329): the browser then refuses the cookie unless it
+ * is Secure, on path /, and carries no Domain. Without the prefix, a page on
+ * any sibling subdomain could set `session=<its own token>; Domain=…` and sign
+ * an agent in as someone else. Plain elsewhere, since the prefix needs Secure
+ * and local development runs over HTTP; the end-to-end suite runs as test.
+ *
+ * Renaming signs everyone out once, on the deploy that ships it.
+ */
+export const SESSION_COOKIE = env.NODE_ENV === 'production' ? '__Host-session' : 'session'
 export const SESSION_TTL_MS = 8 * 60 * 60 * 1000
 
 /** The raw token lives only in the cookie; the database stores this hash. */
