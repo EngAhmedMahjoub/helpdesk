@@ -12,4 +12,12 @@ Applies to all code and doc changes in this repository.
 6. **Close on merge.** Do not close issues manually; merging the release PR closes them and the project marks them Done.
 7. **Move the issue to In Progress** on the project board when work on its branch starts.
 
+## Parent issues and sub-issues
+
+Review findings (a security audit, a cleanup review) go in one parent issue with a GitHub sub-issue per finding, so each finding is reviewed on its own but lands on `dev` as one merge.
+
+- The parent gets a branch off `dev`, `<parent-number>-<slug>`. Each sub-issue gets a branch off the parent's branch, `<sub-number>-<slug>`, and a PR into it that says `Part of #<sub-number>`.
+- Close each sub-issue by hand (`gh issue close`, naming the merged PR) once its PR merges — the one exception to step 6, since no closing keyword fires outside the default branch.
+- When every sub-issue is closed, one PR takes the parent's branch into `dev`. The parent closes with the release PR into `main`.
+
 Before opening a PR, check the issue's *Done when* criteria and report which are verified and which are not.

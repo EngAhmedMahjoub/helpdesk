@@ -8,6 +8,7 @@ export const ESCALATION_REASONS = [
   'unverified_sender',
   'auto_reply_limit',
   'agent_assigned',
+  'unknown_link',
 ] as const
 
 export type TicketStatus = (typeof TICKET_STATUSES)[number]
@@ -163,16 +164,19 @@ export type UpdateTicketRequest = z.infer<typeof updateTicketSchema>
  */
 export const REPLY_MAX_LENGTH = 10_000
 
+/** An agent's reply text, wherever one is written: a reply, or an approved draft. */
+export const replyBodyField = z
+  .string()
+  .trim()
+  .min(1, 'Write a reply')
+  .max(REPLY_MAX_LENGTH, `Keep the reply under ${REPLY_MAX_LENGTH} characters`)
+
 /**
  * The body of `POST /api/tickets/:id/replies`. Only the text: who wrote it is
  * the session's user, and a reply is always an outbound agent message.
  */
 export const createReplySchema = z.object({
-  body: z
-    .string()
-    .trim()
-    .min(1, 'Write a reply')
-    .max(REPLY_MAX_LENGTH, `Keep the reply under ${REPLY_MAX_LENGTH} characters`),
+  body: replyBodyField,
 })
 
 export type CreateReplyRequest = z.infer<typeof createReplySchema>

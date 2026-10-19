@@ -72,7 +72,10 @@ export type UpdateUserRequest = z.infer<typeof updateUserSchema>
  */
 export const loginSchema = z.object({
   email: z.email('Enter a valid email address'),
-  password: z.string().min(1, 'Enter your password'),
+  // The cap that keeps a 100KB body out of argon2 on create and edit, here on
+  // the one path that runs argon2 without a session (#326). No real password is
+  // longer: the forms and the seed refuse to set one.
+  password: z.string().min(1, 'Enter your password').max(PASSWORD_MAX_LENGTH, PASSWORD_TOO_LONG),
 })
 
 export type LoginRequest = z.infer<typeof loginSchema>

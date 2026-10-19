@@ -1,5 +1,47 @@
-import { type RateLimitRequestHandler, ipKeyGenerator, rateLimit } from 'express-rate-limit'
+import {
+  type Options,
+  type RateLimitRequestHandler,
+  ipKeyGenerator,
+  rateLimit,
+} from 'express-rate-limit'
 import { env } from '../env.ts'
+
+type LimiterFactory = (options?: { skip?: boolean }) => RateLimitRequestHandler
+
+const FIFTEEN_MINUTES = 15 * 60 * 1000
+
+// Both login limits refuse with the same words.
+const LOGIN_REFUSED = 'Too many login attempts, please try again later'
+
+/**
+ * The one shape every limit here takes. Returns a factory, so each limit keeps
+ * its own name — and with it the comment saying why that number and that
+ * message — and so the tests can build one that enforces regardless of NODE_ENV.
+ */
+function limiter(config: {
+  windowMs: number
+  limit: number
+  keyGenerator: Options['keyGenerator']
+  message: string
+}): LimiterFactory {
+  return (options = {}) =>
+    rateLimit({
+      windowMs: config.windowMs,
+      limit: config.limit,
+      skip: () => options.skip ?? false,
+      // The standard RateLimit-* headers; the legacy X-RateLimit-* ones are noise.
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+      keyGenerator: config.keyGenerator,
+      message: { error: config.message },
+    })
+}
+
+// The production-only gate every exported instance takes; the login limit's
+// comment says why.
+function inProduction(factory: LimiterFactory): RateLimitRequestHandler {
+  return factory({ skip: env.NODE_ENV !== 'production' })
+}
 
 /**
  * Caps password guessing against `/api/auth/login`.
@@ -25,50 +67,57 @@ import { env } from '../env.ts'
  * front exactly: TRUST_PROXY_HOPS, 3 on Render (#87). Unset there, every client
  * would share one proxy's address and so one budget per account.
  */
-export function createLoginRateLimit(options: { skip?: boolean } = {}): RateLimitRequestHandler {
-  const { skip = false } = options
+export const createLoginRateLimit = limiter({
+  windowMs: FIFTEEN_MINUTES,
+  limit: 10,
+  keyGenerator: (req) => {
+    const email: unknown = (req.body as { email?: unknown } | undefined)?.email
+    // ipKeyGenerator masks an IPv6 address to its subnet, so an attacker
+    // holding a /64 cannot sidestep the count by rotating the low bits.
+    const ip = ipKeyGenerator(req.ip ?? 'unknown')
+    return typeof email === 'string' ? `${ip}:${email.toLowerCase()}` : ip
+  },
+  message: LOGIN_REFUSED,
+})
 
-  return rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 10,
-    skip: () => skip,
-    // The standard RateLimit-* headers; the legacy X-RateLimit-* ones are noise.
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-    keyGenerator: (req) => {
-      const email: unknown = (req.body as { email?: unknown } | undefined)?.email
-      // ipKeyGenerator masks an IPv6 address to its subnet, so an attacker
-      // holding a /64 cannot sidestep the count by rotating the low bits.
-      const ip = ipKeyGenerator(req.ip ?? 'unknown')
-      return typeof email === 'string' ? `${ip}:${email.toLowerCase()}` : ip
-    },
-    message: { error: 'Too many login attempts, please try again later' },
-  })
-}
+export const loginRateLimit = inProduction(createLoginRateLimit)
 
-export const loginRateLimit = createLoginRateLimit({ skip: env.NODE_ENV !== 'production' })
+/**
+ * Caps `/api/auth/login` per IP alone, ahead of the per-account limit above.
+ *
+ * That limit gives each address its own budget, so one IP sending a new email
+ * on every request was never refused — and each request still costs an argon2
+ * verification at 64 MiB, against the dummy hash when no account exists (#326).
+ * This bounds what one client can make the API hash, whichever accounts it names.
+ *
+ * Thirty in fifteen minutes is three accounts' worth of the per-account budget:
+ * room for an office behind one NAT signing in at the start of a shift, and a
+ * small fraction of the unbounded work it replaces.
+ *
+ * Production only, and behind the same trust-proxy setting, as the limit above.
+ */
+export const createLoginIpRateLimit = limiter({
+  windowMs: FIFTEEN_MINUTES,
+  limit: 30,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? 'unknown'),
+  message: LOGIN_REFUSED,
+})
+
+export const loginIpRateLimit = inProduction(createLoginIpRateLimit)
 
 /**
  * A limiter keyed by whoever is acting, for the writes behind requireAuth.
  *
  * The IP fallback never fires there; it is what keeps a route wired without
  * the guard on a limit of its own rather than one bucket for everybody.
- *
- * Returns a factory, so each limit keeps its own name — and with it the comment
- * saying why that number and that message — and so the tests can build one that
- * enforces regardless of NODE_ENV.
  */
-function perUserRateLimit(limit: number, message: string) {
-  return (options: { skip?: boolean } = {}): RateLimitRequestHandler =>
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      limit,
-      skip: () => options.skip ?? false,
-      standardHeaders: 'draft-7',
-      legacyHeaders: false,
-      keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? 'unknown'),
-      message: { error: message },
-    })
+function perUserRateLimit(limit: number, message: string): LimiterFactory {
+  return limiter({
+    windowMs: FIFTEEN_MINUTES,
+    limit,
+    keyGenerator: (req) => req.user?.id ?? ipKeyGenerator(req.ip ?? 'unknown'),
+    message,
+  })
 }
 
 /**
@@ -91,9 +140,7 @@ export const createUserWriteRateLimit = perUserRateLimit(
   'Too many changes to users, please try again later',
 )
 
-export const userWriteRateLimit = createUserWriteRateLimit({
-  skip: env.NODE_ENV !== 'production',
-})
+export const userWriteRateLimit = inProduction(createUserWriteRateLimit)
 
 /**
  * Caps writes to a ticket — replies and changes alike — per acting user, on one
@@ -114,9 +161,7 @@ export const createTicketWriteRateLimit = perUserRateLimit(
   'Too many changes to tickets, please try again later',
 )
 
-export const ticketWriteRateLimit = createTicketWriteRateLimit({
-  skip: env.NODE_ENV !== 'production',
-})
+export const ticketWriteRateLimit = inProduction(createTicketWriteRateLimit)
 
 /**
  * Caps Polish (#323) per acting user. Every call is a billed model request, so
@@ -134,9 +179,7 @@ export const createPolishRateLimit = perUserRateLimit(
   'Too many polish requests, please try again later',
 )
 
-export const polishRateLimit = createPolishRateLimit({
-  skip: env.NODE_ENV !== 'production',
-})
+export const polishRateLimit = inProduction(createPolishRateLimit)
 
 /**
  * Caps Polish across every user, per day. The per-user limit bounds one
@@ -153,18 +196,11 @@ export const polishRateLimit = createPolishRateLimit({
  *
  * Production only, like the rest.
  */
-export function createPolishDailyLimit(options: { skip?: boolean } = {}): RateLimitRequestHandler {
-  return rateLimit({
-    windowMs: 24 * 60 * 60 * 1000,
-    limit: 1000,
-    skip: () => options.skip ?? false,
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-    keyGenerator: () => 'polish',
-    message: { error: 'Polish has reached its daily limit, please try again tomorrow' },
-  })
-}
-
-export const polishDailyLimit = createPolishDailyLimit({
-  skip: env.NODE_ENV !== 'production',
+export const createPolishDailyLimit = limiter({
+  windowMs: 24 * 60 * 60 * 1000,
+  limit: 1000,
+  keyGenerator: () => 'polish',
+  message: 'Polish has reached its daily limit, please try again tomorrow',
 })
+
+export const polishDailyLimit = inProduction(createPolishDailyLimit)

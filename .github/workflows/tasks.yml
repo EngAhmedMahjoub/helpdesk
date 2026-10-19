@@ -17,6 +17,9 @@ concurrency:
 env:
   API_URL: https://api.helpdesk.mahjoub.io
 
+# Nothing by default (#330); a job that needs the token asks for it.
+permissions: {}
+
 jobs:
   tasks:
     runs-on: ubuntu-latest

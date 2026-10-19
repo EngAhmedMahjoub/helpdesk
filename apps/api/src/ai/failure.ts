@@ -115,3 +115,33 @@ export function failureForError(error: unknown): unknown {
   }
   return error
 }
+
+/**
+ * Sends one request and returns the model's finished answer, or throws an
+ * `AiFailure` saying why there is none: the SDK's error mapped first, then the
+ * stop reason, so a caller only ever parses an answer that ended on its own.
+ */
+export async function createChecked(
+  client: Anthropic,
+  params: Anthropic.MessageCreateParamsNonStreaming,
+): Promise<Anthropic.Message> {
+  let response: Anthropic.Message
+  try {
+    response = await client.messages.create(params)
+  } catch (error) {
+    throw failureForError(error)
+  }
+
+  const stopped = failureForStop(response.stop_reason, response.usage)
+  if (stopped) throw stopped
+
+  return response
+}
+
+/** Every text block of the answer, joined. Not trimmed: each caller decides. */
+export function responseText(response: Anthropic.Message): string {
+  return response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
+}

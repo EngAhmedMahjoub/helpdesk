@@ -2,8 +2,8 @@ import { z } from 'zod'
 import {
   type Assignee,
   type EscalationReason,
-  REPLY_MAX_LENGTH,
   type TicketCategory,
+  replyBodyField,
   ticketIdSchema,
 } from './tickets.ts'
 
@@ -69,12 +69,7 @@ export const draftIdSchema = ticketIdSchema
  */
 export const approveDraftSchema = z.object({
   updatedAt: z.iso.datetime(),
-  body: z
-    .string()
-    .trim()
-    .min(1, 'Write a reply')
-    .max(REPLY_MAX_LENGTH, `Keep the reply under ${REPLY_MAX_LENGTH} characters`)
-    .optional(),
+  body: replyBodyField.optional(),
 })
 
 export type ApproveDraftRequest = z.infer<typeof approveDraftSchema>

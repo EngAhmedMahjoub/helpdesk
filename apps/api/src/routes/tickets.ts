@@ -11,7 +11,7 @@ import {
   ticketIdSchema,
   updateTicketSchema,
 } from '@helpdesk/shared'
-import { isPrismaError, prisma } from '../db.ts'
+import { isPrismaError, prisma, userNameFields } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
 import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
@@ -31,8 +31,7 @@ const summaryFields = {
   category: true,
   needsAgent: true,
   escalationReason: true,
-  // Named like a message's agent: by id and name, never the rest of their row.
-  assignee: { select: { id: true, name: true } },
+  assignee: { select: userNameFields },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.TicketSelect
@@ -47,13 +46,12 @@ function toSummary(
   }
 }
 
-// Explicit: emailMessageId is plumbing for threading, and an agent is named
-// by id and name only, never the rest of their row.
+// Explicit: emailMessageId is plumbing for threading.
 const messageFields = {
   id: true,
   direction: true,
   author: true,
-  agent: { select: { id: true, name: true } },
+  agent: { select: userNameFields },
   body: true,
   createdAt: true,
 } satisfies Prisma.MessageSelect
@@ -186,7 +184,7 @@ ticketsRouter.get('/assignees', async (_req, res) => {
   const assignees: Assignee[] = await prisma.user.findMany({
     // The same users PATCH accepts: a deactivated one is refused there.
     where: { isActive: true },
-    select: { id: true, name: true },
+    select: userNameFields,
     // id breaks ties, so two people with one name keep their order.
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
   })

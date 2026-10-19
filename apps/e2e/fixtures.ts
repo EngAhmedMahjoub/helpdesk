@@ -23,7 +23,14 @@ import {
 
 export { expect } from '@playwright/test'
 
-/** Set by the API; the name lives in `apps/api/src/auth/session.ts`. */
+/**
+ * The name the e2e API gives its session cookie. `apps/api/src/auth/session.ts`
+ * picks it by NODE_ENV (#329): `__Host-session` in production, `session`
+ * anywhere else. `session` holds here only because `playwright.config.ts`
+ * starts the API with NODE_ENV=test. Start it as production and the cookie
+ * comes back as `__Host-session`, so `findSessionCookie` finds none and every
+ * spec that looks for one fails.
+ */
 export const SESSION_COOKIE = 'session'
 
 export type Credentials = { email: string; password: string }
