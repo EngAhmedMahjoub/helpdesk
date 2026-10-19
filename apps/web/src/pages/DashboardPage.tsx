@@ -7,6 +7,7 @@ import {
   type TicketStatus,
 } from '@helpdesk/shared'
 import CountBarChart from '@/components/count-bar-chart'
+import { QueryError } from '@/components/form-field'
 import RecentTickets from '@/components/recent-tickets'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -55,11 +56,7 @@ export default function DashboardPage() {
       <div className="mt-6">
         {dashboard.isPending && <DashboardSkeleton />}
 
-        {dashboard.isError && (
-          <p className="text-destructive" role="alert">
-            {dashboard.error.message}
-          </p>
-        )}
+        <QueryError query={dashboard} />
 
         {dashboard.data && <Counts data={dashboard.data} />}
       </div>

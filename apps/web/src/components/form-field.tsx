@@ -35,3 +35,13 @@ export function FormAlert({ children }: { children: React.ReactNode }) {
     </p>
   )
 }
+
+/** Why a query failed, in place of what it would have shown; nothing while it has not. */
+export function QueryError({ query }: { query: { isError: boolean; error: Error | null } }) {
+  if (!query.isError || !query.error) return null
+  return (
+    <p className="text-destructive" role="alert">
+      {query.error.message}
+    </p>
+  )
+}

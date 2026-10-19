@@ -48,6 +48,22 @@ test('an admin sees every user, in the order the API sent them', async () => {
   expect(names).toEqual(['Ada Admin', 'Gil Agent', 'Fay Former'])
 })
 
+test('heads each column, in order', async () => {
+  stubApi({ '/auth/me': responds.currentUser, '/users': () => Response.json(users) })
+
+  renderRoute('/users')
+
+  await screen.findByRole('cell', { name: 'Ada Admin' })
+  expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+    'Name',
+    'Email',
+    'Role',
+    'Status',
+    'Joined',
+    'Actions',
+  ])
+})
+
 test('each row carries the email, role and status', async () => {
   stubApi({ '/auth/me': responds.currentUser, '/users': () => Response.json(users) })
 

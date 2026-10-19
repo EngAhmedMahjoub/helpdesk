@@ -1,17 +1,11 @@
 import { useState } from 'react'
 import type { UserSummary } from '@helpdesk/shared'
 import CreateAgentDialog from '@/components/create-agent-dialog'
-import TableSkeleton, { type Column } from '@/components/table-skeleton'
+import { QueryError } from '@/components/form-field'
+import TableSkeleton, { type Column, ColumnHeaders } from '@/components/table-skeleton'
 import UserActions from '@/components/user-actions'
 import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { useUsers } from '@/hooks/use-users'
@@ -60,11 +54,7 @@ export default function UsersPage() {
       <div className="mt-6">
         {users.isPending && <TableSkeleton columns={columns} label="Loading users" />}
 
-        {users.isError && (
-          <p className="text-destructive" role="alert">
-            {users.error.message}
-          </p>
-        )}
+        <QueryError query={users} />
 
         {users.data && (
           <UsersTable
@@ -94,15 +84,7 @@ function UsersTable({
   return (
     <Table className="table-fixed">
       <caption className="sr-only">Users, oldest first</caption>
-      <TableHeader>
-        <TableRow>
-          {columns.map((column) => (
-            <TableHead className={column.width} key={column.label}>
-              {column.label}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
+      <ColumnHeaders columns={columns} />
       <TableBody>
         {users.map((user) => (
           <TableRow key={user.id}>

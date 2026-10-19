@@ -1,4 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
+import { AiFailure } from './failure.ts'
+
+type UsageSubject = { ticket: number } | { polish_by: string }
 
 /**
  * One log line for one model call (5.17): what it cost and what came of it.
@@ -16,11 +19,7 @@ import type Anthropic from '@anthropic-ai/sdk'
  * Never the ticket's text, the reply or the polished text: an id is enough to
  * find the source, and a log is the wrong place for a student's email.
  */
-export function usageLine(
-  subject: { ticket: number } | { polish_by: string },
-  usage: Anthropic.Usage,
-  outcome: string,
-): string {
+export function usageLine(subject: UsageSubject, usage: Anthropic.Usage, outcome: string): string {
   const fields = {
     ...subject,
     outcome,
@@ -31,4 +30,14 @@ export function usageLine(
   }
   const pairs = Object.entries(fields).map(([key, value]) => `${key}=${String(value)}`)
   return `AI usage: ${pairs.join(' ')}`
+}
+
+/**
+ * The usage line for a call that failed, or undefined when it never reached
+ * the model. A refused or cut-off answer is billed like any other, so it is
+ * counted too; a failure without usage cost nothing.
+ */
+export function failedUsageLine(subject: UsageSubject, error: unknown): string | undefined {
+  if (!(error instanceof AiFailure) || !error.usage) return undefined
+  return usageLine(subject, error.usage, `failed_${error.reason}`)
 }
