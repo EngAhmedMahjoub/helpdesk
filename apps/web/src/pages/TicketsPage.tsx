@@ -1,4 +1,5 @@
 import type { TicketListResponse, TicketSummary } from '@helpdesk/shared'
+import { QueryError } from '@/components/form-field'
 import TableSkeleton, { type Column, ColumnHeaders } from '@/components/table-skeleton'
 import { TicketStatusBadge, TicketSubjectLink, Timestamp } from '@/components/ticket-cells'
 import TicketFilters, {
@@ -63,11 +64,7 @@ export default function TicketsPage() {
       <div className="mt-6">
         {tickets.isPending && <TableSkeleton columns={columns} label="Loading tickets" />}
 
-        {tickets.isError && (
-          <p className="text-destructive" role="alert">
-            {tickets.error.message}
-          </p>
-        )}
+        <QueryError query={tickets} />
 
         {tickets.data && <TicketsTable data={tickets.data} />}
       </div>

@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import type { TicketSummary } from '@helpdesk/shared'
+import { QueryError } from '@/components/form-field'
 import TableSkeleton, { type Column, ColumnHeaders } from '@/components/table-skeleton'
 import { TicketStatusBadge, TicketSubjectLink, Timestamp } from '@/components/ticket-cells'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -47,11 +48,7 @@ export default function RecentTickets() {
           />
         )}
 
-        {recent.isError && (
-          <p className="text-destructive" role="alert">
-            {recent.error.message}
-          </p>
-        )}
+        <QueryError query={recent} />
 
         {recent.data && <RecentTable tickets={recent.data.tickets} />}
       </CardContent>
