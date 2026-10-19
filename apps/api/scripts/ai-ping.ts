@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { AI_MODEL, anthropic } from '../src/ai/client.ts'
+import { responseText } from '../src/ai/failure.ts'
 
 /**
  * One real call to Anthropic, to prove the key and the model id work before a
@@ -17,10 +18,7 @@ try {
     messages: [{ role: 'user', content: 'Reply with: the helpdesk can reach Claude.' }],
   })
 
-  const text = response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('')
+  const text = responseText(response)
 
   console.log(`model:  ${response.model}`)
   console.log(`stop:   ${response.stop_reason ?? 'none'}`)

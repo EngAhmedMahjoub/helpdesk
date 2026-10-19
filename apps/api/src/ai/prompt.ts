@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { type AiOutput, type MessageAuthor, aiOutputSchema } from '@helpdesk/shared'
 import { AI_MODEL } from './client.ts'
-import { AiFailure, failureForError, failureForStop } from './failure.ts'
+import { AiFailure, createChecked, responseText } from './failure.ts'
 
 /**
  * Room for the longest reply the schema accepts — 10,000 characters is about
@@ -114,32 +114,24 @@ export async function analyseTicket(
   knowledgeBase: string,
   ticket: TicketForPrompt,
 ): Promise<TicketAnalysis> {
-  let response: Anthropic.Message
-  try {
-    response = await client.messages.create({
-      model: AI_MODEL,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: [
-        {
-          type: 'text',
-          text: buildSystemPrompt(knowledgeBase),
-          // Inert today: Haiku 4.5 caches nothing under 4,096 tokens, and a
-          // call is about 1,770. It costs nothing to mark, and starts saving
-          // on its own once the knowledge base grows past the minimum.
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
-      messages: [{ role: 'user', content: buildTicketMessage(ticket) }],
-      // The same schema the answer is checked against below, sent as the
-      // model's output format; create() sends it without parsing the reply.
-      output_config: { format: zodOutputFormat(aiOutputSchema) },
-    })
-  } catch (error) {
-    throw failureForError(error)
-  }
-
-  const stopped = failureForStop(response.stop_reason, response.usage)
-  if (stopped) throw stopped
+  const response = await createChecked(client, {
+    model: AI_MODEL,
+    max_tokens: MAX_OUTPUT_TOKENS,
+    system: [
+      {
+        type: 'text',
+        text: buildSystemPrompt(knowledgeBase),
+        // Inert today: Haiku 4.5 caches nothing under 4,096 tokens, and a
+        // call is about 1,770. It costs nothing to mark, and starts saving
+        // on its own once the knowledge base grows past the minimum.
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
+    messages: [{ role: 'user', content: buildTicketMessage(ticket) }],
+    // The same schema the answer is checked against below, sent as the
+    // model's output format; create() sends it without parsing the reply.
+    output_config: { format: zodOutputFormat(aiOutputSchema) },
+  })
 
   return { output: parseOutput(response), usage: response.usage }
 }
@@ -151,10 +143,7 @@ export async function analyseTicket(
  * answer can come back inside them where the first did not.
  */
 function parseOutput(response: Anthropic.Message): AiOutput {
-  const text = response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('')
+  const text = responseText(response)
 
   const invalid = (detail: string) =>
     new AiFailure('invalid_output', true, `The answer was not usable: ${detail}`, response.usage)

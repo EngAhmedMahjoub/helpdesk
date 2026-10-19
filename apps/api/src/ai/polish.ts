@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { REPLY_MAX_LENGTH } from '@helpdesk/shared'
 import { AI_MODEL } from './client.ts'
-import { AiFailure, failureForError, failureForStop } from './failure.ts'
+import { AiFailure, createChecked, responseText } from './failure.ts'
 import { LINK, normaliseToken } from './links.ts'
 import { refundPhrases } from './refund-safeguard.ts'
 
@@ -146,26 +146,14 @@ export type Polished = {
  * the button is there to press again.
  */
 export async function polishText(client: Anthropic, text: string): Promise<Polished> {
-  let response: Anthropic.Message
-  try {
-    response = await client.messages.create({
-      model: AI_MODEL,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: POLISH_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: buildPolishMessage(text) }],
-    })
-  } catch (error) {
-    throw failureForError(error)
-  }
+  const response = await createChecked(client, {
+    model: AI_MODEL,
+    max_tokens: MAX_OUTPUT_TOKENS,
+    system: POLISH_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildPolishMessage(text) }],
+  })
 
-  const stopped = failureForStop(response.stop_reason, response.usage)
-  if (stopped) throw stopped
-
-  const polished = response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('')
-    .trim()
+  const polished = responseText(response).trim()
 
   const invalid = (detail: string) =>
     new AiFailure('invalid_output', true, `The polish was not usable: ${detail}`, response.usage)
