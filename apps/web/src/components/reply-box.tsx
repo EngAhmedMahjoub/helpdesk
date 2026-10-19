@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { type CreateReplyRequest, REPLY_MAX_LENGTH, createReplySchema } from '@helpdesk/shared'
+import { FormAlert } from '@/components/form-field'
 import { PendingLabel } from '@/components/page-spinner'
 import { PolishControl, PolishError } from '@/components/polish-control'
 import { Button } from '@/components/ui/button'
@@ -37,11 +38,7 @@ export default function ReplyBox({ ticketId, student }: { ticketId: number; stud
 
   return (
     <form noValidate onSubmit={form.handleSubmit(submit)}>
-      {sendReply.isError && (
-        <p className="mb-4 text-sm text-destructive" role="alert">
-          {sendReply.error.message}
-        </p>
-      )}
+      {sendReply.isError && <FormAlert>{sendReply.error.message}</FormAlert>}
 
       <Field data-invalid={Boolean(errors.body)}>
         <FieldLabel htmlFor="reply-body">Reply to {student}</FieldLabel>
