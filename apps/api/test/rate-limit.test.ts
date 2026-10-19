@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import express from 'express'
+import type { Role } from '@helpdesk/shared'
+import express, { type RequestHandler } from 'express'
 import request from 'supertest'
 import {
   createLoginIpRateLimit,
@@ -10,6 +11,17 @@ import {
   createUserWriteRateLimit,
 } from '../src/auth/rate-limit.ts'
 import { runUnder } from './child-process.ts'
+
+/**
+ * Stands in for the requireAuth that sets req.user in the real routes: the
+ * caller is named by the `header` on each request.
+ */
+function actingAs(header: string, role: Role): RequestHandler {
+  return (req, _res, next) => {
+    req.user = { id: String(req.headers[header]), email: '', name: '', role }
+    next()
+  }
+}
 
 /**
  * A stand-in for the login route, carrying a limiter that actually enforces.
@@ -255,10 +267,7 @@ describe('user-management write limit', () => {
    */
   function appWithUserLimiter() {
     const app = express()
-    app.use((req, _res, next) => {
-      req.user = { id: String(req.headers['x-admin']), email: '', name: '', role: 'admin' }
-      next()
-    })
+    app.use(actingAs('x-admin', 'admin'))
     app.post('/api/users', createUserWriteRateLimit(), (_req, res) => {
       res.status(201).end()
     })
@@ -313,10 +322,7 @@ describe('ticket write limit', () => {
    */
   function appWithTicketLimiter() {
     const app = express()
-    app.use((req, _res, next) => {
-      req.user = { id: String(req.headers['x-agent']), email: '', name: '', role: 'agent' }
-      next()
-    })
+    app.use(actingAs('x-agent', 'agent'))
     const limiter = createTicketWriteRateLimit()
     app.post('/replies', limiter, (_req, res) => {
       res.status(201).end()
@@ -399,10 +405,7 @@ describe('polish limit', () => {
   /** A stand-in for POST /api/ai/polish behind an enforcing limiter, as for the others. */
   function appWithPolishLimiter() {
     const app = express()
-    app.use((req, _res, next) => {
-      req.user = { id: String(req.headers['x-agent']), email: '', name: '', role: 'agent' }
-      next()
-    })
+    app.use(actingAs('x-agent', 'agent'))
     app.post('/polish', createPolishRateLimit(), (_req, res) => {
       res.status(200).end()
     })
@@ -449,10 +452,7 @@ describe('polish daily limit', () => {
   /** A stand-in for POST /api/ai/polish behind both limits, in the route's order. */
   function appWithPolishLimits() {
     const app = express()
-    app.use((req, _res, next) => {
-      req.user = { id: String(req.headers['x-agent']), email: '', name: '', role: 'agent' }
-      next()
-    })
+    app.use(actingAs('x-agent', 'agent'))
     app.post('/polish', createPolishRateLimit(), createPolishDailyLimit(), (_req, res) => {
       res.status(200).end()
     })
