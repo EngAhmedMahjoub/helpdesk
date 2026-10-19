@@ -7,7 +7,7 @@ import {
   draftIdSchema,
   listDraftsQuerySchema,
 } from '@helpdesk/shared'
-import { isPrismaError, prisma } from '../db.ts'
+import { isPrismaError, prisma, userNameFields } from '../db.ts'
 import type { Prisma } from '../generated/prisma/client.ts'
 import { requireAuth } from '../auth/middleware.ts'
 import { ticketWriteRateLimit } from '../auth/rate-limit.ts'
@@ -25,14 +25,14 @@ const REPLY_NOT_SENT = 'The reply could not be sent. Please try again.'
 
 /**
  * The columns a draft list exposes. Explicit, as on tickets: the reviewer is
- * named by id and name, never the rest of their row, and the ticket carries
- * only what a reviewer judges the draft by.
+ * named by userNameFields, and the ticket carries only what a reviewer judges
+ * the draft by.
  */
 const draftFields = {
   id: true,
   body: true,
   status: true,
-  reviewedBy: { select: { id: true, name: true } },
+  reviewedBy: { select: userNameFields },
   reviewedAt: true,
   createdAt: true,
   updatedAt: true,
