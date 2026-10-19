@@ -139,6 +139,22 @@ test('an emptied box is refused here, before anything is sent', async () => {
   expect(approved).toHaveLength(0)
 })
 
+test('a draft edited past the reply limit is refused here, with the limit named', async () => {
+  const user = userEvent.setup()
+  const { approved } = stubReview()
+
+  renderRoute('/tickets/40')
+  const draft = await box()
+  await user.clear(draft)
+  // Pasted, so the test is not 10,001 keystrokes long.
+  await user.click(draft)
+  await user.paste('a'.repeat(10_001))
+  await user.click(screen.getByRole('button', { name: 'Approve and send' }))
+
+  expect(await screen.findByText('Keep the reply under 10000 characters')).toBeTruthy()
+  expect(approved).toHaveLength(0)
+})
+
 test("a send the API couldn't make keeps the draft and the edit, and says why", async () => {
   const user = userEvent.setup()
   stubReview({

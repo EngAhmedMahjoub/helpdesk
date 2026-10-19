@@ -1,7 +1,11 @@
-import type { ListTicketsQuery, TicketListResponse, TicketSummary } from '@helpdesk/shared'
+import type { TicketListResponse, TicketSummary } from '@helpdesk/shared'
 import TableSkeleton, { type Column } from '@/components/table-skeleton'
 import { TicketStatusBadge, TicketSubjectLink, Timestamp } from '@/components/ticket-cells'
-import TicketFilters, { type SortChoice } from '@/components/ticket-filters'
+import TicketFilters, {
+  type SortBy,
+  type SortChoice,
+  type SortOrder,
+} from '@/components/ticket-filters'
 import TicketPagination from '@/components/ticket-pagination'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -55,7 +59,7 @@ export default function TicketsPage() {
         onNeedsAgent={(needsAgent) => update({ needsAgent })}
         onCategory={(category) => update({ category })}
         onSort={(choice) => {
-          const [sortBy, order] = choice.split(':') as [ListTicketsQuery['sort'], 'asc' | 'desc']
+          const [sortBy, order] = choice.split(':') as [SortBy, SortOrder]
           update({ sort: sortBy, order })
         }}
         onStatus={(status) => update({ status })}

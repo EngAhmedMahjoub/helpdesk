@@ -13,3 +13,10 @@ export function isPrismaError(
 ): err is Prisma.PrismaClientKnownRequestError {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === code
 }
+
+/**
+ * A user as other rows name them — a ticket's assignee, a message's agent, a
+ * draft's reviewer — by id and name only, never the rest of their row: the
+ * email, role and password hash stay out of every response that names someone.
+ */
+export const userNameFields = { id: true, name: true } satisfies Prisma.UserSelect

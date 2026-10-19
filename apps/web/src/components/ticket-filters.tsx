@@ -8,8 +8,15 @@ import {
 import SelectField from '@/components/select-field'
 import { SelectItem } from '@/components/ui/select'
 
-/** The sort and its direction as one choice, because they are one control. */
-export type SortChoice = `${'createdAt' | 'updatedAt'}:${'asc' | 'desc'}`
+export type SortBy = NonNullable<ListTicketsQuery['sort']>
+export type SortOrder = NonNullable<ListTicketsQuery['order']>
+
+/**
+ * The sort and its direction as one choice, because they are one control.
+ * Built from the query schema, so a new sort fails to compile until it has a
+ * label below.
+ */
+export type SortChoice = `${SortBy}:${SortOrder}`
 
 const sortLabels: Record<SortChoice, string> = {
   'updatedAt:desc': 'Latest activity',
