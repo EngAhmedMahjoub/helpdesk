@@ -17,7 +17,7 @@ import { atSendLimit, overCallBudget, withinBudget } from '../ai/limits.ts'
 import { analyseTicket } from '../ai/prompt.ts'
 import { domainOf, knownHosts, unknownLink } from '../ai/links.ts'
 import { decideRouting, studentText } from '../ai/refund-safeguard.ts'
-import { usageLine } from '../ai/usage.ts'
+import { failedUsageLine, usageLine } from '../ai/usage.ts'
 import { isPrismaError } from '../db.ts'
 import type { SendEmail } from '../email/outbound.ts'
 import { outboundMessage, replyEmail } from '../email/reply-thread.ts'
@@ -191,11 +191,8 @@ export async function processTicket(deps: ProcessTicketDeps, job: ProcessTicketJ
   try {
     analysis = await analyseTicket(deps.client, deps.knowledgeBase, { ...ticket, messages })
   } catch (error) {
-    // A refused or cut-off answer is billed like any other, so it is counted
-    // too. Failures without usage never reached the model, and cost nothing.
-    if (error instanceof AiFailure && error.usage) {
-      console.log(usageLine({ ticket: job.ticketId }, error.usage, `failed_${error.reason}`))
-    }
+    const failed = failedUsageLine({ ticket: job.ticketId }, error)
+    if (failed) console.log(failed)
     throw error
   }
   const { output, usage } = analysis
