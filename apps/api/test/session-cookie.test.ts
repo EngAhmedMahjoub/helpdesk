@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { VALID_BOOT_ENV } from './boot-env.ts'
+import { runUnder } from './child-process.ts'
 
 type CookieRoundTrip = { set: string; cleared: string; read: string | null }
 
@@ -30,18 +30,7 @@ async function roundTripUnder(nodeEnv: string): Promise<CookieRoundTrip> {
     server.close()
     console.log(JSON.stringify({ set, cleared, read: read.token }))
   `
-  // --no-env-file, as in rate-limit.test.ts: the child sees this environment only.
-  const proc = Bun.spawn(['bun', '--no-env-file', '-e', source], {
-    cwd: `${import.meta.dir}/..`,
-    env: { PATH: process.env.PATH ?? '', ...VALID_BOOT_ENV, NODE_ENV: nodeEnv },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
+  const { stdout, stderr, exitCode } = await runUnder(nodeEnv, source)
   if (exitCode !== 0)
     throw new Error(`The ${nodeEnv} child failed (exit ${String(exitCode)}):\n${stderr}`)
   return JSON.parse(stdout.trim().split('\n').at(-1)!) as CookieRoundTrip
