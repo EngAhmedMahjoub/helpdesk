@@ -19,6 +19,21 @@ export type Column = {
   width: string
 }
 
+/** The header row for `columns`, shared by the skeleton and every table built from them. */
+export function ColumnHeaders({ columns }: { columns: Column[] }) {
+  return (
+    <TableHeader>
+      <TableRow>
+        {columns.map((column) => (
+          <TableHead className={column.width} key={column.label}>
+            {column.label}
+          </TableHead>
+        ))}
+      </TableRow>
+    </TableHeader>
+  )
+}
+
 type TableSkeletonProps = {
   columns: Column[]
   /** Announced to screen readers in place of the pulsing bars they cannot see. */
@@ -37,15 +52,7 @@ export default function TableSkeleton({ columns, label, rows = 5 }: TableSkeleto
       {/* Hidden from assistive tech: a table of empty cells would be read out
           row by row, and the status above already says what is happening. */}
       <Table aria-hidden="true" className="table-fixed">
-        <TableHeader>
-          <TableRow>
-            {columns.map((column) => (
-              <TableHead className={column.width} key={column.label}>
-                {column.label}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
+        <ColumnHeaders columns={columns} />
         <TableBody>
           {Array.from({ length: rows }, (_, row) => (
             <TableRow key={row}>

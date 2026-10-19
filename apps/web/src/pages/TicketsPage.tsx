@@ -1,5 +1,6 @@
 import type { TicketListResponse, TicketSummary } from '@helpdesk/shared'
-import TableSkeleton, { type Column } from '@/components/table-skeleton'
+import { QueryError } from '@/components/form-field'
+import TableSkeleton, { type Column, ColumnHeaders } from '@/components/table-skeleton'
 import { TicketStatusBadge, TicketSubjectLink, Timestamp } from '@/components/ticket-cells'
 import TicketFilters, {
   type SortBy,
@@ -8,14 +9,7 @@ import TicketFilters, {
 } from '@/components/ticket-filters'
 import TicketPagination from '@/components/ticket-pagination'
 import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { useTicketQuery } from '@/hooks/use-ticket-query'
 import { useTickets } from '@/hooks/use-tickets'
@@ -70,11 +64,7 @@ export default function TicketsPage() {
       <div className="mt-6">
         {tickets.isPending && <TableSkeleton columns={columns} label="Loading tickets" />}
 
-        {tickets.isError && (
-          <p className="text-destructive" role="alert">
-            {tickets.error.message}
-          </p>
-        )}
+        <QueryError query={tickets} />
 
         {tickets.data && <TicketsTable data={tickets.data} />}
       </div>
@@ -108,15 +98,7 @@ function TicketsTable({ data }: { data: TicketListResponse }) {
   return (
     <Table className="table-fixed">
       <caption className="sr-only">Tickets matching the filters</caption>
-      <TableHeader>
-        <TableRow>
-          {columns.map((column) => (
-            <TableHead className={column.width} key={column.label}>
-              {column.label}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
+      <ColumnHeaders columns={columns} />
       <TableBody>
         {data.tickets.map((ticket) => (
           <TicketRow key={ticket.id} ticket={ticket} />
