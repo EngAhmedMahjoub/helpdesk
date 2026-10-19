@@ -167,86 +167,83 @@ async function lastStatusIs429(source: string, nodeEnv: string): Promise<boolean
   return status === '429'
 }
 
-describe('which environments enforce it', () => {
-  /**
-   * Loads the module fresh under a chosen NODE_ENV and reports whether an
-   * eleventh attempt is refused. A child process because the wiring is decided
-   * once at import, from an env.ts that validates once and exits on failure —
-   * neither can be re-evaluated inside the runner.
-   */
-  async function enforcesUnder(nodeEnv: string) {
-    const source = `
-      const { loginRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
-      const express = (await import('express')).default
-      const app = express()
-      app.use(express.json())
-      app.post('/login', loginRateLimit, (_req, res) => res.status(401).end())
-      const server = app.listen(0)
-      const { port } = server.address()
-      let last = 0
-      for (let i = 0; i < 11; i += 1) {
-        const res = await fetch(\`http://localhost:\${port}/login\`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'agent@example.com', password: 'wrong' }),
-        })
-        last = res.status
-      }
-      server.close()
-      console.log(String(last))
-    `
+/**
+ * Loads rate-limit.ts fresh under a chosen NODE_ENV, mounts the exported
+ * `limiter` instance, sends it `requests` POSTs and reports whether the last
+ * was refused. A child process because the wiring is decided once at import.
+ *
+ * `userId` stands in for requireAuth's req.user. `body` is a JavaScript
+ * expression evaluated in the child for each request, with the loop's `i` in
+ * scope, and sent as JSON; without it the requests carry no body.
+ */
+async function enforcedUnder(
+  nodeEnv: string,
+  options: { limiter: string; requests: number; userId?: string; body?: string },
+): Promise<boolean> {
+  const { limiter, requests, userId, body } = options
+  const actAs = userId
+    ? `app.use((req, _res, next) => { req.user = { id: ${JSON.stringify(userId)} }; next() })`
+    : ''
+  const init = body
+    ? `{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(${body}) }`
+    : `{ method: 'POST' }`
+  const source = `
+    const { ${limiter} } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
+    const express = (await import('express')).default
+    const app = express()
+    app.use(express.json())
+    ${actAs}
+    app.post('/', ${limiter}, (_req, res) => res.status(200).end())
+    const server = app.listen(0)
+    const { port } = server.address()
+    let last = 0
+    for (let i = 0; i < ${String(requests)}; i += 1) {
+      last = (await fetch(\`http://localhost:\${port}/\`, ${init})).status
+    }
+    server.close()
+    console.log(String(last))
+  `
 
-    return lastStatusIs429(source, nodeEnv)
+  return lastStatusIs429(source, nodeEnv)
+}
+
+describe('which environments enforce it', () => {
+  // Is an eleventh attempt at one address refused?
+  const login = {
+    limiter: 'loginRateLimit',
+    requests: 11,
+    body: `{ email: 'agent@example.com', password: 'wrong' }`,
   }
 
   test('enforces in production', async () => {
-    expect(await enforcesUnder('production')).toBe(true)
+    expect(await enforcedUnder('production', login)).toBe(true)
   })
 
   test('does not enforce in development', async () => {
     // It would only throttle whoever is building the screens that sign in.
-    expect(await enforcesUnder('development')).toBe(false)
+    expect(await enforcedUnder('development', login)).toBe(false)
   })
 
   test('does not enforce in test', async () => {
     // A live limiter here would fail unrelated assertions by ordering.
-    expect(await enforcesUnder('test')).toBe(false)
+    expect(await enforcedUnder('test', login)).toBe(false)
   })
 })
 
 describe('which environments enforce the login per-IP limit', () => {
-  /** As enforcesUnder above: is a 31st attempt, each naming a new address, refused? */
-  async function ipLimitEnforcedUnder(nodeEnv: string) {
-    const source = `
-      const { loginIpRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
-      const express = (await import('express')).default
-      const app = express()
-      app.use(express.json())
-      app.post('/login', loginIpRateLimit, (_req, res) => res.status(401).end())
-      const server = app.listen(0)
-      const { port } = server.address()
-      let last = 0
-      for (let i = 0; i < 31; i += 1) {
-        const res = await fetch(\`http://localhost:\${port}/login\`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: \`agent-\${i}@example.com\`, password: 'wrong' }),
-        })
-        last = res.status
-      }
-      server.close()
-      console.log(String(last))
-    `
-
-    return lastStatusIs429(source, nodeEnv)
+  // Is a 31st attempt, each naming a new address, refused?
+  const loginIp = {
+    limiter: 'loginIpRateLimit',
+    requests: 31,
+    body: "{ email: `agent-${i}@example.com`, password: 'wrong' }",
   }
 
   test('enforces in production', async () => {
-    expect(await ipLimitEnforcedUnder('production')).toBe(true)
+    expect(await enforcedUnder('production', loginIp)).toBe(true)
   })
 
   test('does not enforce in test', async () => {
-    expect(await ipLimitEnforcedUnder('test')).toBe(false)
+    expect(await enforcedUnder('test', loginIp)).toBe(false)
   })
 })
 
@@ -293,37 +290,19 @@ describe('user-management write limit', () => {
 })
 
 describe('which environments enforce the user-management write limit', () => {
-  /** As enforcesUnder above, for the users limiter: is a 61st write refused? */
-  async function userWritesEnforcedUnder(nodeEnv: string) {
-    const source = `
-      const { userWriteRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
-      const express = (await import('express')).default
-      const app = express()
-      app.use((req, _res, next) => { req.user = { id: 'admin-1' }; next() })
-      app.post('/users', userWriteRateLimit, (_req, res) => res.status(201).end())
-      const server = app.listen(0)
-      const { port } = server.address()
-      let last = 0
-      for (let i = 0; i < 61; i += 1) {
-        last = (await fetch(\`http://localhost:\${port}/users\`, { method: 'POST' })).status
-      }
-      server.close()
-      console.log(String(last))
-    `
-
-    return lastStatusIs429(source, nodeEnv)
-  }
+  // Is one admin's 61st write refused?
+  const userWrites = { limiter: 'userWriteRateLimit', requests: 61, userId: 'admin-1' }
 
   test('enforces in production', async () => {
-    expect(await userWritesEnforcedUnder('production')).toBe(true)
+    expect(await enforcedUnder('production', userWrites)).toBe(true)
   })
 
   test('does not enforce in test, where the end-to-end suite creates users all day', async () => {
-    expect(await userWritesEnforcedUnder('test')).toBe(false)
+    expect(await enforcedUnder('test', userWrites)).toBe(false)
   })
 
   test('does not enforce in development', async () => {
-    expect(await userWritesEnforcedUnder('development')).toBe(false)
+    expect(await enforcedUnder('development', userWrites)).toBe(false)
   })
 })
 
@@ -404,33 +383,15 @@ describe('ticket write limit', () => {
 })
 
 describe('which environments enforce the ticket write limit', () => {
-  /** As for the other two: a child process, since the wiring is read at import. */
-  async function ticketRepliesEnforcedUnder(nodeEnv: string) {
-    const source = `
-      const { ticketWriteRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
-      const express = (await import('express')).default
-      const app = express()
-      app.use(express.json())
-      app.post('/replies', ticketWriteRateLimit, (_req, res) => res.status(201).end())
-      const server = app.listen(0)
-      const { port } = server.address()
-      let last = 0
-      for (let i = 0; i < 121; i += 1) {
-        last = (await fetch(\`http://localhost:\${port}/replies\`, { method: 'POST' })).status
-      }
-      server.close()
-      console.log(String(last))
-    `
-
-    return lastStatusIs429(source, nodeEnv)
-  }
+  // Is a 121st reply refused?
+  const ticketWrites = { limiter: 'ticketWriteRateLimit', requests: 121 }
 
   test('enforces in production', async () => {
-    expect(await ticketRepliesEnforcedUnder('production')).toBe(true)
+    expect(await enforcedUnder('production', ticketWrites)).toBe(true)
   })
 
   test('does not enforce in development', async () => {
-    expect(await ticketRepliesEnforcedUnder('development')).toBe(false)
+    expect(await enforcedUnder('development', ticketWrites)).toBe(false)
   })
 })
 
@@ -472,33 +433,15 @@ describe('polish limit', () => {
 })
 
 describe('which environments enforce the polish limit', () => {
-  /** As for the others: a child process, since the wiring is read at import. */
-  async function polishEnforcedUnder(nodeEnv: string) {
-    const source = `
-      const { polishRateLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
-      const express = (await import('express')).default
-      const app = express()
-      app.use((req, _res, next) => { req.user = { id: 'agent-1' }; next() })
-      app.post('/polish', polishRateLimit, (_req, res) => res.status(200).end())
-      const server = app.listen(0)
-      const { port } = server.address()
-      let last = 0
-      for (let i = 0; i < 31; i += 1) {
-        last = (await fetch(\`http://localhost:\${port}/polish\`, { method: 'POST' })).status
-      }
-      server.close()
-      console.log(String(last))
-    `
-
-    return lastStatusIs429(source, nodeEnv)
-  }
+  // Is one agent's 31st polish refused?
+  const polish = { limiter: 'polishRateLimit', requests: 31, userId: 'agent-1' }
 
   test('enforces in production', async () => {
-    expect(await polishEnforcedUnder('production')).toBe(true)
+    expect(await enforcedUnder('production', polish)).toBe(true)
   })
 
   test('does not enforce in test', async () => {
-    expect(await polishEnforcedUnder('test')).toBe(false)
+    expect(await enforcedUnder('test', polish)).toBe(false)
   })
 })
 
@@ -553,31 +496,14 @@ describe('polish daily limit', () => {
 })
 
 describe('which environments enforce the polish daily limit', () => {
-  /** As for the others: is the 1,001st polish of the day, from many users, refused? */
-  async function dailyEnforcedUnder(nodeEnv: string) {
-    const source = `
-      const { polishDailyLimit } = await import(${JSON.stringify(`${import.meta.dir}/../src/auth/rate-limit.ts`)})
-      const express = (await import('express')).default
-      const app = express()
-      app.post('/polish', polishDailyLimit, (_req, res) => res.status(200).end())
-      const server = app.listen(0)
-      const { port } = server.address()
-      let last = 0
-      for (let i = 0; i < 1001; i += 1) {
-        last = (await fetch(\`http://localhost:\${port}/polish\`, { method: 'POST' })).status
-      }
-      server.close()
-      console.log(String(last))
-    `
-
-    return lastStatusIs429(source, nodeEnv)
-  }
+  // Is the 1,001st polish of the day refused? One key for everybody, so no user.
+  const daily = { limiter: 'polishDailyLimit', requests: 1001 }
 
   test('enforces in production', async () => {
-    expect(await dailyEnforcedUnder('production')).toBe(true)
+    expect(await enforcedUnder('production', daily)).toBe(true)
   })
 
   test('does not enforce in test', async () => {
-    expect(await dailyEnforcedUnder('test')).toBe(false)
+    expect(await enforcedUnder('test', daily)).toBe(false)
   })
 })
