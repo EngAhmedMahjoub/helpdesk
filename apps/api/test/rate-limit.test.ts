@@ -9,7 +9,7 @@ import {
   createTicketWriteRateLimit,
   createUserWriteRateLimit,
 } from '../src/auth/rate-limit.ts'
-import { VALID_BOOT_ENV } from './boot-env.ts'
+import { runUnder } from './child-process.ts'
 
 /**
  * A stand-in for the login route, carrying a limiter that actually enforces.
@@ -159,22 +159,7 @@ describe('behind three proxies', () => {
  * running, which is how a variable newly required at boot once went unnoticed.
  */
 async function lastStatusIs429(source: string, nodeEnv: string): Promise<boolean> {
-  // --no-env-file: inside apps/api Bun would otherwise load its .env files, and
-  // fill anything missing from the list below with the developer's own values,
-  // real keys included. The child sees exactly this environment and no other.
-  const proc = Bun.spawn(['bun', '--no-env-file', '-e', source], {
-    // Inside apps/api so express resolves.
-    cwd: `${import.meta.dir}/..`,
-    env: { PATH: process.env.PATH ?? '', ...VALID_BOOT_ENV, NODE_ENV: nodeEnv },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
+  const { stdout, stderr, exitCode } = await runUnder(nodeEnv, source)
   const status = /(\d{3})\s*$/.exec(stdout)?.[1]
   if (exitCode !== 0 || !status) {
     throw new Error(`The ${nodeEnv} child printed no status (exit ${String(exitCode)}):\n${stderr}`)
