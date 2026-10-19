@@ -75,6 +75,23 @@ test('shows the tickets the API returned', async () => {
   expect(await screen.findByRole('cell', { name: 'tom@student.example' })).toBeTruthy()
 })
 
+test('heads each column, in order', async () => {
+  stubTickets(() => listOf(tickets))
+
+  renderRoute('/tickets')
+
+  await screen.findByRole('cell', { name: 'Refund for the bootcamp' })
+  expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+    'Subject',
+    'Student',
+    'Status',
+    'Category',
+    'Assignee',
+    'Needs agent',
+    'Last activity',
+  ])
+})
+
 test('an unclassified ticket nobody escalated shows a dash and No', async () => {
   stubTickets(() => listOf([ticketSummary({ id: 3, subject: 'Where are my slides' })]))
 
