@@ -1,6 +1,6 @@
 {
   "name": "helpdesk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI-powered support desk: student emails become tickets, Claude classifies them and drafts replies for agents to review.",
   "author": "Ahmed Ali Mahjoub",
   "license": "MIT",
