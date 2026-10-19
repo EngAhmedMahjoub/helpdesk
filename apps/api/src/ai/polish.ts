@@ -20,7 +20,7 @@ const MAX_OUTPUT_TOKENS = 2048
  * "we'll look into a refund" into "your refund is approved" would be a promise
  * the agent never made, sent under their name.
  */
-export const POLISH_SYSTEM_PROMPT = `You are an editor for the support team at Mahjoub Academy, an online course platform. An agent has written text for a student. You tidy it before the agent sends it.
+const POLISH_SYSTEM_PROMPT = `You are an editor for the support team at Mahjoub Academy, an online course platform. An agent has written text for a student. You tidy it before the agent sends it.
 
 ## What to do
 
@@ -49,18 +49,17 @@ function neutralise(text: string): string {
   return text.replace(/<(\/?)text\b/gi, '&lt;$1text')
 }
 
-export function buildPolishMessage(text: string): string {
+function buildPolishMessage(text: string): string {
   return `<text>\n${neutralise(text)}\n</text>`
 }
 
 /**
  * The facts the rules forbid a polish to change: links, email addresses, bare
- * domains, numbers and currency. Trailing punctuation is dropped, so a link
- * that ends a sentence is the same link with or without the full stop.
+ * domains, numbers and currency.
  *
  * Each kind closed a gap the security review found getting through (#327):
  * - Bare domains (`refunds-desk.com/claim`): a link a student can click
- *   without any `https://`. The letters-only ending keeps "e.g." and "3.5" out.
+ *   without any `https://`.
  * - Digits in any script (`\p{Nd}`): `٤٨٠` and `４８０` are 480 to a reader,
  *   and `\d` sees only ASCII.
  * - Currency, as a sign or a word: "four hundred eighty dollars" carries no
