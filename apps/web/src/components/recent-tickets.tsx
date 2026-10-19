@@ -1,16 +1,9 @@
 import { Link } from 'react-router'
 import type { TicketSummary } from '@helpdesk/shared'
-import TableSkeleton, { type Column } from '@/components/table-skeleton'
+import TableSkeleton, { type Column, ColumnHeaders } from '@/components/table-skeleton'
 import { TicketStatusBadge, TicketSubjectLink, Timestamp } from '@/components/ticket-cells'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { RECENT_TICKETS_QUERY, useRecentTickets } from '@/hooks/use-tickets'
 import { studentLabel } from '@/lib/tickets'
 
@@ -78,15 +71,7 @@ function RecentTable({ tickets }: { tickets: TicketSummary[] }) {
   return (
     <Table className="table-fixed">
       <caption className="sr-only">The newest tickets, most recent first</caption>
-      <TableHeader>
-        <TableRow>
-          {columns.map((column) => (
-            <TableHead className={column.width} key={column.label}>
-              {column.label}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
+      <ColumnHeaders columns={columns} />
       <TableBody>
         {tickets.map((ticket) => (
           <TableRow key={ticket.id}>
