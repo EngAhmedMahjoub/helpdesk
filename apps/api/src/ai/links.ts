@@ -19,7 +19,7 @@ export function normaliseToken(token: string): string {
 }
 
 /** Every link, address and bare domain in `text`, normalised. */
-export function linkTokens(text: string): string[] {
+function linkTokens(text: string): string[] {
   return (text.match(LINK) ?? []).map(normaliseToken)
 }
 
